@@ -445,7 +445,7 @@ export class EcashWallet {
     script += toPush(''); // Data arbitraire (vide)
     script += toPush(authPubkey); // Auth Pubkey (pour reminter plus tard)
     
-    return Script.fromHex(script);
+    return new Script(fromHex(script));
   }
 
   /**
@@ -472,7 +472,7 @@ export class EcashWallet {
       scriptHex += '08' + toHex64(amount2); // Montant change
     }
     
-    return Script.fromHex(scriptHex);
+    return new Script(fromHex(scriptHex));
   }
 
   /**
