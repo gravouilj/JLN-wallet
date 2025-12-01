@@ -25,7 +25,9 @@ import ErrorBoundary from './components/ErrorBoundary';
 
 // Hooks
 import { useEcashWallet } from './hooks/useEcashWallet';
-import { useChronikWebSocket } from './hooks/useChronikWebSocket';
+
+// Components
+import ChronikConnectionIndicator from './components/ChronikConnectionIndicator';
 
 // i18n
 import './i18n';
@@ -40,9 +42,6 @@ function App() {
   const [locale] = useAtom(localeAtom);
   const [savedMnemonic] = useAtom(savedMnemonicAtom);
   const { walletConnected, loading, initializeWallet } = useEcashWallet();
-  
-  // Initialize Chronik WebSocket for real-time balance updates
-  useChronikWebSocket();
 
   useEffect(() => {
     // Initialize i18n on app load
@@ -76,6 +75,7 @@ function App() {
         <ErrorBoundary>
           <div className="app-container">
             <Notification />
+            <ChronikConnectionIndicator />
             <Routes>
               {/* ========================================
                   ROUTES PUBLIQUES (Sans wallet requis)
