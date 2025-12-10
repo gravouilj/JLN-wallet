@@ -4,7 +4,7 @@
  */
 
 import { useChronikWebSocket } from '../hooks/useChronikWebSocket';
-import '../styles/chronik-indicator.css';
+import '../styles/layout.css';
 
 export const ChronikConnectionIndicator = () => {
   const { isConnected, lastError, reconnectAttempts } = useChronikWebSocket();

@@ -22,7 +22,7 @@ const AdminGateRoute = ({ children, fallbackRoute = '/create-token' }) => {
   const navigate = useNavigate();
   const [walletConnected] = useAtom(walletConnectedAtom);
   const { wallet } = useEcashWallet();
-  const isAdmin = useAdmin();
+  const { isAdmin, isChecking } = useAdmin(); // Récupérer isChecking
   
   const [loading, setLoading] = useState(true);
   const [hasAccess, setHasAccess] = useState(false);
@@ -30,10 +30,22 @@ const AdminGateRoute = ({ children, fallbackRoute = '/create-token' }) => {
 
   useEffect(() => {
     const checkAccess = async () => {
+      // Attendre que le check admin soit terminé
+      if (isChecking) {
+        console.log('⏳ AdminGateRoute: Attente vérification admin...');
+        return;
+      }
+      
       try {
         if (!walletConnected || !wallet) {
+          if (import.meta.env.DEV) console.log('⚠️ AdminGateRoute: Wallet non connecté');
           setLoading(false);
           return;
+        }
+
+        if (import.meta.env.DEV) {
+          console.log('🔍 AdminGateRoute: Vérification accès...');
+          console.log('👤 isAdmin:', isAdmin);
         }
 
         // Super admin a toujours accès
@@ -44,11 +56,16 @@ const AdminGateRoute = ({ children, fallbackRoute = '/create-token' }) => {
           return;
         }
 
-        // Vérifier mint batons
+        // Vérifier mint batons pour les créateurs (pas pour admin)
+        if (import.meta.env.DEV) console.log('🔑 Vérification mint batons...');
         const batons = await wallet.getMintBatons();
-        console.log('🔑 Mint batons vérifiés:', batons);
+        if (import.meta.env.DEV) console.log('🔑 Mint batons vérifiés:', batons);
         
         const hasAny = Array.isArray(batons) && batons.length > 0;
+        if (import.meta.env.DEV) console.log('✅ A des mint batons:', hasAny);
+        
+        // Admin a TOUJOURS accès (déjà vérifié plus haut)
+        // Créateur a accès seulement s'il a au moins 1 baton
         setHasAccess(hasAny);
 
         // Si pas d'accès, rediriger
@@ -56,6 +73,8 @@ const AdminGateRoute = ({ children, fallbackRoute = '/create-token' }) => {
           console.log('ℹ️ Utilisateur sans permission → Redirection vers', fallbackRoute);
           navigate(fallbackRoute, { replace: true });
         }
+        
+        setLoading(false);
       } catch (err) {
         console.warn('⚠️ Erreur vérification accès:', err);
         setError(err.message);
@@ -67,7 +86,7 @@ const AdminGateRoute = ({ children, fallbackRoute = '/create-token' }) => {
     };
 
     checkAccess();
-  }, [walletConnected, wallet, isAdmin, navigate, fallbackRoute]);
+  }, [walletConnected, wallet, isAdmin, isChecking, navigate, fallbackRoute]);
 
   // Pas connecté
   if (!walletConnected) {

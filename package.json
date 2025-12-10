@@ -14,11 +14,13 @@
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
     "test:debug": "playwright test --debug",
-    "test:report": "playwright show-report"
+    "test:report": "playwright show-report",
+    "sync-farms": "node scripts/sync-farms-data.js"
   },
   "dependencies": {
     "@scure/bip32": "^1.5.0",
     "@scure/bip39": "^1.5.4",
+    "@supabase/supabase-js": "^2.87.0",
     "@yudiel/react-qr-scanner": "^2.0.8",
     "assert": "^2.0.0",
     "buffer": "^6.0.3",

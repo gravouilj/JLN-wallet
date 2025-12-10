@@ -73,53 +73,112 @@ const WalletDashboard = () => {
   // Setter for favorite farms
   const setFavoriteFarmIds = useSetAtom(favoriteFarmsAtom);
 
-  // Load all token balances for hub view (SCAN GLOBAL)
+  // Load all token balances for hub view (SCAN GLOBAL - Source: wallet.listETokens())
   useEffect(() => {
     if (!wallet || !walletConnected || selectedFarm !== null) return;
     
     const loadAllTokenBalances = async () => {
       setScanLoading(true);
-      console.log('🔍 SCAN GLOBAL: Analyse de toutes les fermes (' + farms.length + ')...');
-      const balances = {};
-      const tokensWithBalance = [];
-      const newFavoritesToAdd = [];
+      console.log('🔍 SCAN GLOBAL: Scan des jetons dans le wallet...');
       
-      for (const farm of farms) {
-        try {
-          const tokenData = await wallet.getTokenBalance(farm.tokenId);
-          const rawBalance = tokenData.balance || '0';
-          const formattedBalance = formatTokenBalance(rawBalance, farm.decimals || 0);
-          balances[farm.tokenId] = formattedBalance;
+      try {
+        // 1. Source de vérité: tous les tokens possédés dans le wallet
+        const walletTokens = await wallet.listETokens();
+        console.log(`📦 ${walletTokens.length} jeton(s) détecté(s) dans le wallet`);
+        
+        const balances = {};
+        const tokensWithBalance = [];
+        const newFavoritesToAdd = [];
+        
+        // 2. Pour chaque token trouvé dans le wallet
+        for (const walletToken of walletTokens) {
+          const { tokenId, balance: rawBalance } = walletToken;
           
-          // Vérifier si le solde est strictement positif
-          const balanceNum = typeof rawBalance === 'string' ? BigInt(rawBalance) : BigInt(rawBalance.toString());
-          if (balanceNum > 0n) {
-            console.log(`✅ Jeton détecté: ${farm.name} (${farm.ticker}) - Solde: ${formattedBalance}`);
-            tokensWithBalance.push(farm);
+          // Ignorer les soldes nuls
+          const balanceNum = BigInt(rawBalance || '0');
+          if (balanceNum === 0n) continue;
+          
+          // 3. Récupérer les métadonnées blockchain (ticker, decimals TOUJOURS depuis blockchain)
+          let tokenInfo = { genesisInfo: { tokenName: 'Inconnu', tokenTicker: '???', decimals: 0 } };
+          try {
+            tokenInfo = await wallet.getTokenInfo(tokenId);
+          } catch (e) {
+            console.warn(`⚠️ Impossible de récupérer infos blockchain pour ${tokenId}:`, e);
+          }
+          
+          const ticker = tokenInfo.genesisInfo?.tokenTicker || 'UNK';
+          const decimals = tokenInfo.genesisInfo?.decimals || 0;
+          const blockchainName = tokenInfo.genesisInfo?.tokenName || 'Token Inconnu';
+          
+          // 4. Chercher si le token existe dans farms.json (pour image, description, vérification)
+          const farmMatch = farms.find(f => f.tokenId === tokenId);
+          
+          if (farmMatch) {
+            // ✅ Token référencé dans farms.json
+            const formattedBalance = formatTokenBalance(rawBalance, decimals);
+            balances[tokenId] = formattedBalance;
+            
+            console.log(`✅ Jeton référencé: ${farmMatch.name} (${ticker}) - Solde: ${formattedBalance}`);
+            
+            // Utiliser les infos du JSON (image, description) + blockchain (ticker, decimals)
+            tokensWithBalance.push({
+              ...farmMatch,
+              ticker: ticker, // OVERRIDE: toujours blockchain
+              decimals: decimals, // OVERRIDE: toujours blockchain
+              verified: true,
+              balance: formattedBalance
+            });
             
             // Auto-ajout aux favoris si pas déjà présent
-            if (!favoriteFarmIds.includes(farm.id)) {
-              console.log(`⭐ Auto-ajout aux favoris: ${farm.name}`);
-              newFavoritesToAdd.push(farm.id);
+            if (!favoriteFarmIds.includes(farmMatch.id)) {
+              console.log(`⭐ Auto-ajout aux favoris: ${farmMatch.name}`);
+              newFavoritesToAdd.push(farmMatch.id);
             }
+          } else {
+            // ⚠️ Token NON référencé - utiliser infos blockchain uniquement
+            console.log(`⚠️ Jeton non-référencé détecté: ${tokenId}`);
+            
+            const formattedBalance = formatTokenBalance(rawBalance, decimals);
+            balances[tokenId] = formattedBalance;
+            
+            console.log(`📡 Infos blockchain: ${blockchainName} (${ticker})`);
+            
+            // Créer un objet "farm" synthétique avec infos blockchain
+            tokensWithBalance.push({
+              id: tokenId,
+              tokenId: tokenId,
+              name: blockchainName,
+              ticker: ticker,
+              decimals: decimals,
+              description: 'Jeton non référencé dans l\'annuaire',
+              verified: false, // Marquer comme non-vérifié
+              balance: formattedBalance,
+              // Image par défaut
+              image: null,
+              region: 'Inconnu',
+              country: 'Inconnu'
+            });
           }
-        } catch (err) {
-          console.warn(`⚠️ Échec lecture solde ${farm.name}:`, err);
-          balances[farm.tokenId] = '0';
         }
+        
+        setTokenBalances(balances);
+        setMyTokens(tokensWithBalance);
+        
+        // Mise à jour des favoris (seulement pour les tokens référencés)
+        if (newFavoritesToAdd.length > 0) {
+          console.log(`💾 Ajout de ${newFavoritesToAdd.length} ferme(s) référencée(s) aux favoris`);
+          setFavoriteFarmIds([...favoriteFarmIds, ...newFavoritesToAdd]);
+        }
+        
+        console.log(`📊 RÉSULTAT SCAN: ${tokensWithBalance.length} jeton(s) avec solde positif`);
+        console.log(`   - Référencés: ${tokensWithBalance.filter(t => t.verified).length}`);
+        console.log(`   - Non-référencés: ${tokensWithBalance.filter(t => !t.verified).length}`);
+        
+      } catch (error) {
+        console.error('❌ Erreur lors du scan des jetons:', error);
+      } finally {
+        setScanLoading(false);
       }
-      
-      setTokenBalances(balances);
-      setMyTokens(tokensWithBalance);
-      
-      // Mise à jour des favoris (si nouveaux jetons détectés)
-      if (newFavoritesToAdd.length > 0) {
-        console.log(`💾 Ajout de ${newFavoritesToAdd.length} ferme(s) aux favoris`);
-        setFavoriteFarmIds([...favoriteFarmIds, ...newFavoritesToAdd]);
-      }
-      
-      console.log(`📊 RÉSULTAT SCAN: ${tokensWithBalance.length} jeton(s) avec solde positif`);
-      setScanLoading(false);
     };
     
     loadAllTokenBalances();
@@ -131,7 +190,7 @@ const WalletDashboard = () => {
     setActiveTokenBalance(null);
     
     if (selectedFarm && tokenInfo && selectedFarm.tokenId === currentTokenId) {
-      const balance = formatTokenBalance(tokenBalance, tokenInfo.genesisInfo?.decimals || selectedFarm.decimals || 0);
+      const balance = formatTokenBalance(tokenBalance, tokenInfo.genesisInfo?.decimals || 0);
       setActiveTokenBalance(balance);
     }
   }, [selectedFarm, tokenInfo, currentTokenId, tokenBalance]);
@@ -253,7 +312,7 @@ const WalletDashboard = () => {
           selectedFarm.tokenId,
           sanitizedAddress,
           cleanAmount,
-          selectedFarm.decimals || 0,
+          tokenInfo.genesisInfo?.decimals || 0,
           selectedFarm.protocol || 'SLP'
         );
       } else {
@@ -538,7 +597,35 @@ const WalletDashboard = () => {
                             fontSize: '14px',
                             fontWeight: '500'
                           }}>
-                            {farm.name}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span>{farm.name}</span>
+                              {/* Badge vérifié/non-référencé */}
+                              {farm.verified ? (
+                                <span style={{
+                                  fontSize: '10px',
+                                  padding: '2px 6px',
+                                  borderRadius: '10px',
+                                  backgroundColor: '#e8f5e9',
+                                  color: '#2e7d32',
+                                  fontWeight: '600',
+                                  whiteSpace: 'nowrap'
+                                }} title="Ferme référencée dans l'annuaire">
+                                  ✅ Vérifié
+                                </span>
+                              ) : (
+                                <span style={{
+                                  fontSize: '10px',
+                                  padding: '2px 6px',
+                                  borderRadius: '10px',
+                                  backgroundColor: '#fff3e0',
+                                  color: '#e65100',
+                                  fontWeight: '600',
+                                  whiteSpace: 'nowrap'
+                                }} title="Jeton non référencé dans l'annuaire">
+                                  ⚠️ Non-référencé
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td style={{ 
                             padding: '14px 12px',
@@ -586,7 +673,7 @@ const WalletDashboard = () => {
               >
                 <div>
                   <div style={{ fontSize: '13px', color: '#666', marginBottom: '4px' }}>
-                    💎 {t('wallet.ecashAvailable') || 'eCash (XEC) disponible'}
+                    💎 {t('wallet.ecashAvailable') || '💎CreaeCash (XEC) disponible'}
                   </div>
                   <div style={{ fontSize: '11px', color: '#999' }}>
                     {t('wallet.networkFees') || 'Frais réseau'}
@@ -629,7 +716,7 @@ const WalletDashboard = () => {
                 onClick={() => navigate('/settings')}
                 style={{ cursor: 'pointer' }}
               >
-                <div className="balance-xec-label">{t('wallet.ecashAvailable') || 'eCash(XEC) disponible'}</div>
+                <div className="balance-xec-label">{t('wallet.ecashAvailable') || '💎 eCash(XEC) disponible'}</div>
                 <div className="balance-xec-amount">
                   {balanceLoading ? (
                     <span className="loading-pulse">...</span>

@@ -1,7 +1,9 @@
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation';
-import LanguageToggle from '../components/LanguageToggle';
-import ThemeToggle from '../components/ThemeToggle';
+import TopBar from '../components/Layout/TopBar';
+import BottomNavigation from '../components/Layout/BottomNavigation';
+import { useAtom } from 'jotai';
+import { walletConnectedAtom } from '../atoms';
 import '../styles/farmer-info.css';
 
 /**
@@ -12,6 +14,7 @@ import '../styles/farmer-info.css';
 const FarmerInfoPage = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [walletConnected] = useAtom(walletConnectedAtom);
 
   const handleRegisterRequest = () => {
     const subject = encodeURIComponent(t('farmerInfo.emailRegisterSubject'));
@@ -31,22 +34,7 @@ const FarmerInfoPage = () => {
 
   return (
     <div className="farmer-info-page">
-      {/* TopBar Public */}
-      <div className="top-bar">
-        <div className="top-bar-content">
-          <button
-            onClick={() => navigate('/')}
-            className="back-button"
-          >
-            ← {t('common.back') || 'Retour'}
-          </button>
-          <h1 className="page-title">{t('farmerInfo.title')}</h1>
-          <div className="top-bar-spacer">
-            <LanguageToggle />
-            <ThemeToggle compact={true} />
-          </div>
-        </div>
-      </div>
+      <TopBar />
 
       <div className="farmer-info-content">
         {/* Hero Section */}
@@ -175,22 +163,42 @@ const FarmerInfoPage = () => {
           }}>
             {t('farmerInfo.readyText') || 'Connectez votre wallet pour créer votre jeton en quelques clics avant de demander le référencement.'}
           </p>
-          <button 
-            onClick={() => navigate('/create-token')} 
-            style={{
-              padding: '14px 30px',
-              fontSize: '16px',
-              fontWeight: '600',
-              borderRadius: '8px',
-              border: 'none',
-              backgroundColor: 'var(--accent-primary, #0074e4)',
-              color: '#fff',
-              cursor: 'pointer',
-              marginBottom: '10px'
-            }}
-          >
-            🏭 {t('farmerInfo.readyButton') || 'Accéder au Dashboard Créateur'}
-          </button>
+          <div style={{ display: 'flex', gap: '10px', flexDirection: 'column', alignItems: 'center' }}>
+            <button 
+              onClick={() => navigate('/manage-token')} 
+              style={{
+                padding: '14px 30px',
+                fontSize: '16px',
+                fontWeight: '600',
+                borderRadius: '8px',
+                border: 'none',
+                backgroundColor: 'var(--accent-primary, #0074e4)',
+                color: '#fff',
+                cursor: 'pointer',
+                width: '100%',
+                maxWidth: '400px'
+              }}
+            >
+              🏭 {t('farmerInfo.readyButton') || 'Accéder au Dashboard Créateur'}
+            </button>
+            <button 
+              onClick={() => navigate('/manage-token')} 
+              style={{
+                padding: '14px 30px',
+                fontSize: '16px',
+                fontWeight: '600',
+                borderRadius: '8px',
+                border: '2px solid var(--accent-primary, #0074e4)',
+                backgroundColor: 'transparent',
+                color: 'var(--accent-primary, #0074e4)',
+                cursor: 'pointer',
+                width: '100%',
+                maxWidth: '400px'
+              }}
+            >
+              📥 {t('farmerInfo.importButton') || 'Importer un jeton existant'}
+            </button>
+          </div>
         </section>
 
         {/* Call to Action - Referencing */}
@@ -216,6 +224,8 @@ const FarmerInfoPage = () => {
           </p>
         </section>
       </div>
+      
+      {walletConnected && <BottomNavigation />}
     </div>
   );
 };

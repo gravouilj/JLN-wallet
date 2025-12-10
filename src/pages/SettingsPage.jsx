@@ -85,7 +85,7 @@ const SettingsPage = () => {
   };
 
   const handleTwitter = () => {
-    window.open('https://twitter.com/farmwallet', '_blank');
+    window.open('https://twitter.com/', '_blank');
   };
 
   const handleLanguageChange = (e) => {
@@ -119,8 +119,81 @@ const SettingsPage = () => {
     <MobileLayout title={t('settings.title')}>
       <div className="settings-page-content">
         <h1 className="page-header-title">{pageTitle}</h1>
-        
-        {/* EN-TÊTE: Prix du Marché */}
+
+        {/* SECTION: Préférences */}
+        <div className="settings-section">
+          <h2 className="section-title">
+            <span className="section-icon">⚙️</span>
+            {t('settings.preferences')}
+          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Sélecteur Langue */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label htmlFor="language-select" style={{
+                fontSize: '0.9rem',
+                fontWeight: '600',
+                color: 'var(--text-primary, #000)'
+              }}>
+                🌐 {t('settings.language')}
+              </label>
+              <select
+                id="language-select"
+                value={locale}
+                onChange={handleLanguageChange}
+                style={{
+                  padding: '12px',
+                  fontSize: '1rem',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-color, #ddd)',
+                  backgroundColor: 'var(--bg-primary, #fff)',
+                  color: 'var(--text-primary, #000)',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="fr" defaultValue={true}>🇫🇷 Français</option>
+                <option value="en">🇬🇧 English</option>
+                <option value="es">🇪🇸 Espanol</option>
+                <option value="de">🇩🇪 Deutsch</option>
+                <option value="pt">🇵🇹 Portugues</option>
+                <option value="it">🇮🇹 Italian</option>
+                <option value="en-us"> 🇺🇸 USA</option>
+                
+              </select>
+            </div>
+
+            {/* Sélecteur Monnaie */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label htmlFor="currency-select" style={{
+                fontSize: '0.9rem',
+                fontWeight: '600',
+                color: 'var(--text-primary, #000)'
+              }}>
+                💱 {t('settings.currency')}
+              </label>
+              <select
+                id="currency-select"
+                value={currency}
+                onChange={handleCurrencyChange}
+                style={{
+                  padding: '12px',
+                  fontSize: '1rem',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-color, #ddd)',
+                  backgroundColor: 'var(--bg-primary, #fff)',
+                  color: 'var(--text-primary, #000)',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="EUR" defaultValue={true}>EUR (€)</option>
+                <option value="GBP">GBP (£)</option>
+                <option value="USD">USD ($)</option>
+
+              </select>
+            </div>
+          </div>
+        </div>
+
+{/* EN-TÊTE: Prix du Marché */}
         <div style={{
           padding: '16px',
           marginBottom: '20px',
@@ -155,74 +228,7 @@ const SettingsPage = () => {
             </div>
           )}
         </div>
-
-        {/* SECTION: Préférences */}
-        <div className="settings-section">
-          <h2 className="section-title">
-            <span className="section-icon">⚙️</span>
-            {t('settings.preferences')}
-          </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {/* Sélecteur Langue */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label htmlFor="language-select" style={{
-                fontSize: '0.9rem',
-                fontWeight: '600',
-                color: 'var(--text-primary, #000)'
-              }}>
-                🌐 {t('settings.language')}
-              </label>
-              <select
-                id="language-select"
-                value={locale}
-                onChange={handleLanguageChange}
-                style={{
-                  padding: '12px',
-                  fontSize: '1rem',
-                  borderRadius: '8px',
-                  border: '1px solid var(--border-color, #ddd)',
-                  backgroundColor: 'var(--bg-primary, #fff)',
-                  color: 'var(--text-primary, #000)',
-                  cursor: 'pointer'
-                }}
-              >
-                <option value="fr">🇫🇷 Français</option>
-                <option value="en">🇬🇧 English</option>
-              </select>
-            </div>
-
-            {/* Sélecteur Monnaie */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label htmlFor="currency-select" style={{
-                fontSize: '0.9rem',
-                fontWeight: '600',
-                color: 'var(--text-primary, #000)'
-              }}>
-                💱 {t('settings.currency')}
-              </label>
-              <select
-                id="currency-select"
-                value={currency}
-                onChange={handleCurrencyChange}
-                style={{
-                  padding: '12px',
-                  fontSize: '1rem',
-                  borderRadius: '8px',
-                  border: '1px solid var(--border-color, #ddd)',
-                  backgroundColor: 'var(--bg-primary, #fff)',
-                  color: 'var(--text-primary, #000)',
-                  cursor: 'pointer'
-                }}
-              >
-                <option value="EUR">EUR (€)</option>
-                <option value="USD">USD ($)</option>
-                <option value="GBP">GBP (£)</option>
-                <option value="CHF">CHF (Fr)</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
+        
         {/* SECTION: Sécurité & Fonds */}
         <div className="settings-section">
           <h2 className="section-title">

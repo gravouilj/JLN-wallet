@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
+import { supabase } from '../services/supabaseClient';
+import { FarmService } from '../services/farmService';
 
 /**
- * Hook to load and manage farms data from farms.json
+ * Hook to load and manage farms data from Supabase (Cloud)
  * @returns {Object} { farms, loading, error, refreshFarms }
  */
 export const useFarms = () => {
@@ -14,39 +16,18 @@ export const useFarms = () => {
     setError(null);
 
     try {
-      // Import farms.json directly using Vite's import feature
-      const farmsData = await import('../data/farms.json');
+      // Charger TOUTES les fermes depuis Supabase (y compris non vérifiées)
+      const { data, error } = await supabase
+        .from('farms')
+        .select('*')
+        .order('created_at', { ascending: false });
       
-      // Support multiple formats:
-      // 1. Direct array (new format): [{ id, name, ... }]
-      // 2. Object with farms property: { farms: [...] }
-      // 3. Default export with array
-      // 4. Default export with farms property
-      let farmsArray = null;
+      if (error) throw error;
       
-      if (Array.isArray(farmsData.default)) {
-        // Direct array import (new format)
-        farmsArray = farmsData.default;
-      } else if (farmsData.default && Array.isArray(farmsData.default.farms)) {
-        // Object with farms property (old format)
-        farmsArray = farmsData.default.farms;
-      } else if (Array.isArray(farmsData.farms)) {
-        // Named export with farms property
-        farmsArray = farmsData.farms;
-      } else if (Array.isArray(farmsData)) {
-        // Direct array (edge case)
-        farmsArray = farmsData;
-      }
-      
-      if (farmsArray && farmsArray.length > 0) {
-        console.log(`✅ Loaded ${farmsArray.length} farms`);
-        setFarms(farmsArray);
-      } else {
-        console.warn('⚠️ No farms found in farms.json');
-        setFarms([]);
-      }
+      console.log(`✅ ${data.length} fermes chargées depuis Supabase (tous statuts)`);
+      setFarms(data || []);
     } catch (err) {
-      console.error('Failed to load farms:', err);
+      console.error('Failed to load farms from Supabase:', err);
       setError(err.message || 'Failed to load farms data');
       setFarms([]);
     } finally {

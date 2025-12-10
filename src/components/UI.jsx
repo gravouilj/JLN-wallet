@@ -183,3 +183,300 @@ export const PageHeader = ({ icon = '', title = '', subtitle = '', action, class
     </div>
   </div>
 );
+
+/**
+ * Input - Simple input component with label, icons, and action button
+ */
+export const Input = ({ className = '', label = '', rightIcon, actionButton, helperText, ...props }) => (
+  <div className={`input-wrapper ${className}`}>
+    {label && (
+      <label style={{
+        display: 'block',
+        fontSize: '0.875rem',
+        fontWeight: '500',
+        color: 'var(--text-primary)',
+        marginBottom: '0.5rem'
+      }}>
+        {label}
+      </label>
+    )}
+    <div style={{ position: 'relative' }}>
+      <input 
+        className="input"
+        style={{
+          width: '100%',
+          padding: rightIcon ? '0.75rem 3rem 0.75rem 1rem' : actionButton ? '0.75rem 5rem 0.75rem 1rem' : '0.75rem 1rem',
+          fontSize: '1rem',
+          border: '1px solid var(--border-primary)',
+          borderRadius: '8px',
+          background: 'var(--input-bg)',
+          color: 'var(--text-primary)',
+          transition: 'border-color 0.2s',
+          outline: 'none'
+        }}
+        onFocus={(e) => e.target.style.borderColor = 'var(--accent-primary)'}
+        onBlur={(e) => e.target.style.borderColor = 'var(--border-primary)'}
+        {...props} 
+      />
+      {rightIcon && (
+        <div style={{
+          position: 'absolute',
+          right: '0.5rem',
+          top: '50%',
+          transform: 'translateY(-50%)'
+        }}>
+          {rightIcon}
+        </div>
+      )}
+      {actionButton && (
+        <button
+          type="button"
+          onClick={actionButton.onClick}
+          style={{
+            position: 'absolute',
+            right: '0.5rem',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            padding: '0.25rem 0.75rem',
+            fontSize: '0.75rem',
+            fontWeight: '600',
+            color: 'var(--accent-primary)',
+            background: 'transparent',
+            border: '1px solid var(--accent-primary)',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            transition: 'all 0.2s'
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.background = 'var(--accent-primary)';
+            e.target.style.color = 'white';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.background = 'transparent';
+            e.target.style.color = 'var(--accent-primary)';
+          }}
+        >
+          {actionButton.label}
+        </button>
+      )}
+    </div>
+    {helperText && (
+      <p style={{
+        fontSize: '0.75rem',
+        color: 'var(--text-secondary)',
+        marginTop: '0.25rem',
+        marginBottom: 0
+      }}>
+        {helperText}
+      </p>
+    )}
+  </div>
+);
+
+/**
+ * Label - Simple label component
+ */
+export const Label = ({ children, className = '', htmlFor = '', ...props }) => (
+  <label 
+    htmlFor={htmlFor}
+    className={`label ${className}`}
+    style={{
+      display: 'block',
+      fontSize: '0.875rem',
+      fontWeight: '500',
+      color: 'var(--text-primary)',
+      marginBottom: '0.5rem'
+    }}
+    {...props}
+  >
+    {children}
+  </label>
+);
+
+/**
+ * Checkbox - Simple checkbox component
+ */
+export const Checkbox = ({ className = '', label = '', ...props }) => (
+  <label style={{
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    cursor: 'pointer',
+    fontSize: '0.875rem',
+    color: 'var(--text-primary)'
+  }}>
+    <input 
+      type="checkbox"
+      className={`checkbox ${className}`}
+      style={{
+        width: '1.25rem',
+        height: '1.25rem',
+        cursor: 'pointer',
+        accentColor: 'var(--accent-primary)'
+      }}
+      {...props} 
+    />
+    {label && <span>{label}</span>}
+  </label>
+);
+
+/**
+ * Select - Simple select component
+ */
+export const Select = ({ className = '', label = '', options = [], ...props }) => (
+  <div className={`select-wrapper ${className}`}>
+    {label && (
+      <label style={{
+        display: 'block',
+        fontSize: '0.875rem',
+        fontWeight: '500',
+        color: 'var(--text-primary)',
+        marginBottom: '0.5rem'
+      }}>
+        {label}
+      </label>
+    )}
+    <select 
+      className="select"
+      style={{
+        width: '100%',
+        padding: '0.75rem 1rem',
+        fontSize: '1rem',
+        border: '1px solid var(--border-primary)',
+        borderRadius: '8px',
+        background: 'var(--input-bg)',
+        color: 'var(--text-primary)',
+        cursor: 'pointer',
+        outline: 'none'
+      }}
+      {...props}
+    >
+      {options.map((opt, idx) => (
+        <option key={idx} value={opt.value}>
+          {opt.label}
+        </option>
+      ))}
+    </select>
+  </div>
+);
+
+/**
+ * Textarea - Simple textarea component
+ */
+export const Textarea = ({ className = '', label = '', ...props }) => (
+  <div className={`textarea-wrapper ${className}`}>
+    {label && (
+      <label style={{
+        display: 'block',
+        fontSize: '0.875rem',
+        fontWeight: '500',
+        color: 'var(--text-primary)',
+        marginBottom: '0.5rem'
+      }}>
+        {label}
+      </label>
+    )}
+    <textarea 
+      className="textarea"
+      style={{
+        width: '100%',
+        padding: '0.75rem 1rem',
+        fontSize: '1rem',
+        border: '1px solid var(--border-primary)',
+        borderRadius: '8px',
+        background: 'var(--input-bg)',
+        color: 'var(--text-primary)',
+        resize: 'vertical',
+        minHeight: '100px',
+        outline: 'none'
+      }}
+      onFocus={(e) => e.target.style.borderColor = 'var(--accent-primary)'}
+      onBlur={(e) => e.target.style.borderColor = 'var(--border-primary)'}
+      {...props} 
+    />
+  </div>
+);
+
+/**
+ * Modal - Simple modal component
+ */
+export const Modal = ({ children, isOpen = false, onClose, className = '' }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div 
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        padding: '1rem'
+      }}
+      onClick={onClose}
+    >
+      <div 
+        className={`modal ${className}`}
+        style={{
+          background: 'var(--card-bg)',
+          borderRadius: '12px',
+          maxWidth: '500px',
+          width: '100%',
+          maxHeight: '90vh',
+          overflow: 'auto',
+          boxShadow: '0 4px 24px rgba(0, 0, 0, 0.2)'
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </div>
+    </div>
+  );
+};
+
+// Modal sub-components
+Modal.Header = ({ children, className = '' }) => (
+  <div 
+    className={`modal-header ${className}`}
+    style={{
+      padding: '1.5rem',
+      borderBottom: '1px solid var(--border-primary)',
+      fontSize: '1.25rem',
+      fontWeight: '700',
+      color: 'var(--text-primary)'
+    }}
+  >
+    {children}
+  </div>
+);
+
+Modal.Body = ({ children, className = '' }) => (
+  <div 
+    className={`modal-body ${className}`}
+    style={{
+      padding: '1.5rem'
+    }}
+  >
+    {children}
+  </div>
+);
+
+Modal.Footer = ({ children, className = '' }) => (
+  <div 
+    className={`modal-footer ${className}`}
+    style={{
+      padding: '1.5rem',
+      borderTop: '1px solid var(--border-primary)',
+      display: 'flex',
+      gap: '0.75rem',
+      justifyContent: 'flex-end'
+    }}
+  >
+    {children}
+  </div>
+);

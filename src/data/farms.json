@@ -1,7 +1,7 @@
 [
   {
     "id": "1",
-    "name": "Ferme EVA (Test)",
+    "name": "Ferme EVA",
     "description": "Producteur local partenaire spécialisé dans la permaculture expérimentale. Vente directe à la ferme tous les mercredis.",
     "region": "Bretagne",
     "country": "France",
@@ -9,54 +9,76 @@
     "products": ["Légumes", "Fruits", "Oeufs"],
     "services": ["Vente à la ferme", "Cueillette", "Visite pédagogique"],
     "verified": true,
+    "verificationStatus": "verified",
+    "createdWithFarmWallet": true,
+    "creatorAddress": null,
     "address": "Kerlaouen, 29000 Quimper",
     "email": "contact@ferme-eva.bzh",
     "phone": "06 00 00 00 00",
     "website": "https://ferme-eva.bzh",
     "image": "https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=400&q=80",
-    
-    "tokenId": "fc2e2b3a44632006f2ee946e4638f0b2b4f4c9f5d5d5c47319fa5738a406f171",
-    "ticker": "EVA",
-    "decimals": 2,
-    "protocol": "ALP"
+    "coordinates": {
+      "lat": 48.0,
+      "lng": -3.0
+    },
+    "tokens": [
+      {
+        "tokenId": "fc2e2b3a44632006f2ee946e4638f0b2b4f4c9f5d5d5c47319fa5738a406f171",
+        "protocol": "ALP",
+        "ticker": null,
+        "tokenName": null,
+        "decimals": null,
+        "purpose": "Token de la ferme EVA pour achats directs et fidélité",
+        "_dynamicData": {
+          "_note": "Données synchronisées depuis blockchain",
+          "circulatingSupply": null,
+          "genesisSupply": null,
+          "isActive": null,
+          "isDeleted": null,
+          "lastUpdated": null
+        }
+      }
+    ]
   },
   {
     "id": "2",
-    "name": "Ferme du Soleil",
-    "description": "Exploitation familiale bio depuis 1985. Nous produisons des fruits et légumes de saison dans le respect de la biodiversité.",
-    "region": "Normandie",
+    "name": "Ferme Admin Test",
+    "description": "Ferme de test créée par l'administrateur pour validation du système. Production de légumes bio et transformation artisanale.",
+    "region": "Île-de-France",
     "country": "France",
-    "department": "Calvados",
-    "products": ["Légumes", "Cidre", "Jus de pomme"],
-    "services": ["AMAP", "Marché", "Livraison"],
+    "department": "Val-d'Oise",
+    "products": ["Légumes bio", "Conserves", "Confitures"],
+    "services": ["Vente directe", "Livraison", "Ateliers"],
     "verified": true,
-    "address": "Route de la Pomme, 14000 Caen",
-    "email": "bonjour@fermedusoleil.fr",
-    "phone": "02 31 00 00 00",
-    "image": "https://images.unsplash.com/photo-1464226184884-fa280b87c399?w=400&q=80",
-    
-    "tokenId": "3213213213213213213213213213213213213213213213213213213213213211",
-    "ticker": "SOL",
-    "decimals": 0,
-    "protocol": "SLP"
-  },
-  {
-    "id": "3",
-    "name": "Le Jardin de Pierre",
-    "description": "Maraîchage sur sol vivant et micro-pousses. Nos produits sont cultivés sans intrants chimiques.",
-    "region": "Occitanie",
-    "country": "France",
-    "department": "Hérault",
-    "products": ["Micro-pousses", "Légumes racines", "Herbes aromatiques"],
-    "services": ["Vente aux restaurateurs", "Marché"],
-    "verified": false,
-    "address": "Chemin des Vignes, 34000 Montpellier",
-    "email": "pierre@jardin.fr",
-    "image": "https://images.unsplash.com/photo-1595855709920-4e2483842106?w=400&q=80",
-    
-    "tokenId": "6546546546546546546546546546546546546546546546546546546546546544",
-    "ticker": "JDP",
-    "decimals": 0,
-    "protocol": "SLP"
+    "verificationStatus": "verified",
+    "createdWithFarmWallet": true,
+    "creatorAddress": null,
+    "address": "Chemin de la Ferme, 95000 Cergy",
+    "email": "admin@farmwallet.test",
+    "phone": "01 23 45 67 89",
+    "website": "https://admin-farm.test",
+    "image": "https://images.unsplash.com/photo-1574943320219-553eb213f72d?w=400&q=80",
+    "coordinates": {
+      "lat": 49.0,
+      "lng": 2.0
+    },
+    "tokens": [
+      {
+        "tokenId": "1f178629bf631d25da79a769bcbd7e7fa565209a35b795095b357c3ffcab3302",
+        "protocol": "ALP",
+        "ticker": null,
+        "tokenName": null,
+        "decimals": null,
+        "purpose": "Token test pour validation du système",
+        "_dynamicData": {
+          "_note": "Données synchronisées depuis blockchain",
+          "circulatingSupply": null,
+          "genesisSupply": null,
+          "isActive": null,
+          "isDeleted": null,
+          "lastUpdated": null
+        }
+      }
+    ]
   }
 ]

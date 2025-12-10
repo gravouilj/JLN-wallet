@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useAtom } from 'jotai';
-import { favoriteFarmsAtom, selectedFarmAtom, walletAtom, toggleFarmFavoriteAtom } from '../atoms';
+import { favoriteFarmsAtom, selectedFarmAtom, toggleFarmFavoriteAtom, walletConnectedAtom } from '../atoms';
 import { useFarms } from '../hooks/useFarms';
-import { useEcashToken } from '../hooks/useEcashWallet';
+import { useToken } from '../hooks/useToken';
 import { useTranslation } from '../hooks/useTranslation';
 import { useNavigate } from 'react-router-dom';
-import MobileLayout from '../components/Layout/MobileLayout';
+import TopBar from '../components/Layout/TopBar';
+import BottomNavigation from '../components/Layout/BottomNavigation';
 import '../styles/directory.css';
 
 const FavoritesPage = () => {
@@ -13,29 +14,29 @@ const FavoritesPage = () => {
   const navigate = useNavigate();
   const { farms, loading, error } = useFarms();
   const [favoriteFarmIds] = useAtom(favoriteFarmsAtom);
-  const [selectedFarm, setSelectedFarm] = useAtom(selectedFarmAtom);
-  const [wallet] = useAtom(walletAtom);
+  const [, setSelectedFarm] = useAtom(selectedFarmAtom);
   const [, toggleFavorite] = useAtom(toggleFarmFavoriteAtom);
+  const [walletConnected] = useAtom(walletConnectedAtom);
   const [modalFarm, setModalFarm] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   
-  // Page title
-  const pageTitle = '⭐ Mes Favoris';
-
   // Filter farms to only show favorites
   const favoriteFarms = farms.filter(farm => favoriteFarmIds.includes(farm.id));
 
   const handleOpenModal = (farm) => {
     setModalFarm(farm);
+    setIsModalOpen(true);
   };
 
   const handleCloseModal = () => {
+    setIsModalOpen(false);
     setModalFarm(null);
   };
 
   const handlePayFarm = (farm) => {
     setSelectedFarm(farm);
     navigate('/wallet');
-    setModalFarm(null);
+    handleCloseModal();
   };
 
   const handleRemoveFavorite = (e, farmId) => {
@@ -50,17 +51,14 @@ const FavoritesPage = () => {
       url: window.location.origin
     };
 
-    // Try Web Share API first (mobile)
     if (navigator.share) {
       navigator.share(shareData)
         .catch((error) => {
-          // Fallback to mailto if sharing fails or is cancelled
           if (error.name !== 'AbortError') {
             openMailtoFallback();
           }
         });
     } else {
-      // Fallback to mailto for desktop
       openMailtoFallback();
     }
   };
@@ -70,11 +68,14 @@ const FavoritesPage = () => {
     const body = encodeURIComponent(`Bonjour,
 
 Je t'invite à découvrir Farm Wallet, une plateforme qui permet aux producteurs de créer leur propre monnaie locale pour :
+- Financer leur(s) activité(s)
+- Augmenter leurs ventes
+- Développer leur réseau
 - Fidéliser leur clientèle
-- Obtenir une avance de trésorerie
-- Vendre en circuit ultra-court sans intermédiaire
 
-C'est simple, gratuit et décentralisé sur la blockchain eCash.
+Bref vendre en circuit ultra-court sans intermédiaire plus facilement !
+
+C'est simple, gratuit et très simple à utiliser.
 
 Découvre la plateforme : ${window.location.origin}
 
@@ -83,98 +84,54 @@ Découvre la plateforme : ${window.location.origin}
     window.location.href = `mailto:?subject=${subject}&body=${body}`;
   };
 
+  const getGoogleMapsLink = (farm) => {
+    const query = encodeURIComponent(`${farm.name}, ${farm.region}, France`);
+    return `https://www.google.com/maps/search/?api=1&query=${query}`;
+  };
+
   if (loading) {
     return (
-      <MobileLayout>
-        <div className="directory-page">
-          <div className="loading-message">{t('common.loading')}</div>
+      <div className="directory-container">
+        <TopBar />
+        <div className="directory-loading">
+          <div className="loading-spinner"></div>
+          <p>{t('common.loading')}</p>
         </div>
-      </MobileLayout>
+        {walletConnected && <BottomNavigation />}
+      </div>
     );
   }
 
   if (error) {
     return (
-      <MobileLayout>
-        <div className="directory-page">
-          <div className="error-message">{error}</div>
+      <div className="directory-container">
+        <TopBar />
+        <div className="directory-error">
+          <h2>❌ {t('directory.error') || 'Error'}</h2>
+          <p>{error}</p>
         </div>
-      </MobileLayout>
+        {walletConnected && <BottomNavigation />}
+      </div>
     );
   }
 
   if (favoriteFarms.length === 0) {
     return (
-      <MobileLayout>
-        <div className="directory-page">
-          <div className="directory-header">
-            <h1>⭐ {t('navigation.favorites') || 'Favorites'}</h1>
-            <p className="directory-subtitle">
-              {t('favorites.description') || 'Retrouvez ici vos producteurs préférés pour un accès rapide.'}
-            </p>
-          </div>
-          <div className="empty-favorites">
-            <p className="empty-message">{t('favorites.empty') || 'No favorite farms yet. Add farms from the directory!'}</p>
-            <button onClick={() => navigate('/')} className="primary-button">
-              {t('favorites.goToDirectory') || 'Browse Directory'}
-            </button>
-          </div>
-
-          {/* Invitation Section - Always visible even when empty */}
-          <div className="invite-section">
-            <h2>{t('favorites.inviteTitle') || 'Vous connaissez un producteur ?'}</h2>
-            <p className="invite-description">
-              {t('favorites.inviteDescription') || 'Partagez la plateforme avec les producteurs de votre région et aidez-les à créer leur monnaie locale.'}
-            </p>
-            <button onClick={handleInviteFarmer} className="invite-button">
-              👨‍🌾 {t('favorites.inviteButton') || 'Inviter un fermier'}
-            </button>
-          </div>
-        </div>
-      </MobileLayout>
-    );
-  }
-
-  return (
-    <MobileLayout>
-      <div className="directory-page">
-        <h1 className="page-header-title">{pageTitle}</h1>
-        
+      <div className="directory-container">
+        <TopBar />
         <div className="directory-header">
-          <h2 className="directory-subtitle-header">⭐ {t('navigation.favorites') || 'Favorites'}</h2>
+          <h1>🧑‍🌾 {t('favorites.title') || 'Mes producteurs'}</h1>
           <p className="directory-subtitle">
             {t('favorites.description') || 'Retrouvez ici vos producteurs préférés pour un accès rapide.'}
           </p>
-          <p className="favorites-count">
-            {favoriteFarms.length} {t('favorites.farmsCount') || 'favorite farm(s)'}
-          </p>
+        </div>
+        <div className="empty-favorites">
+          <p className="empty-message">{t('favorites.empty') || 'Aucun producteur favori. Ajoutez des fermes depuis le répertoire !'}</p>
+          <button onClick={() => navigate('/')} className="primary-button">
+            {t('favorites.goToDirectory') || 'Parcourir le répertoire'}
+          </button>
         </div>
 
-        <div className="farms-grid">
-          {favoriteFarms.map((farm) => (
-            <FarmCard
-              key={farm.id}
-              farm={farm}
-              isSelected={selectedFarm?.id === farm.id}
-              onOpenModal={() => handleOpenModal(farm)}
-              onRemoveFavorite={(e) => handleRemoveFavorite(e, farm.id)}
-              onPay={() => handlePayFarm(farm)}
-              wallet={wallet}
-            />
-          ))}
-        </div>
-
-        {/* Farm Detail Modal */}
-        {modalFarm && (
-          <FarmModal
-            farm={modalFarm}
-            onClose={handleCloseModal}
-            onPay={() => handlePayFarm(modalFarm)}
-            wallet={wallet}
-          />
-        )}
-
-        {/* Invitation Section */}
         <div className="invite-section">
           <h2>{t('favorites.inviteTitle') || 'Vous connaissez un producteur ?'}</h2>
           <p className="invite-description">
@@ -184,196 +141,200 @@ Découvre la plateforme : ${window.location.origin}
             👨‍🌾 {t('favorites.inviteButton') || 'Inviter un fermier'}
           </button>
         </div>
+        {walletConnected && <BottomNavigation />}
       </div>
-    </MobileLayout>
-  );
-};
-
-// Farm Card Component with Token Balance
-const FarmCard = ({ farm, isSelected, onOpenModal, onRemoveFavorite, onPay, wallet }) => {
-  const { t } = useTranslation();
-  const { tokenBalance, tokenInfo } = useEcashToken(farm.tokenId);
-
-  const formatBalance = (balance) => {
-    if (!balance || balance === '0') return '0';
-    const decimals = tokenInfo?.decimals || 0;
-    const divisor = Math.pow(10, decimals);
-    return (parseFloat(balance) / divisor).toFixed(decimals);
-  };
+    );
+  }
 
   return (
-    <div 
-      className={`farm-card ${isSelected ? 'selected' : ''}`}
-      onClick={onOpenModal}
-      style={{ cursor: 'pointer' }}
-    >
-      <button 
-        className="favorite-star active"
-        onClick={onRemoveFavorite}
-        aria-label={t('favorites.remove') || 'Remove from favorites'}
-        title={t('favorites.remove') || 'Remove from favorites'}
-      >
-        ⭐
-      </button>
-
-      <div className="farm-header">
-        <h3>{farm.name}</h3>
-        {farm.verified && (
-          <span className="verified-badge" title={t('directory.verified')}>
-            ✓
-          </span>
-        )}
+    <div className="directory-container">
+      <TopBar />
+      
+      <div className="directory-header">
+        <h1>🧑‍🌾 {t('favorites.title') || 'Mes producteurs'}</h1>
+        <p className="directory-subtitle">
+          {t('favorites.description') || 'Retrouvez ici vos producteurs préférés pour un accès rapide.'}
+        </p>
       </div>
 
-      <div className="farm-meta">
-        <span className="farm-region">📍 {farm.region}</span>
-        <span className="farm-type">{farm.type}</span>
+      {/* Results count */}
+      <div className="results-count">
+        <p>
+          {favoriteFarms.length} {favoriteFarms.length === 1 ? t('directory.farm') || 'farm' : t('directory.farms') || 'farms'}
+        </p>
       </div>
 
-      {farm.description && (
-        <p className="farm-description">{farm.description}</p>
-      )}
+      {/* Farms Grid */}
+      <div className="farms-grid">
+        {favoriteFarms.map((farm) => (
+          <FavoriteFarmCard 
+            key={farm.id}
+            farm={farm}
+            onCardClick={() => handleOpenModal(farm)}
+            onRemoveFavorite={(e) => handleRemoveFavorite(e, farm.id)}
+          />
+        ))}
+      </div>
 
-      {wallet && (
-        <div className="farm-balance">
-          <div className="balance-info">
-            <span className="balance-label">{t('favorites.yourBalance') || 'Your balance'}:</span>
-            <span className="balance-value">
-              {formatBalance(tokenBalance)} <strong>{tokenInfo?.ticker || farm.ticker}</strong>
-            </span>
+      {/* Invitation Section */}
+      <div className="invite-section">
+        <h2>{t('favorites.inviteTitle') || 'Vous connaissez un producteur ?'}</h2>
+        <p className="invite-description">
+          {t('favorites.inviteDescription') || 'Partagez la plateforme avec les producteurs de votre région et aidez-les à créer leur monnaie locale.'}
+        </p>
+        <button onClick={handleInviteFarmer} className="invite-button">
+          👨‍🌾 {t('favorites.inviteButton') || 'Inviter un fermier'}
+        </button>
+      </div>
+
+      {/* Farm Details Modal */}
+      {isModalOpen && modalFarm && (
+        <div className="modal-overlay" onClick={handleCloseModal}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close" onClick={handleCloseModal}>
+              ✕
+            </button>
+            
+            <div className="modal-header">
+              <h2>{modalFarm.name}</h2>
+              {modalFarm.verified && (
+                <span className="verified-badge verified modal-verified">
+                  ✓ {t('directory.verified') || 'Verified'}
+                </span>
+              )}
+            </div>
+            
+            <div className="modal-body">
+              <div className="modal-info-row">
+                <span className="modal-label">🌍 {t('directory.country') || 'Pays'}:</span>
+                <span className="modal-value">{modalFarm.country}</span>
+              </div>
+
+              <div className="modal-info-row">
+                <span className="modal-label">📍 {t('directory.region') || 'Région'}:</span>
+                <span className="modal-value">{modalFarm.region}</span>
+              </div>
+              
+              {modalFarm.department && (
+                <div className="modal-info-row">
+                  <span className="modal-label">🏛️ Département:</span>
+                  <span className="modal-value">{modalFarm.department}</span>
+                </div>
+              )}
+              
+              <div className="modal-section">
+                <h3>{t('directory.description') || 'Description'}</h3>
+                <p>{modalFarm.description}</p>
+              </div>
+              
+              {modalFarm.products && modalFarm.products.length > 0 && (
+                <div className="modal-section">
+                  <h3>👨‍🌾 Produits</h3>
+                  <div className="product-badges">
+                    {modalFarm.products.map((product, idx) => (
+                      <span key={idx} className="product-badge">
+                        {product}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {modalFarm.contactEmail && (
+                <div className="modal-info-row">
+                  <span className="modal-label">📧 {t('directory.contact') || 'Contact'}:</span>
+                  <a href={`mailto:${modalFarm.contactEmail}`} className="modal-link">
+                    {modalFarm.contactEmail}
+                  </a>
+                </div>
+              )}
+              
+              {modalFarm.website && (
+                <div className="modal-info-row">
+                  <span className="modal-label">🌐 {t('directory.website') || 'Website'}:</span>
+                  <a href={modalFarm.website} target="_blank" rel="noopener noreferrer" className="modal-link">
+                    {modalFarm.website}
+                  </a>
+                </div>
+              )}
+              
+              <div className="modal-actions">
+                <a
+                  href={getGoogleMapsLink(modalFarm)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="modal-map-btn"
+                >
+                  🗺️ {t('directory.directions') || 'Itinéraire'}
+                </a>
+                <button onClick={() => handlePayFarm(modalFarm)} className="modal-select-btn">
+                  💰 {t('directory.investNow') || 'Investir maintenant'} →
+                </button>
+              </div>
+            </div>
           </div>
-          <button 
-            className="pay-button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onPay();
-            }}
-          >
-            💳 {t('favorites.pay') || 'Payer'}
-          </button>
         </div>
       )}
 
-      {isSelected && (
-        <span className="active-badge">
-          ✓ {t('directory.active') || 'Active'}
-        </span>
-      )}
+      {walletConnected && <BottomNavigation />}
     </div>
   );
 };
 
-// Farm Detail Modal Component
-const FarmModal = ({ farm, onClose, onPay, wallet }) => {
+/**
+ * FavoriteFarmCard - Shows favorite farm with live balance
+ */
+const FavoriteFarmCard = ({ farm, onCardClick, onRemoveFavorite }) => {
   const { t } = useTranslation();
-  const { tokenBalance, tokenInfo } = useEcashToken(farm.tokenId);
-
-  const formatBalance = (balance) => {
-    if (!balance || balance === '0') return '0';
-    const decimals = tokenInfo?.decimals || 0;
-    const divisor = Math.pow(10, decimals);
-    return (parseFloat(balance) / divisor).toFixed(decimals);
-  };
-
+  const { tokenBalance, loading } = useToken(farm.tokenId);
+  
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <button className="modal-close" onClick={onClose}>×</button>
+    <div className="farm-card" onClick={onCardClick}>
+      <div className="card-header">
+        <h3>{farm.name}</h3>
+        <button
+          className="favorite-btn active"
+          onClick={onRemoveFavorite}
+          title="Remove from favorites"
+        >
+          ⭐
+        </button>
+      </div>
+      
+      <div className="card-content">
+        <p className="card-region">📍 {farm.region}</p>
+        <p className="card-description">{farm.description}</p>
         
-        <div className="modal-header">
-          <h2>{farm.name}</h2>
-          {farm.verified && (
-            <span className="verified-badge" title={t('directory.verified')}>
-              ✓ {t('directory.verified')}
-            </span>
-          )}
-        </div>
-
-        <div className="modal-body">
-          <div className="farm-detail-section">
-            {/* Location */}
-            <div className="modal-info-section">
-              <div className="info-icon">📍</div>
-              <div className="info-content">
-                <div className="info-main">{farm.region}, {farm.department}</div>
-                {farm.country && <div className="info-sub">{farm.country}</div>}
-              </div>
-            </div>
-
-            {/* Description */}
-            {farm.description && (
-              <div className="modal-info-section">
-                <p className="farm-description-text">{farm.description}</p>
-              </div>
-            )}
-
-            {/* Products */}
-            {farm.products && farm.products.length > 0 && (
-              <div className="modal-info-section">
-                <h3 className="section-title">👨‍🌾 Produits</h3>
-                <div className="products-list">
-                  {farm.products.map((product, index) => (
-                    <span key={index} className="product-tag">{product}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Rewards */}
-            {farm.rewards && (
-              <div className="modal-info-section rewards-section">
-                <div className="rewards-icon">🎁</div>
-                <div className="rewards-text">{farm.rewards}</div>
-              </div>
-            )}
-
-            {/* Balance */}
-            {wallet && (
-              <div className="modal-balance">
-                <div className="balance-label-small">{t('favorites.yourBalance') || 'Votre solde'}</div>
-                <div className="balance-display-large">
-                  <span className="balance-amount">{formatBalance(tokenBalance)}</span>
-                  <span className="balance-ticker">{tokenInfo?.ticker || farm.ticker}</span>
-                </div>
-              </div>
-            )}
-
-            {/* Contact Links */}
-            <div className="modal-contact-grid">
-              {farm.address && (
-                <a 
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(farm.address)}`}
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  className="contact-link"
-                >
-                  🗺️ {t('directory.directions') || 'Itinéraire'}
-                </a>
-              )}
-              {farm.phone && (
-                <a href={`tel:${farm.phone}`} className="contact-link">
-                  📞 {t('directory.phone') || 'Téléphone'}
-                </a>
-              )}
-              {farm.website && (
-                <a href={farm.website} target="_blank" rel="noopener noreferrer" className="contact-link">
-                  🌐 {t('directory.website') || 'Site web'}
-                </a>
-              )}
-              {farm.contactEmail && (
-                <a href={`mailto:${farm.contactEmail}`} className="contact-link">
-                  📧 {t('directory.contact') || 'Contact'}
-                </a>
-              )}
-            </div>
+        {farm.products && farm.products.length > 0 && (
+          <div className="card-products">
+            {farm.products.slice(0, 3).map((product, idx) => (
+              <span key={idx} className="product-tag">{product}</span>
+            ))}
           </div>
+        )}
+      </div>
+      
+      <div className="card-footer">
+        <div className="card-balance">
+          <span className="balance-label">{t('common.balance') || 'Solde'}:</span>
+          <span className="balance-value">
+            {loading ? (
+              <span className="loading-text">{t('common.loading') || 'Chargement'}...</span>
+            ) : (
+              `${(Number(tokenBalance) / 100).toFixed(2)} ${farm.tokenSymbol || farm.name}`
+            )}
+          </span>
         </div>
-
-        <div className="modal-footer">
-          <button className="modal-pay-button" onClick={onPay}>
-            💳 {t('favorites.pay') || 'Payer'}
-          </button>
-        </div>
+        
+        <button 
+          className="pay-button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onCardClick();
+          }}
+        >
+          💰 {t('common.invest') || 'Investir'}
+        </button>
       </div>
     </div>
   );

@@ -18,12 +18,16 @@ import '../styles/directory.css';
 const DirectoryPage = () => {
   const { t } = useTranslation();
   const { farms, loading, error } = useFarms();
+  const { wallet } = useEcashWallet();
   const [, setSelectedFarm] = useAtom(selectedFarmAtom);
   const [favoriteFarmIds] = useAtom(favoriteFarmsAtom);
   const [, toggleFavorite] = useAtom(toggleFarmFavoriteAtom);
   const [walletConnected] = useAtom(walletConnectedAtom);
   const [isWalletModalOpen, setIsWalletModalOpen] = useAtom(walletModalOpenAtom);
   const navigate = useNavigate();
+  
+  // State pour les tickers blockchain
+  const [farmTickers, setFarmTickers] = useState({});
 
   // Filters state
   const [searchQuery, setSearchQuery] = useState('');
@@ -31,10 +35,17 @@ const DirectoryPage = () => {
   const [selectedRegion, setSelectedRegion] = useState('all');
   const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [selectedProduct, setSelectedProduct] = useState('all');
+  const [showFilters, setShowFilters] = useState(false);
+  const [displayCount, setDisplayCount] = useState(4); // Pagination: show 4 farms by default
   
   // Modal state
   const [modalFarm, setModalFarm] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // Report modal state
+  const [reportModalFarm, setReportModalFarm] = useState(null);
+  const [reportReason, setReportReason] = useState('');
+  const [isReporting, setIsReporting] = useState(false);
 
   // The wallet modal is controlled by isWalletModalOpen atom
   // TopBar can set it to true to open the modal from anywhere
@@ -85,9 +96,33 @@ const DirectoryPage = () => {
     const uniqueProducts = [...new Set(allProducts)];
     return uniqueProducts.sort();
   }, [farms, selectedCountry, selectedRegion, selectedDepartment]);
+  
+  // Charger les tickers depuis la blockchain
+  useEffect(() => {
+    const loadTickers = async () => {
+      if (!wallet || !farms || farms.length === 0) return;
+      
+      const tickers = {};
+      for (const farm of farms) {
+        if (farm.tokenId) {
+          try {
+            const info = await wallet.getTokenInfo(farm.tokenId);
+            tickers[farm.tokenId] = info.genesisInfo?.tokenTicker || 'UNK';
+          } catch (e) {
+            console.warn(`⚠️ Impossible de charger ticker pour ${farm.tokenId}`);
+            tickers[farm.tokenId] = '???';
+          }
+        }
+      }
+      setFarmTickers(tickers);
+    };
+    
+    loadTickers();
+  }, [wallet, farms]);
 
   // Filter farms based on search, country, region, department, and products (cascading logic)
   const filteredFarms = useMemo(() => {
+    // Montrer TOUTES les fermes (unverified, pending, verified) dans l'annuaire
     let filtered = farms.filter(farm => {
       const matchesSearch = farm.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                            farm.description.toLowerCase().includes(searchQuery.toLowerCase());
@@ -157,6 +192,44 @@ const DirectoryPage = () => {
     }
   };
   
+  const handleReport = (e, farm) => {
+    e.stopPropagation();
+    if (!walletConnected) {
+      alert('Vous devez être connecté pour signaler une ferme');
+      return;
+    }
+    setReportModalFarm(farm);
+    setReportReason('');
+  };
+  
+  const handleSubmitReport = async () => {
+    if (!reportReason.trim()) {
+      alert('Veuillez indiquer la raison du signalement');
+      return;
+    }
+    
+    setIsReporting(true);
+    try {
+      const { FarmService } = await import('../services/farmService');
+      const address = wallet?.address || '';
+      await FarmService.reportFarm(reportModalFarm.id, address, reportReason);
+      
+      alert('🚨 Signalement enregistré. L\'équipe va examiner votre demande.');
+      
+      setReportModalFarm(null);
+      setReportReason('');
+    } catch (err) {
+      console.error('Erreur signalement:', err);
+      if (err.code === '23505') {
+        alert('Vous avez déjà signalé cette ferme');
+      } else {
+        alert('Erreur lors du signalement');
+      }
+    } finally {
+      setIsReporting(false);
+    }
+  };
+  
   const getGoogleMapsLink = (farm) => {
     const query = encodeURIComponent(`${farm.name}, ${farm.region}, France`);
     return `https://www.google.com/maps/search/?api=1&query=${query}`;
@@ -198,6 +271,7 @@ const DirectoryPage = () => {
       {/* Filters Section */}
       <div className="directory-filters-wrapper">
         <div className="search-container">
+          <span className="search-icon">🔍</span>
           <input
             type="text"
             className="search-input"
@@ -216,7 +290,19 @@ const DirectoryPage = () => {
           )}
         </div>
 
-        <div className="filters-horizontal-scroll">
+        {/* Desktop: Filters on single line | Mobile: Filters button */}
+        <div className="filters-controls">
+          <button 
+            className="filters-toggle-btn"
+            onClick={() => setShowFilters(!showFilters)}
+            aria-label="Toggle filters"
+          >
+            ⚙️ {t('directory.filters') || 'Filtres'}
+          </button>
+        </div>
+
+        {/* Filters Grid - visible on desktop or when toggled on mobile */}
+        <div className={`filters-grid ${showFilters ? 'show' : ''}`}>
           <div className="filter-group">
             <select
               className="filter-select modern"
@@ -319,20 +405,47 @@ const DirectoryPage = () => {
             )}
           </div>
         ) : (
-          filteredFarms.map((farm) => {
-            const isFavorite = favoriteFarmIds.includes(farm.id);
-            return (
-              <FarmCard 
-                key={farm.id} 
-                farm={farm} 
-                isFavorite={isFavorite}
-                onCardClick={handleCardClick}
-                onSelectClick={handleLogin}
-              />
-            );
-          })
+          <>
+            {filteredFarms.slice(0, displayCount).map((farm) => {
+              const isFavorite = favoriteFarmIds.includes(farm.id);
+              return (
+                <FarmCard
+                  key={farm.id}
+                  farm={farm}
+                  isFavorite={isFavorite}
+                  onCardClick={handleCardClick}
+                  onSelectClick={handleLogin}
+                  onReport={handleReport}
+                  farmTickers={farmTickers}
+                />
+              );
+            })}
+          </>
         )}
       </div>
+
+      {/* Pagination Controls */}
+      {filteredFarms.length > displayCount && (
+        <div className="pagination-controls">
+          <button 
+            className="pagination-btn"
+            onClick={() => setDisplayCount(displayCount + 4)}
+          >
+            ➕ {t('directory.viewMore') || 'Voir plus'}
+          </button>
+        </div>
+      )}
+
+      {displayCount > 4 && filteredFarms.length > 4 && (
+        <div className="pagination-controls">
+          <button 
+            className="pagination-btn secondary"
+            onClick={() => setDisplayCount(4)}
+          >
+            ➖ {t('directory.viewLess') || 'Voir moins'}
+          </button>
+        </div>
+      )}
 
       {/* Register Farm Button - Moved to bottom */}
       <div className="register-farm-section-footer">
@@ -428,6 +541,79 @@ const DirectoryPage = () => {
         </div>
       )}
       
+      {/* Report Modal */}
+      {reportModalFarm && (
+        <div className="modal-overlay" onClick={() => setReportModalFarm(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <button 
+              className="modal-close"
+              onClick={() => setReportModalFarm(null)}
+              aria-label="Close"
+            >
+              ✕
+            </button>
+            <div style={{ padding: '20px' }}>
+              <h2 style={{ marginBottom: '16px', fontSize: '20px', fontWeight: 'bold' }}>
+                🚨 Signaler "{reportModalFarm.name}"
+              </h2>
+              <p style={{ marginBottom: '16px', fontSize: '14px', color: 'var(--text-secondary)' }}>
+                Votre signalement sera examiné par l'équipe de modération. Merci de préciser la raison.
+              </p>
+              <textarea
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value)}
+                placeholder="Ex: Informations trompeuses, arnaque suspectée, contenu inapproprié..."
+                rows={4}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '8px',
+                  marginBottom: '16px',
+                  fontFamily: 'inherit',
+                  fontSize: '14px'
+                }}
+                disabled={isReporting}
+              />
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={handleSubmitReport}
+                  disabled={isReporting || !reportReason.trim()}
+                  style={{
+                    flex: 1,
+                    padding: '10px 16px',
+                    background: '#ef4444',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: isReporting || !reportReason.trim() ? 'not-allowed' : 'pointer',
+                    opacity: isReporting || !reportReason.trim() ? 0.5 : 1,
+                    fontWeight: '500'
+                  }}
+                >
+                  {isReporting ? '⏳ Envoi...' : '🚨 Signaler'}
+                </button>
+                <button
+                  onClick={() => setReportModalFarm(null)}
+                  disabled={isReporting}
+                  style={{
+                    flex: 1,
+                    padding: '10px 16px',
+                    background: 'transparent',
+                    color: 'var(--text-primary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    cursor: isReporting ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  Annuler
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Wallet Connection Modal */}
       {isWalletModalOpen && (
         <div className="modal-overlay" onClick={() => setIsWalletModalOpen(false)}>
@@ -472,7 +658,7 @@ const DirectoryPage = () => {
 /**
  * Smart FarmCard Component - Shows Pay button if user holds tokens, Select otherwise
  */
-const FarmCard = ({ farm, isFavorite, onCardClick, onSelectClick }) => {
+const FarmCard = ({ farm, isFavorite, onCardClick, onSelectClick, onReport, farmTickers }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [walletConnected] = useAtom(walletConnectedAtom);
@@ -528,7 +714,9 @@ const FarmCard = ({ farm, isFavorite, onCardClick, onSelectClick }) => {
         
         <h3 className="farm-name">
           {farm.name}
-          {farm.ticker && <span className="farm-ticker"> ({farm.ticker})</span>}
+          {farm.tokenId && farmTickers[farm.tokenId] && (
+            <span className="farm-ticker"> ({farmTickers[farm.tokenId]})</span>
+          )}
         </h3>
         <p className="farm-region">📍 {farm.region}</p>
         <p className="farm-description">{farm.description}</p>
@@ -543,7 +731,7 @@ const FarmCard = ({ farm, isFavorite, onCardClick, onSelectClick }) => {
         {/* Token balance - show if user has tokens */}
         {hasTokens && !balanceLoading && (
           <div className="farm-balance-display">
-            💰 {t('directory.yourBalance') || 'Your balance'}: <strong>{balance.toLocaleString()} {farm.ticker || 'tokens'}</strong>
+            💰 {t('directory.yourBalance') || 'Your balance'}: <strong>{balance.toLocaleString()} {farmTickers[farm.tokenId] || 'tokens'}</strong>
           </div>
         )}
         
@@ -562,31 +750,66 @@ const FarmCard = ({ farm, isFavorite, onCardClick, onSelectClick }) => {
           <div className="farm-badges">
             {farm.verified ? (
               <span className="verified-badge verified">
-                ✓ {t('directory.verified') || 'Verified'}
+                ✅ {t('directory.verified') || 'Vérifiée'}
+              </span>
+            ) : farm.verification_status === 'pending' ? (
+              <span className="verified-badge pending">
+                ⏳ {t('directory.pendingVerification') || 'En cours de validation'}
               </span>
             ) : (
               <span className="verified-badge unverified">
-                {t('directory.notVerified') || 'Not Verified'}
+                ⚠️ {t('directory.notVerified') || 'Non vérifiée'}
               </span>
             )}
           </div>
           
-          {/* Smart button - Pay if has tokens, Select otherwise */}
-          {hasTokens ? (
-            <button 
-              className="pay-farm-btn"
-              onClick={handlePayFarm}
-            >
-              {t('directory.pay') || 'Pay'} 💳
-            </button>
-          ) : (
-            <button 
-              className="select-farm-btn"
-              onClick={handleSelectFarm}
-            >
-              {t('directory.select') || 'Select'} →
-            </button>
-          )}
+          <div className="flex gap-2 items-center">
+            {/* Report button - only show if connected */}
+            {walletConnected && (
+              <button 
+                className="report-farm-btn"
+                onClick={(e) => onReport(e, farm)}
+                title="Signaler cette ferme"
+                style={{
+                  padding: '8px 12px',
+                  fontSize: '14px',
+                  border: '1px solid #ef4444',
+                  color: '#ef4444',
+                  background: 'transparent',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#ef4444';
+                  e.currentTarget.style.color = 'white';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = '#ef4444';
+                }}
+              >
+                🚨
+              </button>
+            )}
+            
+            {/* Smart button - Pay if has tokens, Select otherwise */}
+            {hasTokens ? (
+              <button 
+                className="pay-farm-btn"
+                onClick={handlePayFarm}
+              >
+                {t('directory.pay') || 'Pay'} 💳
+              </button>
+            ) : (
+              <button 
+                className="select-farm-btn"
+                onClick={handleSelectFarm}
+              >
+                {t('directory.select') || 'Select'} →
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

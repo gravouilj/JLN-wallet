@@ -4,11 +4,12 @@ import { useAtom, useSetAtom } from 'jotai';
 import MobileLayout from '../components/Layout/MobileLayout';
 import BlockchainStatus from '../components/BlockchainStatus';
 import QrCodeScanner from '../components/QrCodeScanner';
-import { Card, CardContent, Button, PageLayout, Badge, Tabs, BalanceCard } from '../components/UI';
+import { Card, CardContent, Button, PageLayout, Badge, Tabs, BalanceCard, Stack, Input, Modal } from '../components/UI';
 import { useEcashWallet } from '../hooks/useEcashWallet';
 import { useFarms } from '../hooks/useFarms';
 import { useXecPrice } from '../hooks/useXecPrice';
 import { notificationAtom, currencyAtom } from '../atoms';
+import { syncTokenData, getCachedTokenData, cacheTokenData } from '../utils/tokenSync';
 import '../styles/token-details.css';
 
 const TokenDetailsPage = () => {
@@ -44,6 +45,11 @@ const TokenDetailsPage = () => {
   const [ignoreCreator, setIgnoreCreator] = useState(false);
   const [airdropTotal, setAirdropTotal] = useState('');
   const [minEligible, setMinEligible] = useState('');
+  const [airdropProcessing, setAirdropProcessing] = useState(false);
+  const [holdersCount, setHoldersCount] = useState(null);
+  const [loadingHolders, setLoadingHolders] = useState(false);
+  const [calculatedHolders, setCalculatedHolders] = useState([]);
+  const [isCalculationValid, setIsCalculationValid] = useState(false);
   
   // Hooks pour le prix et la devise
   const price = useXecPrice();
@@ -60,20 +66,34 @@ const TokenDetailsPage = () => {
       try {
         setLoading(true);
 
-        // 1. Récupérer les infos blockchain complètes
+        // 1. Vérifier le cache d'abord pour affichage immédiat
+        const cachedData = getCachedTokenData(tokenId);
+        if (cachedData) {
+          console.log('📦 Données en cache disponibles:', cachedData);
+          // Utiliser temporairement le cache pendant le chargement
+        }
+
+        // 2. Synchroniser depuis la blockchain (source de vérité)
+        const dynamicData = await syncTokenData(tokenId, wallet);
+        if (dynamicData) {
+          cacheTokenData(tokenId, dynamicData);
+          console.log('✅ Données synchronisées depuis blockchain:', dynamicData);
+        }
+
+        // 3. Récupérer les infos blockchain complètes
         const info = await wallet.getTokenInfo(tokenId);
         console.log('📊 Token Info Blockchain:', info);
         
-        // 2. Récupérer les infos de l'annuaire
+        // 4. Récupérer les infos de l'annuaire
         const farm = farms.find((f) => f.tokenId === tokenId);
         console.log('🗂️ Farm Info:', farm);
 
-        // 3. Vérifier si je suis le créateur (j'ai un Mint Baton)
+        // 5. Vérifier si je suis le créateur (j'ai un Mint Baton)
         const batons = await wallet.getMintBatons();
         const hasBaton = batons.some((b) => b.tokenId === tokenId);
         setIsCreator(hasBaton);
 
-        // 4. Récupérer mon solde
+        // 6. Récupérer mon solde
         let balance = '0';
         try {
           const balanceData = await wallet.getTokenBalance(tokenId);
@@ -86,9 +106,12 @@ const TokenDetailsPage = () => {
         setFarmInfo(farm);
         setMyBalance(balance);
 
-        // 5. Récupérer le solde XEC pour les frais
+        // 7. Récupérer le solde XEC pour les frais
         const xecBalanceData = await wallet.getBalance();
         setXecBalance(xecBalanceData.balance || 0);
+
+        // 8. Charger le nombre de détenteurs
+        fetchHolderCount();
 
       } catch (err) {
         console.error('❌ Erreur chargement jeton:', err);
@@ -102,7 +125,53 @@ const TokenDetailsPage = () => {
     };
 
     loadTokenData();
-  }, [tokenId, wallet, farms, setNotification]);
+    
+    // SYNC automatique toutes les 30 secondes avec centralisation
+    const refreshInterval = setInterval(() => {
+      console.log('🔄 Synchronisation automatique depuis blockchain...');
+      loadTokenData();
+    }, 30000); // 30 secondes
+    
+    return () => clearInterval(refreshInterval);
+  }, [tokenId, wallet]);
+
+  // Charger le nombre de détenteurs
+  const fetchHolderCount = async () => {
+    if (!wallet || !tokenId) return;
+    
+    try {
+      setLoadingHolders(true);
+      console.log('👥 Comptage des détenteurs...');
+      
+      // Récupérer tous les UTXOs du token
+      const tokenUtxos = await wallet.chronik.tokenId(tokenId).utxos();
+      
+      // Agréger par adresse (similaire à la logique airdrop)
+      const holderAddresses = new Set();
+      
+      for (const utxo of tokenUtxos.utxos) {
+        if (!utxo.token || utxo.token.isMintBaton) continue;
+        
+        // Extraire l'adresse depuis le script P2PKH
+        try {
+          const scriptHex = utxo.script;
+          const pkhHex = scriptHex.substring(6, 46);
+          holderAddresses.add(pkhHex);
+        } catch (e) {
+          console.warn('Impossible de décoder adresse:', e);
+        }
+      }
+      
+      setHoldersCount(holderAddresses.size);
+      console.log(`✅ ${holderAddresses.size} détenteurs trouvés`);
+      
+    } catch (err) {
+      console.warn('⚠️ Impossible de compter les détenteurs:', err);
+      setHoldersCount(null);
+    } finally {
+      setLoadingHolders(false);
+    }
+  };
 
   // Copier le Token ID
   const handleCopyTokenId = () => {
@@ -203,11 +272,31 @@ const TokenDetailsPage = () => {
       return;
     }
 
+    // AVERTISSEMENT : Vérifier si on brûle tout + si on a un mint baton
+    const burnAmountBigInt = BigInt(Math.round(parseFloat(burnAmount) * Math.pow(10, tokenInfo?.genesisInfo?.decimals || 0)));
+    const myBalanceBigInt = BigInt(myBalance || '0');
+    const isBurningAll = burnAmountBigInt >= myBalanceBigInt;
+    
+    if (isBurningAll && isCreator) {
+      const confirmMsg = "⚠️ ATTENTION : Vous allez détruire TOUS vos tokens. Si le mint baton est inclus, vous ne pourrez PLUS JAMAIS créer de nouveaux tokens pour ce tokenId. Continuer ?";
+      if (!window.confirm(confirmMsg)) {
+        setProcessing(false);
+        return;
+      }
+    } else if (parseFloat(burnAmount) > parseFloat(myBalance) * 0.5) {
+      // Avertissement si burn > 50%
+      if (!window.confirm(`⚠️ Vous allez détruire ${burnAmount} tokens (${((parseFloat(burnAmount) / parseFloat(myBalance)) * 100).toFixed(0)}% de votre solde). Continuer ?`)) {
+        setProcessing(false);
+        return;
+      }
+    }
+
     setProcessing(true);
     try {
       const decimals = tokenInfo?.genesisInfo?.decimals || 0;
       const protocol = farmInfo?.protocol || tokenInfo?.protocol || 'ALP';
-      const txid = await wallet.burnToken(tokenId, parseInt(burnAmount), decimals, protocol);
+      const result = await wallet.burnToken(tokenId, parseInt(burnAmount), decimals, protocol);
+      const txid = result.txid || result;
       
       setNotification({
         type: 'success',
@@ -245,12 +334,175 @@ const TokenDetailsPage = () => {
     setAirdropTotal(xecBalance.toString());
   };
 
-  // Calculer Airdrop (Simulé)
-  const handleCalculateAirdrop = () => {
-    setNotification({ 
-      type: 'info', 
-      message: '🚧 Fonctionnalité Airdrop en développement' 
-    });
+  // Calculer le nombre de détenteurs pour l'airdrop
+  const handleCalculateAirdrop = async () => {
+    if (!airdropTotal || parseFloat(airdropTotal) <= 0) {
+      setNotification({ type: 'error', message: 'Montant total requis' });
+      return;
+    }
+
+    setLoadingHolders(true);
+    try {
+      console.log('👥 Calcul des détenteurs éligibles...');
+      
+      const decimals = tokenInfo?.genesisInfo?.decimals || 0;
+      const minTokens = minEligible ? parseFloat(minEligible) : 0;
+      
+      // Utiliser la méthode du wallet
+      const result = await wallet.calculateAirdropHolders(
+        tokenId, 
+        minTokens, 
+        ignoreCreator, 
+        decimals
+      );
+      
+      // Calculer le montant XEC pour chaque détenteur
+      const totalXec = parseFloat(airdropTotal);
+      const isProportional = airdropMode === 'prorata';
+      
+      let holdersWithXec = [];
+      
+      if (isProportional) {
+        // Mode proportionnel : calculer la somme des tokens des détenteurs ÉLIGIBLES
+        const totalEligibleTokens = result.holders.reduce((sum, h) => sum + h.balanceFormatted, 0);
+        
+        holdersWithXec = result.holders.map(holder => {
+          const percentage = holder.balanceFormatted / totalEligibleTokens;
+          const xecAmount = totalXec * percentage;
+          return {
+            ...holder,
+            xecAmount: xecAmount.toFixed(2)
+          };
+        });
+      } else {
+        // Mode égalitaire : montant identique pour tous
+        const xecPerHolder = totalXec / result.count;
+        
+        holdersWithXec = result.holders.map(holder => ({
+          ...holder,
+          xecAmount: xecPerHolder.toFixed(2)
+        }));
+      }
+      
+      setHoldersCount(result.count);
+      setCalculatedHolders(holdersWithXec);
+      setIsCalculationValid(true); // Marquer le calcul comme valide
+      
+      setNotification({
+        type: 'success',
+        message: `✅ ${result.count} détenteur${result.count > 1 ? 's' : ''} éligible${result.count > 1 ? 's' : ''} trouvé${result.count > 1 ? 's' : ''}`
+      });
+      
+      console.log(`✅ Détenteurs éligibles: ${result.count}`, holdersWithXec.slice(0, 5));
+      
+    } catch (err) {
+      console.error('❌ Erreur calcul détenteurs:', err);
+      setNotification({ 
+        type: 'error', 
+        message: 'Impossible de calculer les détenteurs' 
+      });
+    } finally {
+      setLoadingHolders(false);
+    }
+  };
+
+  // Recalculer les montants XEC quand le montant total ou le mode change
+  useEffect(() => {
+    if (calculatedHolders.length === 0 || !airdropTotal || parseFloat(airdropTotal) <= 0) return;
+    
+    // Invalider le calcul car les param\u00e8tres ont chang\u00e9\n    setIsCalculationValid(false);
+    
+    const totalXec = parseFloat(airdropTotal);
+    const isProportional = airdropMode === 'prorata';
+    
+    let holdersWithXec = [];
+    
+    if (isProportional) {
+      // Calculer la somme des tokens des détenteurs éligibles
+      const totalEligibleTokens = calculatedHolders.reduce((sum, h) => sum + h.balanceFormatted, 0);
+      
+      holdersWithXec = calculatedHolders.map(holder => {
+        const percentage = holder.balanceFormatted / totalEligibleTokens;
+        const xecAmount = totalXec * percentage;
+        return {
+          ...holder,
+          xecAmount: xecAmount.toFixed(2)
+        };
+      });
+    } else {
+      const xecPerHolder = totalXec / calculatedHolders.length;
+      
+      holdersWithXec = calculatedHolders.map(holder => ({
+        ...holder,
+        xecAmount: xecPerHolder.toFixed(2)
+      }));
+    }
+    
+    setCalculatedHolders(holdersWithXec);
+  }, [airdropTotal, airdropMode]);
+
+  // Invalider le calcul quand les paramètres de filtrage changent
+  useEffect(() => {
+    if (isCalculationValid) {
+      setIsCalculationValid(false);
+    }
+  }, [minEligible, ignoreCreator]);
+
+  // Distribuer XEC aux détenteurs (Airdrop)
+  const handleExecuteAirdrop = async () => {
+    if (!holdersCount || holdersCount === 0) {
+      setNotification({ type: 'error', message: 'Veuillez d\'abord calculer le nombre de détenteurs' });
+      return;
+    }
+
+    if (!airdropTotal || parseFloat(airdropTotal) <= 0) {
+      setNotification({ type: 'error', message: 'Montant total requis' });
+      return;
+    }
+
+    const totalXec = parseFloat(airdropTotal);
+    const isProportional = airdropMode === 'prorata';
+
+    setAirdropProcessing(true);
+    try {
+      console.log(`🎁 Lancement Airdrop: ${totalXec} XEC (${isProportional ? 'Pro-Rata' : 'Égalitaire'})`);
+      
+      const result = await wallet.airdrop(tokenId, totalXec, isProportional, ignoreCreator, minEligible);
+      
+      setNotification({
+        type: 'success',
+        message: `🎉 Distribution réussie vers ${result.recipientsCount} destinataires ! TXID: ${result.txid.substring(0, 8)}...`
+      });
+      
+      // Afficher détails dans la console
+      console.log('📊 Résultat Airdrop:', result);
+      
+      // Réinitialiser le formulaire
+      setAirdropTotal('');
+      setMinEligible('');
+      setHoldersCount(null);
+      setCalculatedHolders([]);
+      setIsCalculationValid(false);
+      
+      // Recharger le solde XEC
+      setTimeout(async () => {
+        try {
+          const xecBalanceData = await wallet.getBalance(true);
+          setXecBalance(xecBalanceData.balance || 0);
+        } catch (err) {
+          console.warn('⚠️ Échec rechargement solde XEC:', err);
+        }
+      }, 2000);
+      
+    } catch (err) {
+      console.error('❌ Erreur Airdrop:', err);
+      setNotification({ 
+        type: 'error', 
+        message: err.message || 'Échec de la distribution' 
+      });
+    } finally {
+      setAirdropProcessing(false);
+    }
   };
 
   // Formater un nombre avec décimales
@@ -333,6 +585,9 @@ const TokenDetailsPage = () => {
   const isListed = !!farmInfo;
   const genesisSupply = BigInt(genesisInfo.mintAmount || '0');
   const isActive = genesisSupply > 0n;
+  
+  // Trouver le token spécifique dans farmInfo.tokens pour récupérer purpose/counterpart
+  const tokenDetails = farmInfo?.tokens?.find(t => t.tokenId === tokenId) || null;
 
   return (
     <MobileLayout title={name}>
@@ -374,6 +629,49 @@ const TokenDetailsPage = () => {
             </div>
             </CardContent>
           </Card>
+
+          {/* OBJECTIF ET CONTREPARTIE DU JETON */}
+          {tokenDetails && (tokenDetails.purpose || tokenDetails.counterpart) && (
+            <Card>
+              <CardContent className="p-6">
+                <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-white">
+                  🎯 Objectif et Contrepartie du Jeton
+                </h3>
+                
+                {tokenDetails.purpose && (
+                  <div className="mb-4">
+                    <div className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">
+                      🎯 Objectif du Jeton
+                    </div>
+                    <p className="text-gray-900 dark:text-white leading-relaxed">
+                      {tokenDetails.purpose}
+                    </p>
+                    {tokenDetails.purposeUpdatedAt && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Modifié le {new Date(tokenDetails.purposeUpdatedAt).toLocaleDateString('fr-FR')}
+                      </p>
+                    )}
+                  </div>
+                )}
+                
+                {tokenDetails.counterpart && (
+                  <div>
+                    <div className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">
+                      🤝 Contrepartie du Jeton
+                    </div>
+                    <p className="text-gray-900 dark:text-white leading-relaxed">
+                      {tokenDetails.counterpart}
+                    </p>
+                    {tokenDetails.counterpartUpdatedAt && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Modifié le {new Date(tokenDetails.counterpartUpdatedAt).toLocaleDateString('fr-FR')}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* SOLDE ET FRAIS */}
           <BalanceCard
@@ -536,18 +834,69 @@ const TokenDetailsPage = () => {
                 <Card>
                   <CardContent className="p-4 bg-muted/50">
                   <p className="text-sm text-gray-600 dark:text-gray-400 m-0">
-                    💡 Cette fonctionnalité est en cours de développement
+                    💡 Scan des détenteurs et distribution automatique en 1 clic
                   </p>
                   </CardContent>
                 </Card>
 
-                <Button
-                  type="button"
-                  className="w-full bg-green-600 hover:bg-green-700"
-                  onClick={handleCalculateAirdrop}
-                >
-                  🧮 Calculer (Bientôt)
-                </Button>
+                <div className="space-y-3">
+                  <Button
+                    type="button"
+                    className="w-full bg-blue-600 hover:bg-blue-700"
+                    onClick={handleCalculateAirdrop}
+                    disabled={loadingHolders || !airdropTotal}
+                  >
+                    {loadingHolders ? '⏳ Calcul en cours...' : '🔍 Calculer les détenteurs'}
+                  </Button>
+                  
+                  {holdersCount !== null && (
+                    <>
+                      <p className="text-sm text-center font-semibold">
+                        ✅ {holdersCount} détenteur{holdersCount > 1 ? 's' : ''} éligible{holdersCount > 1 ? 's' : ''}
+                      </p>
+                      
+                      {calculatedHolders.length > 0 && (
+                        <div className="max-h-60 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded p-3 bg-gray-50 dark:bg-gray-800">
+                          <p className="text-xs font-semibold mb-2 text-gray-600 dark:text-gray-400">
+                            📋 Détails de la distribution ({airdropMode === 'prorata' ? 'Proportionnelle' : 'Égalitaire'}) :
+                          </p>
+                          <div className="space-y-1">
+                            {calculatedHolders.map((holder, idx) => (
+                              <div key={idx} className="text-xs font-mono bg-white dark:bg-gray-900 p-2 rounded border border-gray-200 dark:border-gray-700">
+                                <div className="text-blue-600 dark:text-blue-400 truncate mb-1">
+                                  {holder.address}
+                                </div>
+                                <div className="flex justify-between items-center text-[10px]">
+                                  <span className="text-gray-600 dark:text-gray-400">
+                                    {holder.balanceFormatted.toLocaleString()} tokens
+                                  </span>
+                                  <span className="text-green-600 dark:text-green-400 font-bold">
+                                    → {holder.xecAmount} XEC
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      <Button
+                        type="button"
+                        className="w-full bg-green-600 hover:bg-green-700"
+                        onClick={handleExecuteAirdrop}
+                        disabled={airdropProcessing || holdersCount === 0 || !isCalculationValid}
+                      >
+                        {airdropProcessing ? '⏳ Distribution en cours...' : '🎁 Distribuer maintenant'}
+                      </Button>
+                      
+                      {!isCalculationValid && holdersCount > 0 && (
+                        <p className="text-xs text-orange-600 dark:text-orange-400 text-center">
+                          ⚠️ Paramètres modifiés - Recalculer avant de distribuer
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
               </form>
               </CardContent>
             </Card>
@@ -681,7 +1030,7 @@ const TokenDetailsPage = () => {
                   En Circulation
                 </div>
                 <div className="text-xl font-bold text-gray-900 dark:text-white">
-                  N/A
+                  {formatAmount(genesisInfo.circulatingSupply || '0', decimals)}
                 </div>
                 </CardContent>
               </Card>
@@ -692,7 +1041,7 @@ const TokenDetailsPage = () => {
                   Genèse
                 </div>
                 <div className="text-xl font-bold text-gray-900 dark:text-white">
-                  {formatAmount(genesisInfo.mintAmount || '0', decimals)}
+                  {formatAmount(genesisInfo.genesisSupply || '0', decimals)}
                 </div>
                 </CardContent>
               </Card>
@@ -719,13 +1068,24 @@ const TokenDetailsPage = () => {
                 </CardContent>
               </Card>
 
+              <Card>
+                <CardContent className="p-4 bg-muted/50">
+                <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase">
+                  Décimales
+                </div>
+                <div className="text-xl font-bold text-gray-900 dark:text-white">
+                  {decimals}
+                </div>
+                </CardContent>
+              </Card>
+
               <Card className="col-span-2">
                 <CardContent className="p-4 bg-muted/50">
                 <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase">
                   Détenteurs
                 </div>
                 <div className="text-xl font-bold text-gray-900 dark:text-white">
-                  N/A
+                  {loadingHolders ? '⏳...' : holdersCount !== null ? holdersCount : 'N/A'}
                 </div>
                 </CardContent>
               </Card>
@@ -758,6 +1118,26 @@ const TokenDetailsPage = () => {
             </Card>
             </CardContent>
           </Card>
+
+          {/* Actions Listing */}
+          {!isListed && (
+            <Card className="border-blue-200 dark:border-blue-800">
+              <CardContent className="p-6">
+              <h3 className="text-lg font-bold mb-2 text-gray-900 dark:text-white">
+                📋 Référencer ce jeton
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                Votre jeton n'est pas encore listé dans l'annuaire public. Demandez son référencement pour le rendre visible à tous.
+              </p>
+              <Button
+                className="w-full bg-blue-600 hover:bg-blue-700"
+                onClick={() => navigate(`/request-listing/${tokenId}`)}
+              >
+                📝 Demander le listing
+              </Button>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Bouton Retour */}
           <Button

@@ -66,19 +66,15 @@ export const useEcashWallet = () => {
         throw new Error('Wallet created but address is undefined');
       }
       
-      // Test connection by getting balance (with timeout to avoid blocking)
+      // Wait for Chronik connection to be ready
+      console.log('⏱️ Waiting for Chronik connection...');
       try {
-        console.log('⏱️ Tentative test balance avec timeout 15s...');
-        await Promise.race([
-          walletInstance.getBalance(),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Balance test timeout')), 15000)
-          )
-        ]);
-        console.log('✅ Balance test réussi');
-      } catch (balanceError) {
-        console.warn('⚠️ Balance test échoué (non-bloquant):', balanceError.message);
-        // Ne pas rejeter - continuer quand même
+        await walletInstance.chronikInitPromise;
+        console.log('✅ Chronik connection ready');
+      } catch (chronikError) {
+        console.error('❌ Chronik connection failed:', chronikError);
+        console.warn('⚠️ Wallet will be created but blockchain features may be limited');
+        // Continue anyway - wallet can still be used
       }
       
       setWallet(walletInstance);
@@ -231,38 +227,44 @@ export const useEcashWallet = () => {
 
   // Auto-initialize wallet on mount if mnemonic exists
   useEffect(() => {
-    console.log('🔍 useEcashWallet - Auto-init check:', {
-      savedMnemonic: savedMnemonic ? 'EXISTS' : 'NULL',
-      walletConnected,
-      loading,
-      wallet: wallet ? 'EXISTS' : 'NULL',
-      walletHasAddress: wallet?.addressStr ? 'YES' : 'NO'
-    });
+    if (import.meta.env.DEV) {
+      console.log('🔍 useEcashWallet - Auto-init check:', {
+        savedMnemonic: savedMnemonic ? 'EXISTS' : 'NULL',
+        walletConnected,
+        loading,
+        wallet: wallet ? 'EXISTS' : 'NULL',
+        walletHasAddress: wallet?.addressStr ? 'YES' : 'NO'
+      });
+    }
     
     // CRITICAL FIX: Only initialize once if wallet doesn't exist
     // Don't re-trigger if walletConnected changes (avoid loop)
     if (savedMnemonic && !loading && !wallet) {
-      console.log('🚀 Starting auto-initialization (no wallet)...');
+      if (import.meta.env.DEV) console.log('🚀 Starting auto-initialization (no wallet)...');
       initializeWallet();
-    } else if (wallet && wallet.addressStr) {
+    } else if (wallet && wallet.addressStr && import.meta.env.DEV) {
       console.log('✅ Wallet already initialized with address:', wallet.addressStr);
     }
   }, [savedMnemonic, loading, wallet, initializeWallet]);
 
   // Extract address from wallet instance - DIRECT ACCESS
   // Don't use useMemo, compute it every render to ensure reactivity
-  let address = '';
-  if (wallet) {
+  // Mémoïser l'extraction de l'adresse (ne change pas tant que wallet ne change pas)
+  const address = useMemo(() => {
+    if (!wallet) {
+      if (import.meta.env.DEV) console.log('⚠️ Wallet is null, address empty');
+      return '';
+    }
+    
     try {
-      address = wallet.getAddress();
-      console.log('🏠 Hook address extracted:', address);
+      const addr = wallet.getAddress();
+      if (import.meta.env.DEV) console.log('🏠 Hook address extracted:', addr);
+      return addr;
     } catch (e) {
       console.error('❌ Erreur récupération adresse:', e);
-      address = '';
+      return '';
     }
-  } else {
-    console.log('⚠️ Wallet is null, address empty');
-  }
+  }, [wallet]); // Recalculer uniquement si wallet change
 
   return {
     wallet,

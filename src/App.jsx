@@ -13,7 +13,12 @@ import FavoritesPage from './pages/FavoritesPage';
 import FarmerInfoPage from './pages/FarmerInfoPage';
 import FaqPage from './pages/FaqPage';
 import CreateTokenPage from './pages/CreateTokenPage';
+import CompleteTokenImportPage from './pages/CompleteTokenImportPage';
 import ManageTokenPage from './pages/ManageTokenPage';
+import ManageFarmPage from './pages/ManageFarmPage';
+import AdminVerificationPage from './pages/AdminVerificationPage';
+import TokenDetailsPage from './pages/TokenDetailsPage';
+import RequestListingPage from './pages/RequestListingPage';
 
 // Layout & Components
 import ProtectedRoute from './components/ProtectedRoute';
@@ -25,9 +30,6 @@ import ErrorBoundary from './components/ErrorBoundary';
 
 // Hooks
 import { useEcashWallet } from './hooks/useEcashWallet';
-
-// Components
-import ChronikConnectionIndicator from './components/ChronikConnectionIndicator';
 
 // i18n
 import './i18n';
@@ -75,7 +77,6 @@ function App() {
         <ErrorBoundary>
           <div className="app-container">
             <Notification />
-            <ChronikConnectionIndicator />
             <Routes>
               {/* ========================================
                   ROUTES PUBLIQUES (Sans wallet requis)
@@ -154,6 +155,18 @@ function App() {
                 } 
               />
               
+              {/* Compléter l'import d'un token existant */}
+              <Route 
+                path="/complete-token-import" 
+                element={
+                  <ProtectedRoute requireFarm={false}>
+                    <ErrorBoundary>
+                      <CompleteTokenImportPage />
+                    </ErrorBoundary>
+                  </ProtectedRoute>
+                } 
+              />
+              
               {/* Gestion de jetons - Nécessite au minimum 1 mint baton */}
               <Route 
                 path="/manage-token" 
@@ -164,7 +177,69 @@ function App() {
                     </ErrorBoundary>
                   </AdminGateRoute>
                 }
-              />              {/* ========================================
+              />
+              
+              {/* Détails d'un token spécifique */}
+              <Route 
+                path="/token/:tokenId" 
+                element={
+                  <ProtectedRoute requireFarm={false}>
+                    <ErrorBoundary>
+                      <TokenDetailsPage />
+                    </ErrorBoundary>
+                  </ProtectedRoute>
+                } 
+              />
+              
+              {/* Demande de listing d'un token */}
+              <Route 
+                path="/request-listing/:tokenId" 
+                element={
+                  <ProtectedRoute requireFarm={false}>
+                    <ErrorBoundary>
+                      <RequestListingPage />
+                    </ErrorBoundary>
+                  </ProtectedRoute>
+                } 
+              />
+              
+              {/* Gestion des informations de la ferme */}
+              <Route 
+                path="/manage-farm/:tokenId" 
+                element={
+                  <AdminGateRoute fallbackRoute="/manage-token">
+                    <ErrorBoundary>
+                      <ManageFarmPage />
+                    </ErrorBoundary>
+                  </AdminGateRoute>
+                }
+              />
+              
+              {/* Page de gestion sans tokenId (création nouvelle ferme) */}
+              <Route 
+                path="/manage-farm" 
+                element={
+                  <ProtectedRoute requireFarm={false}>
+                    <ErrorBoundary>
+                      <ManageFarmPage />
+                    </ErrorBoundary>
+                  </ProtectedRoute>
+                }
+              />
+              
+              {/* Page d'administration - Vérification des fermes */}
+              <Route 
+                path="/admin/verification" 
+                element={
+                  <AdminGateRoute fallbackRoute="/">
+                    <ErrorBoundary>
+                      <AdminVerificationPage />
+                    </ErrorBoundary>
+                  </AdminGateRoute>
+                }
+              />
+              
+              {/* ========================================
                   REDIRECTIONS & COMPATIBILITÉ
                   ======================================== */}
               

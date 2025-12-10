@@ -2,23 +2,20 @@ import { useState, useEffect } from 'react';
 import { useEcashWallet } from './useEcashWallet';
 
 /**
- * SHA256 Hash du super admin ecash address
- * Format: SHA256(address) en hexadécimal
- * À configurer avec le vrai hash de l'adresse du super admin
- * Exemple: "0x123abc..." (adresse hachée en SHA-256)
+ * Récupération du hash depuis les variables d'environnement VITE
+ * Le fichier .env.local doit contenir: VITE_ADMIN_HASH=...
  */
-const ADMIN_ADDRESS_HASH = process.env.REACT_APP_ADMIN_HASH || null;
+const ADMIN_HASH = import.meta.env.VITE_ADMIN_HASH || '';
 
 /**
- * Hash SHA-256 d'une chaîne (async)
+ * Hash SHA-256 d'une chaîne (async) via Web Crypto API
  */
 async function sha256(str) {
   const encoder = new TextEncoder();
   const data = encoder.encode(str);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  return hashHex;
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 /**
@@ -28,37 +25,41 @@ async function sha256(str) {
 export function useAdmin() {
   const { address } = useEcashWallet();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isChecking, setIsChecking] = useState(true); // Nouveau: indique si le check est en cours
   
   useEffect(() => {
-    if (!address || !ADMIN_ADDRESS_HASH) {
+    // Si pas d'adresse ou pas de configuration, pas admin
+    if (!address || !ADMIN_HASH) {
       setIsAdmin(false);
+      setIsChecking(false);
       return;
     }
 
     const checkAdmin = async () => {
       try {
-        // Hacher l'adresse de l'utilisateur
+        setIsChecking(true);
+        // 1. Calculer le hash de l'adresse connectée
         const userAddressHash = await sha256(address);
         
-        // Comparer avec le hash du super admin
-        const isAdminUser = userAddressHash.toLowerCase() === ADMIN_ADDRESS_HASH.toLowerCase();
+        // 2. Comparer avec le hash stocké dans .env.local
+        // On compare en minuscule pour éviter les erreurs de casse
+        const isMatch = userAddressHash.toLowerCase() === ADMIN_HASH.toLowerCase();
         
-        console.log('🔐 Vérification admin:', {
-          address,
-          userHash: userAddressHash.substring(0, 10) + '...',
-          adminHash: ADMIN_ADDRESS_HASH.substring(0, 10) + '...',
-          isAdmin: isAdminUser
-        });
+        if (isMatch) {
+          console.log('👑 Mode ADMIN activé pour :', address);
+        }
         
-        setIsAdmin(isAdminUser);
-      } catch (e) {
-        console.error('❌ Erreur vérification admin:', e);
+        setIsAdmin(isMatch);
+      } catch (error) {
+        console.error('Erreur vérification admin:', error);
         setIsAdmin(false);
+      } finally {
+        setIsChecking(false);
       }
     };
 
     checkAdmin();
   }, [address]);
-  
-  return isAdmin;
+
+  return { isAdmin, isChecking };
 }

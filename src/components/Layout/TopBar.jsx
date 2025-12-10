@@ -6,6 +6,7 @@ import { walletConnectedAtom, notificationAtom, walletModalOpenAtom } from '../.
 import { useBalance } from '../../hooks';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useEcashWallet } from '../../hooks/useEcashWallet';
+import { useIsCreator } from '../../hooks/useIsCreator';
 import ThemeToggle from '../ThemeToggle';
 import LanguageToggle from '../LanguageToggle';
 
@@ -16,6 +17,7 @@ const TopBar = () => {
   const [walletConnected] = useAtom(walletConnectedAtom);
   const { loading, refreshBalance } = useBalance();
   const { resetWallet } = useEcashWallet();
+  const isCreator = useIsCreator();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const setNotification = useSetAtom(notificationAtom);
@@ -103,7 +105,7 @@ const TopBar = () => {
             onClick={() => navigate('/farmer-info')}
             className="farmer-text-link"
           >
-            👨‍🌾 {t('topBar.iAmFarmer') || 'Je suis producteur'}
+            🌻 {t('topBar.iAmFarmer') || 'Je suis producteur'}
           </button>
         ) : showBackButton ? (
           <button
@@ -122,24 +124,27 @@ const TopBar = () => {
 
         {/* RIGHT SECTION - Always visible */}
         <div className="top-bar-spacer">
-          {!isHomePage && (
-            <>
-              <button
-                onClick={() => navigate('/farmer-info')}
-                className="farmer-link"
-                title={t('topBar.farmerSpace') || 'Espace Producteur'}
-              >
-                👨‍🌾
-              </button>
-              <button
-                onClick={() => navigate('/faq')}
-                className="support-link"
-                title={t('support.help') || 'Aide'}
-              >
-                ❓
-              </button>
-            </>
+          {/* Creator shortcut - if user is creator (AVANT FAQ) */}
+          {isCreator && (
+            <button
+              onClick={() => navigate('/manage-token')}
+              className="creator-shortcut"
+              title={t('topBar.manageTokens') || 'Gérer les tokens'}
+              aria-label={t('topBar.manageTokens') || 'Gérer les tokens'}
+            >
+              🗝️
+            </button>
           )}
+          
+          {/* FAQ button - TOUJOURS visible */}
+          <button
+            onClick={() => navigate('/faq')}
+            className="support-link"
+            title={t('support.help') || 'Aide'}
+          >
+            ❓
+          </button>
+          
           {/* Auth button - ALWAYS visible with primary background */}
           <button
             onClick={walletConnected ? handleLogoutClick : handleLogin}

@@ -11,13 +11,13 @@ const BottomNavigation = () => {
   const navItems = [
     { 
       path: '/', 
-      icon: '🏪',
+      icon: '🧑‍🌾',
       label: t('navigation.directory'), 
       ariaLabel: t('navigation.directory') + ' page' 
     },
     { 
       path: '/wallet', 
-      icon: '💼',
+      icon: '🤝',
       label: t('navigation.wallet'), 
       ariaLabel: t('navigation.wallet') + ' page' 
     },

@@ -11,12 +11,28 @@ const resources = {
   fr: { translation: fr }
 };
 
+// Détecte la langue du navigateur intelligemment
+const detectBrowserLanguage = () => {
+  if (typeof window === 'undefined') return 'fr';
+  
+  const navLang = (navigator.language || navigator.userLanguage || 'fr').toLowerCase();
+  
+  // Détecte le français
+  if (navLang.includes('fr')) return 'fr';
+  
+  // Détecte l'anglais
+  if (navLang.includes('en')) return 'en';
+  
+  // Défaut : français (public francophone)
+  return 'fr';
+};
+
 i18n
   .use(LanguageDetector)
   .use(initReactI18next)
   .init({
     resources,
-    lng: undefined, // Let detector choose, will fallback to 'fr' if not found
+    lng: detectBrowserLanguage(), // Auto-détecte avec fallback intelligent
     fallbackLng: 'fr', // Français par défaut (public francophone prioritaire)
 
     detection: {

@@ -44,11 +44,6 @@ const useBalance = (refreshInterval = 10000) => {
     }
 
     try {
-      // Defensive check: ensure wallet is still valid before calling API
-      if (!wallet.getDetailedBalance || typeof wallet.getDetailedBalance !== 'function') {
-        throw new Error('Wallet getDetailedBalance method not available');
-      }
-
       // Get balance data from wallet service (already fetches UTXOs via Chronik)
       const balanceData = await wallet.getBalance();
       

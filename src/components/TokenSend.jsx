@@ -177,7 +177,7 @@ const TokenSend = () => {
 
       // Check if we have enough spendable XEC for transaction fees and dust prevention
       const spendableXEC = balanceBreakdown?.spendableBalance || 0;
-      const minimumXECRequired = 6; // Dust prevention + fee buffer
+      const minimumXECRequired = 5.46; // Dust prevention + fee buffer
 
       // Ensure minimum XEC balance for dust prevention
       if (spendableXEC < minimumXECRequired) {
@@ -196,22 +196,10 @@ const TokenSend = () => {
       // Clean amount: force exactly 2 decimals to avoid floating point issues
       const cleanAmount = String(amount).replace(',', '.');
       
-      // Enrich token with farm metadata (protocol and decimals)
-      let tokenProtocol = 'SLP';
-      let tokenDecimals = 0;
-      
-      // Try to get metadata from selectedFarm first
-      if (selectedFarm && selectedFarm.tokenId === tokenId) {
-        tokenProtocol = selectedFarm.protocol || 'SLP';
-        tokenDecimals = selectedFarm.decimals || 0;
-      } else {
-        // Fallback: search in farms list by tokenId
-        const farm = farms.find(f => f.tokenId === tokenId);
-        if (farm) {
-          tokenProtocol = farm.protocol || 'SLP';
-          tokenDecimals = farm.decimals || 0;
-        }
-      }
+      // Récupérer les métadonnées blockchain du token
+      const tokenInfo = await wallet.getTokenInfo(tokenId);
+      const tokenProtocol = tokenInfo.tokenType?.protocol || 'ALP';
+      const tokenDecimals = tokenInfo.genesisInfo?.decimals || 0;
       
       console.log(`🚀 Envoi Token ${token.symbol} (Protocol: ${tokenProtocol}, Decimals: ${tokenDecimals})`);
       

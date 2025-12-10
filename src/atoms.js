@@ -2,13 +2,33 @@ import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 import { loadMnemonic, saveMnemonic } from './utils/mnemonicStorage';
 
-// Language/Locale atom with localStorage persistence
+// ============================================
+// LANGUAGE & AUTO-DETECTION
+// ============================================
+
+/**
+ * Détecte la langue appropriée selon le navigateur
+ * @returns {string} Code langue ('fr' ou 'en')
+ */
+const getBrowserLanguage = () => {
+  if (typeof window === 'undefined') return 'fr';
+  
+  const lang = (navigator.language || navigator.userLanguage || 'fr').toLowerCase();
+  
+  // Détecte si la langue du navigateur est du français
+  if (lang.includes('fr')) return 'fr';
+  
+  // Par défaut, retourne 'en' pour les autres langues
+  return 'en';
+};
+
+// Language/Locale atom with localStorage persistence and browser auto-detection
 const getInitialLocale = () => {
   if (typeof window !== 'undefined') {
     const saved = localStorage.getItem('farm-wallet-language');
-    return saved || 'en';
+    return saved || getBrowserLanguage(); // Auto-détecte si rien n'est sauvegardé
   }
-  return 'en';
+  return getBrowserLanguage();
 };
 
 const _localeAtom = atom(getInitialLocale());
@@ -23,6 +43,10 @@ export const localeAtom = atom(
   }
 );
 localeAtom.debugLabel = 'localeAtom';
+
+// Language atom - alias for localeAtom for consistency
+export const languageAtom = localeAtom;
+languageAtom.debugLabel = 'languageAtom';
 
 // ============================================
 // FARM WALLET PLATFORM - Dynamic Token System
@@ -268,19 +292,20 @@ walletModalOpenAtom.debugLabel = 'walletModalOpenAtom';
 
 /**
  * Détecte la devise appropriée selon la locale du navigateur
+ * Mappe les langues du navigateur à leur devise principale
  * @returns {string} Code devise (EUR, USD, GBP, CHF)
  */
 const getBrowserCurrency = () => {
   if (typeof window === 'undefined') return 'EUR';
   
-  const lang = navigator.language || navigator.userLanguage || 'fr';
+  const lang = (navigator.language || navigator.userLanguage || 'fr').toLowerCase();
   
   // Mapping intelligent selon la locale
-  if (lang.includes('US')) return 'USD'; // États-Unis
-  if (lang.includes('GB')) return 'GBP'; // Royaume-Uni
-  if (lang.includes('CH')) return 'CHF'; // Suisse
+  if (lang.includes('en-us')) return 'USD'; // États-Unis
+  if (lang.includes('en-gb')) return 'GBP'; // Royaume-Uni
+  if (lang.includes('de-ch') || lang.includes('fr-ch')) return 'CHF'; // Suisse
   
-  // PAR DÉFAUT : EUR (France, Belgique, Allemagne, Espagne, Italie et reste du monde)
+  // PAR DÉFAUT : EUR (France, Belgique, Allemagne, Espagne, Italie et reste du monde francophone)
   return 'EUR';
 };
 
