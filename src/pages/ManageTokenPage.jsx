@@ -26,7 +26,6 @@ const ManageTokenPage = () => {
   const [loadingTokens, setLoadingTokens] = useState(true);
   const [xecBalance, setXecBalance] = useState(0);
   const [activeFilter, setActiveFilter] = useState('active'); // 'active', 'inactive', 'pending', 'all'
-  const [faqOpen, setFaqOpen] = useState(null);
   const [myFarm, setMyFarm] = useState(null);
   const [showImportModal, setShowImportModal] = useState(false);
 
@@ -130,12 +129,13 @@ const ManageTokenPage = () => {
             
             return {
               tokenId: tokenEntry.tokenId,
-              name: tokenEntry.farmName || info.genesisInfo?.tokenName || 'Inconnu',
+              name: info.genesisInfo?.tokenName || tokenEntry.farmName || 'Inconnu',
               ticker: info.genesisInfo?.tokenTicker || tokenEntry.ticker || 'UNK',
               decimals: info.genesisInfo?.decimals || 0,
               image: 'data:image/svg+xml,%3Csvg xmlns=\"http://www.w3.org/2000/svg\" width=\"400\" height=\"400\"%3E%3Crect fill=\"%23ddd\" width=\"400\" height=\"400\"/%3E%3Ctext fill=\"%23999\" font-size=\"48\" x=\"50%25\" y=\"50%25\" text-anchor=\"middle\" dy=\".3em\"%3EToken%3C/text%3E%3C/svg%3E',
               protocol: 'ALP',
               website: '',
+              farmName: tokenEntry.farmName || null, // Nom de la ferme associée
               balance: balance,
               isReferenced: true,
               isFromFarmWallet: isFromFarmWallet,
@@ -229,12 +229,13 @@ const ManageTokenPage = () => {
           
           return {
             ...b, // utxo, tokenId, isMintBaton
-            name: farmInfo?.name || info.genesisInfo?.tokenName || "Jeton Non Référencé",
+            name: info.genesisInfo?.tokenName || farmInfo?.name || "Jeton Non Référencé",
             ticker: info.genesisInfo?.tokenTicker || "UNK",
             decimals: info.genesisInfo?.decimals || 0,
             image: tokenDetails?.image || farmInfo?.image || info.genesisInfo?.url || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Crect fill='%23ddd' width='400' height='400'/%3E%3Ctext fill='%23999' font-size='48' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3EToken%3C/text%3E%3C/svg%3E",
             protocol: farmInfo?.protocol || "ALP",
             website: farmInfo?.website || "",
+            farmName: farmInfo?.name || null, // Nom de la ferme (différent du nom du token)
             purpose: tokenDetails?.purpose || '',
             counterpart: tokenDetails?.counterpart || '',
             isFixed: false, // Si on a le baton, c'est variable
@@ -252,7 +253,105 @@ const ManageTokenPage = () => {
         // Tous les tokens du créateur sont visibles (Farm-Wallet ou pas)
         const validTokens = enriched.filter(t => t !== null);
         console.log(`✅ Jetons enrichis: ${validTokens.length} tokens avec mintBaton`);
-        setTokens(validTokens);
+        
+        // NOUVEAU: Charger aussi les jetons à offre fixe créés par l'utilisateur
+        // (ceux sans MintBaton mais possédés + référencés dans Farm-Wallet)
+        const fixedSupplyTokens = [];
+        
+        // Parcourir les tokens Farm-Wallet pour trouver ceux sans baton mais créés par moi
+        for (const tokenEntry of allTokensFromFarms) {
+          const alreadyInList = validTokens.some(t => t.tokenId === tokenEntry.tokenId);
+          if (alreadyInList) continue; // Déjà dans la liste (avec baton)
+          
+          try {
+            const info = await wallet.getTokenInfo(tokenEntry.tokenId);
+            
+            // Récupérer le solde d'abord
+            let balance = '0';
+            try {
+              const balanceData = await wallet.getTokenBalance(tokenEntry.tokenId);
+              balance = balanceData.balance || '0';
+            } catch (e) {
+              console.warn(`⚠️ Erreur solde ${tokenEntry.tokenId}:`, e);
+              continue; // Pas de balance = pas mon token
+            }
+            
+            // Vérifier si je possède des tokens (créateur probable)
+            const hasTokens = BigInt(balance) > 0n;
+            if (!hasTokens) continue; // Pas de tokens = pas créateur
+            
+            console.log(`🔒 Jeton à offre fixe créé par moi: ${tokenEntry.tokenId}`, {
+              balance,
+              tokenId: tokenEntry.tokenId.substring(0, 8)
+            });
+            
+            // Supply
+            const circulatingSupply = info.genesisInfo?.circulatingSupply || '0';
+            const isActive = BigInt(circulatingSupply) > 0n;
+            
+            // Info annuaire
+            const farmInfo = farms.find(f => f.tokenId === tokenEntry.tokenId);
+            let tokenDetails = null;
+            for (const farm of farms) {
+              if (Array.isArray(farm.tokens)) {
+                const foundToken = farm.tokens.find(t => t.tokenId === tokenEntry.tokenId);
+                if (foundToken) {
+                  tokenDetails = foundToken;
+                  break;
+                }
+              }
+            }
+            
+            const isFromFarmWallet = farmWalletTokenIds.has(tokenEntry.tokenId);
+            const isReferenced = !!farmInfo;
+            
+            fixedSupplyTokens.push({
+              tokenId: tokenEntry.tokenId,
+              name: info.genesisInfo?.tokenName || farmInfo?.name || "Jeton Non Référencé",
+              ticker: info.genesisInfo?.tokenTicker || "UNK",
+              decimals: info.genesisInfo?.decimals || 0,
+              image: tokenDetails?.image || farmInfo?.image || info.genesisInfo?.url || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Crect fill='%23ddd' width='400' height='400'/%3E%3Ctext fill='%23999' font-size='48' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3EToken%3C/text%3E%3C/svg%3E",
+              protocol: farmInfo?.protocol || "ALP",
+              website: farmInfo?.website || "",
+              farmName: farmInfo?.name || null,
+              purpose: tokenDetails?.purpose || '',
+              counterpart: tokenDetails?.counterpart || '',
+              isFixed: true, // Offre fixe confirmée
+              balance: balance,
+              isReferenced: isReferenced,
+              isFromFarmWallet: isFromFarmWallet,
+              isActive: isActive,
+              isDeleted: false,
+              verified: farmInfo?.verified || false,
+              verificationStatus: farmInfo?.verificationStatus || (farmInfo?.verified ? 'verified' : 'unverified'),
+              hasMintBaton: false, // Pas de baton
+              isCreator: true // Mais je suis créateur
+            });
+          } catch (err) {
+            console.warn(`⚠️ Erreur chargement token fixe ${tokenEntry.tokenId}:`, err);
+          }
+        }
+        
+        console.log(`🔒 Jetons à offre fixe créés par moi: ${fixedSupplyTokens.length}`);
+        
+        if (fixedSupplyTokens.length > 0) {
+          console.log('📋 Détails jetons à offre fixe:', fixedSupplyTokens.map(t => ({
+            tokenId: t.tokenId.substring(0, 8),
+            name: t.name,
+            balance: t.balance,
+            isActive: t.isActive,
+            isCreator: t.isCreator,
+            isFromFarmWallet: t.isFromFarmWallet
+          })));
+        }
+        
+        // Fusionner les deux listes
+        const allMyTokens = [...validTokens, ...fixedSupplyTokens];
+        console.log(`✅ Total jetons (variable + fixe): ${allMyTokens.length}`, {
+          variable: validTokens.length,
+          fixe: fixedSupplyTokens.length
+        });
+        setTokens(allMyTokens);
       } catch (err) {
         console.error('❌ Erreur chargement données jetons:', err);
         setNotification({ 
@@ -549,7 +648,7 @@ const ManageTokenPage = () => {
                           : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                       }`}
                     >
-                      🟢 Mes Actifs ({tokens.filter(t => t.isActive && t.hasMintBaton && t.isFromFarmWallet).length})
+                      🟢 En Circulation ({tokens.filter(t => t.isActive && !t.isDeleted && t.isFromFarmWallet).length})
                     </button>
                     <button
                       onClick={() => setActiveFilter('inactive')}
@@ -559,7 +658,7 @@ const ManageTokenPage = () => {
                           : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                       }`}
                     >
-                      ⚫ Mes Inactifs ({tokens.filter(t => !t.isActive && !t.isDeleted && t.hasMintBaton).length})
+                      ⚫ Inactifs ({tokens.filter(t => !t.isActive && !t.isDeleted && t.isFromFarmWallet).length})
                     </button>
                     <button
                       onClick={() => setActiveFilter('deleted')}
@@ -569,7 +668,7 @@ const ManageTokenPage = () => {
                           : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                       }`}
                     >
-                      🗑️ Supprimés ({tokens.filter(t => t.isDeleted).length})
+                      🗑️ Supprimés ({tokens.filter(t => t.isDeleted && t.isFromFarmWallet).length})
                     </button>
                     <button
                       onClick={() => setActiveFilter('all')}
@@ -594,52 +693,44 @@ const ManageTokenPage = () => {
               <CardContent className="p-4 bg-blue-50 dark:bg-blue-950/30">
               <p className="text-sm text-gray-600 dark:text-gray-400 m-0">
                 {isAdmin ? (
-                  activeFilter === 'active' ? '🟢 Vos tokens actifs (offre > 0)' :
-                  activeFilter === 'inactive' ? '⚫ Vos tokens inactifs (offre = 0)' :
-                  activeFilter === 'pending' ? '⏳ Tokens en attente de vérification' :
-                  '📋 Tous les tokens Farm-Wallet référencés'
+                  activeFilter === 'active' ? '🟢 Jetons avec offre en circulation (offre > 0)' :
+                  activeFilter === 'inactive' ? '⚫ Jetons sans circulation (offre = 0)' :
+                  activeFilter === 'deleted' ? '🗑️ Jetons supprimés ou signalés' :
+                  '📋 Tous vos jetons créés ou importés'
                 ) : (
-                  'ℹ️ Tous vos tokens sont affichés ci-dessous (actifs et inactifs)'
+                  activeFilter === 'active' ? '🟢 Jetons avec offre en circulation (offre > 0)' :
+                  activeFilter === 'inactive' ? '⚫ Jetons sans circulation (offre = 0)' :
+                  'ℹ️ Tous vos jetons sont affichés ci-dessous'
                 )}
               </p>
               </CardContent>
             </Card>
             
             {(() => {
-              // Logique de filtrage
+              // Logique de filtrage unifiée
               let displayTokens = [];
               
-              if (isAdmin) {
-                if (activeFilter === 'all') {
-                  // TOUS = Tokens Supabase (farms) + tokens wallet Farm-Wallet sans doublon
-                  const supabaseTokenIds = new Set(allFarmTokens.map(t => t.tokenId));
-                  const walletOnlyFarmTokens = tokens.filter(t => 
-                    t.isFromFarmWallet && !supabaseTokenIds.has(t.tokenId)
-                  );
-                  
-                  displayTokens = [...allFarmTokens, ...walletOnlyFarmTokens]
-                    .filter(t => t.isFromFarmWallet); // Ne garder QUE Farm-Wallet
-                } else if (activeFilter === 'active') {
-                  // Mes Actifs = tokens Farm-Wallet actifs avec baton
-                  displayTokens = tokens.filter(t => t.hasMintBaton && t.isActive && t.isFromFarmWallet);
-                } else if (activeFilter === 'inactive') {
-                  // Inactifs = supply = 0 mais pas supprimés
-                  displayTokens = tokens.filter(t => t.hasMintBaton && !t.isActive && !t.isDeleted);
-                } else if (activeFilter === 'deleted') {
-                  // Supprimés = tokens fixes dont le baton est détruit
-                  displayTokens = tokens.filter(t => t.isDeleted);
-                }
+              if (activeFilter === 'active') {
+                // En circulation: offre > 0 ET Farm-Wallet uniquement
+                displayTokens = tokens.filter(t => t.isActive && !t.isDeleted && t.isFromFarmWallet);
+              } else if (activeFilter === 'inactive') {
+                // Inactifs: offre = 0 ET Farm-Wallet uniquement
+                displayTokens = tokens.filter(t => !t.isActive && !t.isDeleted && t.isFromFarmWallet);
+              } else if (activeFilter === 'deleted' && isAdmin) {
+                // Supprimés: tokens marqués comme supprimés (admin uniquement)
+                displayTokens = tokens.filter(t => t.isDeleted && t.isFromFarmWallet);
+              } else if (activeFilter === 'all' && isAdmin) {
+                // Tous: tous les tokens Farm-Wallet (créés ou importés)
+                const supabaseTokenIds = new Set(allFarmTokens.map(t => t.tokenId));
+                const walletOnlyFarmTokens = tokens.filter(t => 
+                  t.isFromFarmWallet && !supabaseTokenIds.has(t.tokenId)
+                );
+                
+                displayTokens = [...allFarmTokens, ...walletOnlyFarmTokens]
+                  .filter(t => t.isFromFarmWallet);
               } else {
-                // Créateur : filtrer selon la supply blockchain (pas le solde du créateur)
-                if (activeFilter === 'active') {
-                  displayTokens = tokens.filter(t => t.isActive && !t.isDeleted);
-                } else if (activeFilter === 'inactive') {
-                  displayTokens = tokens.filter(t => !t.isActive && !t.isDeleted);
-                } else if (activeFilter === 'deleted') {
-                  displayTokens = tokens.filter(t => t.isDeleted);
-                } else {
-                  displayTokens = tokens;
-                }
+                // Par défaut: afficher tous les tokens Farm-Wallet
+                displayTokens = tokens.filter(t => t.isFromFarmWallet);
               }
               
               console.log('🎯 Filtrage tokens:', {
@@ -660,97 +751,89 @@ const ManageTokenPage = () => {
               .map((token) => (
               <Card
                 key={token.tokenId}
-                className="hover:shadow-md transition-shadow"
+                className="hover:shadow-md transition-shadow cursor-pointer"
+                onClick={() => navigate(`/token/${token.tokenId}`)}
               >
-                <CardContent className="p-6">
-                {/* Header: Image + Info + Badges */}
-                <div className="flex items-start gap-4 mb-4">
+                <CardContent className="p-4">
+                {/* Header: Image + Info + Status */}
+                <div className="flex items-start gap-3 mb-3">
+                  {/* Image fixe 48x48 */}
                   <img 
                     src={token.image} 
                     alt={token.name}
-                    className="w-16 h-16 rounded-xl object-cover border-2 border-gray-100 dark:border-gray-700"
+                    className="w-12 h-12 rounded-lg object-cover border border-gray-200 dark:border-gray-700 flex-shrink-0"
                     loading="lazy"
-                    style={{ imageRendering: 'crisp-edges' }}
                     onError={(e) => {
-                      if (e.target.src !== 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="64" height="64"%3E%3Crect fill="%23ddd" width="64" height="64"/%3E%3Ctext fill="%23999" font-size="12" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3EToken%3C/text%3E%3C/svg%3E') {
+                      if (e.target.src !== 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="48" height="48"%3E%3Crect fill="%23ddd" width="48" height="48"/%3E%3Ctext fill="%23999" font-size="10" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3E?%3C/text%3E%3C/svg%3E') {
                         e.target.onerror = null;
-                        e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="64" height="64"%3E%3Crect fill="%23ddd" width="64" height="64"/%3E%3Ctext fill="%23999" font-size="12" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3EToken%3C/text%3E%3C/svg%3E';
+                        e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="48" height="48"%3E%3Crect fill="%23ddd" width="48" height="48"/%3E%3Ctext fill="%23999" font-size="10" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3E?%3C/text%3E%3C/svg%3E';
                       }
                     }}
                   />
                   
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <h3 className="text-base font-bold text-gray-900 dark:text-gray-100 truncate">
                         {token.name}
                       </h3>
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                        token.isReferenced 
-                          ? 'bg-green-500 text-white' 
-                          : 'bg-gray-400 text-white'
-                      }`}>
-                        {token.isReferenced ? '✓ RÉFÉRENCÉ' : 'NON RÉFÉRENCÉ'}
-                      </span>
-                      {/* Badge Farm-Wallet */}
-                      {token.isFromFarmWallet && (
-                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-500 text-white">
-                          🏡 Farm-Wallet
-                        </span>
-                      )}
-                      {/* Badge Admin: Pas de MintBaton */}
-                      {isAdmin && !token.hasMintBaton && (
-                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-orange-500 text-white">
-                          ⚠️ Pas de MintBaton
+                      {token.isFromFarmWallet && token.isReferenced && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-500 text-white whitespace-nowrap">
+                          🏡
                         </span>
                       )}
                     </div>
-                    <div className="text-sm font-bold text-gray-600 dark:text-gray-400 uppercase">
+                    <div className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-0.5">
                       {token.ticker}
                     </div>
+                    {/* Token ID cliquable */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCopyTokenId(token.tokenId, e);
+                      }}
+                      className="text-[10px] font-mono text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors text-left truncate max-w-full block"
+                      title="Cliquez pour copier"
+                    >
+                      {token.tokenId}
+                    </button>
                   </div>
                   
-                  <div className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase ${
-                    token.isActive 
-                      ? 'bg-green-500 text-white' 
-                      : 'bg-gray-400 text-white'
-                  }`}>
-                    {token.isActive ? '✓ ACTIF' : '⚠ INACTIF'}
-                  </div>
+                  {/* Badge statut compact */}
+                  {token.isActive ? (
+                    <div className="px-2 py-1 rounded bg-green-500 text-white text-[10px] font-bold whitespace-nowrap flex-shrink-0">
+                      ACTIF
+                    </div>
+                  ) : (
+                    <div className="px-2 py-1 rounded bg-gray-400 text-white text-[10px] font-bold whitespace-nowrap flex-shrink-0">
+                      INACTIF
+                    </div>
+                  )}
                 </div>
 
-                {/* Balance Section */}
-                <Card className="mb-4">
-                  <CardContent className="p-4 bg-muted/50">
-                  <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">
-                    💼 Solde en ma possession
-                  </div>
-                  <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                    {formatBalance(token.balance, token.decimals)} {token.ticker}
-                  </div>
-                  </CardContent>
-                </Card>
-
-                {/* Token ID */}
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Token ID</div>
-                    <div className="text-xs font-mono text-gray-900 dark:text-gray-100 truncate">
-                      {token.tokenId}
+                {/* Balance + Type d'offre */}
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 mb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 mb-0.5 uppercase">
+                        💼 Solde
+                      </div>
+                      <div className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                        {formatBalance(token.balance, token.decimals)}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 mb-0.5 uppercase">
+                        Type
+                      </div>
+                      <div className={`text-xs font-bold ${token.hasMintBaton ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                        {token.hasMintBaton ? '🔄 Variable' : '🔒 Fixe'}
+                      </div>
                     </div>
                   </div>
-                  <Button
-                    onClick={(e) => handleCopyTokenId(token.tokenId, e)}
-                    size="sm"
-                    variant="outline"
-                  >
-                    📋 Copier
-                  </Button>
                 </div>
 
-                {/* Boutons d'actions rapides */}
-                {token.hasMintBaton && (
-                  <>
-                <div className="grid grid-cols-2 gap-2 mb-3">
+                {/* Boutons d'actions - Grid responsive */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   <Button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -759,183 +842,40 @@ const ManageTokenPage = () => {
                     size="sm"
                     variant="outline"
                     fullWidth
+                    className="text-xs"
                   >
                     📊 Détails
                   </Button>
                   <Button
                     onClick={(e) => {
                       e.stopPropagation();
-                      // Naviguer vers TokenDetailsPage et l'onglet airdrop sera sélectionnable là-bas
                       navigate(`/token/${token.tokenId}`);
                     }}
                     size="sm"
                     variant="outline"
                     fullWidth
-                  >
-                    🎁 Airdrop
-                  </Button>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      // Naviguer vers TokenDetailsPage et l'onglet send sera sélectionnable là-bas
-                      navigate(`/token/${token.tokenId}`);
-                    }}
-                    size="sm"
-                    variant="outline"
-                    fullWidth
+                    className="text-xs"
                   >
                     📤 Envoyer
                   </Button>
                   <Button
                     onClick={(e) => {
                       e.stopPropagation();
-                      navigate(`/manage-farm/${token.tokenId}`);
+                      navigate(`/token/${token.tokenId}`);
                     }}
                     size="sm"
                     variant="outline"
                     fullWidth
+                    className="text-xs col-span-2 sm:col-span-1"
                   >
-                    🏡 Modifier Ferme
+                    🎁 Airdrop
                   </Button>
                 </div>
-                {/* Bouton Demander Référencement si non référencé */}
-                {!token.isReferenced && (
-                  <Button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigate(`/request-listing/${token.tokenId}`);
-                    }}
-                    size="sm"
-                    variant="primary"
-                    fullWidth
-                    className="mt-2"
-                  >
-                    📝 Demander Référencement
-                  </Button>
-                )}
-                  </>
-                )}
-
-                {/* Admin sans MintBaton: actions limitées */}
-                {isAdmin && !token.hasMintBaton && (
-                  <Card className="mt-3">
-                    <CardContent className="p-4 bg-orange-50 dark:bg-orange-950/30">
-                      <p className="text-xs text-gray-600 dark:text-gray-400 m-0 mb-3">
-                        ⚠️ Vous n'avez pas le MintBaton de ce jeton. Actions limitées.
-                      </p>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/token/${token.tokenId}`);
-                          }}
-                          size="sm"
-                          variant="outline"
-                          fullWidth
-                        >
-                          📊 Détails
-                        </Button>
-                        <Button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/manage-farm/${token.tokenId}`);
-                          }}
-                          size="sm"
-                          variant="outline"
-                          fullWidth
-                        >
-                          🏡 Voir Ferme
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
                 </CardContent>
               </Card>
             ));
             })()}
           </>
-        )}
-
-        {/* FAQ Gestionnaire */}
-        {tokens.length > 0 && (
-          <Card>
-            <CardContent className="p-6">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2 flex items-center gap-2">
-              <span className="text-2xl">❓</span>
-              FAQ Gestionnaire
-            </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">
-              Tout savoir sur la gestion de vos jetons
-            </p>
-
-            <div className="space-y-3">
-              {[
-                {
-                  question: "🏭 C'est quoi Émettre (Mint) ?",
-                  answer: "Émettre (ou \"Mint\") permet de créer de nouveaux jetons et d'augmenter l'offre en circulation. Cette action est réservée aux jetons à offre variable (ceux pour lesquels vous possédez le baton de mint). Les nouveaux jetons sont automatiquement ajoutés à votre solde."
-                },
-                {
-                  question: "🔥 C'est quoi Détruire (Burn) ?",
-                  answer: "Détruire (ou \"Burn\") permet de supprimer définitivement des jetons de la circulation. Cette action est irréversible. Les jetons brûlés disparaissent de votre solde et réduisent l'offre totale. Si vous brûlez tous les jetons (supply = 0), le jeton devient INACTIF."
-                },
-                {
-                  question: "🎁 C'est quoi Distribuer (Airdrop) ?",
-                  answer: "Distribuer permet d'envoyer des XEC (frais réseau) à tous les détenteurs de votre jeton en une seule opération. Vous pouvez choisir le mode Égalitaire (montant identique pour tous) ou Pro-Rata (proportionnel aux soldes). Utile pour récompenser votre communauté ou financer leurs transactions."
-                },
-                {
-                  question: "📊 Génèse vs En circulation ?",
-                  answer: "La \"Génèse\" représente la quantité totale de jetons créés depuis l'origine (incluant ceux détruits). L'\"En circulation\" représente la quantité actuellement disponible (Génèse - Jetons brûlés). Pour les jetons à offre fixe, ces deux valeurs sont identiques."
-                },
-                {
-                  question: "⚠️ Pourquoi mon jeton est INACTIF ?",
-                  answer: "Un jeton devient INACTIF lorsque son offre en circulation est égale à 0 (tous les jetons ont été détruits). Un jeton inactif ne peut plus être échangé mais peut être réactivé en émettant de nouveaux jetons si vous possédez toujours le baton de mint."
-                },
-                {
-                  question: "🔐 ALP vs SLP ?",
-                  answer: "ALP (Augmented Lokad Protocol) et SLP (Simple Ledger Protocol) sont deux standards de jetons sur eCash. ALP est plus récent, plus efficace et offre des fonctionnalités avancées. SLP est le standard historique. Farm Wallet utilise principalement ALP pour ses avantages techniques."
-                },
-                {
-                  question: "📋 Pourquoi \"Non Listé\" ?",
-                  answer: "Un jeton \"Non Listé\" n'apparaît pas encore dans l'annuaire public des fermes. Pour le faire référencer, contactez l'équipe Farm Wallet avec les informations de votre ferme (nom, description, image, coordonnées). Le référencement est gratuit."
-                },
-                {
-                  question: "🔄 Offre Variable vs Fixe ?",
-                  answer: "Offre Variable : vous pouvez émettre de nouveaux jetons à tout moment (vous possédez le baton de mint). Offre Fixe : la quantité totale est déterminée à la création et ne peut plus être modifiée. Vous pouvez toujours détruire des jetons, mais pas en créer de nouveaux."
-                }
-              ].map((faq, index) => (
-                <div
-                  key={index}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setFaqOpen(faqOpen === index ? null : index);
-                  }}
-                  className="cursor-pointer"
-                >
-                  <Card className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-4 bg-muted/50">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {faq.question}
-                      </span>
-                      <span className="text-xl text-gray-600 dark:text-gray-400">
-                        {faqOpen === index ? '−' : '+'}
-                      </span>
-                    </div>
-                    {faqOpen === index && (
-                      <p className="mt-3 text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                        {faq.answer}
-                      </p>
-                    )}
-                    </CardContent>
-                  </Card>
-                </div>
-              ))}
-            </div>
-            </CardContent>
-          </Card>
         )}
 
         {/* Blockchain Status */}

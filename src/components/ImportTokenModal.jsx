@@ -55,17 +55,47 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
         throw new Error('Token non trouvé sur la blockchain');
       }
 
-      // Vérifier que l'utilisateur possède le mintBaton
+      // Vérifier si l'utilisateur possède le mintBaton (offre variable)
       const batons = await wallet.getMintBatons();
-      const hasMintBaton = batons.some(b => b.tokenId === tokenId);
+      const hasMintBaton = batons.some(b => 
+        b.tokenId.toLowerCase() === tokenId.toLowerCase()
+      );
+      
+      console.log('🔍 Vérification MintBaton:', {
+        tokenId,
+        hasMintBaton,
+        batonsCount: batons.length
+      });
 
-      if (!hasMintBaton) {
-        setNotification({
-          type: 'error',
-          message: '❌ Vous ne possédez pas le Droit de Création 🔨 (MintBaton) de ce jeton. Vous devez utiliser l\'adresse avec laquelle le jeton a été créé.'
-        });
-        setIsImporting(false);
-        return;
+      // Déterminer le type d'offre
+      const genesisInfo = info.genesisInfo;
+      const isFixedSupply = !hasMintBaton; // Si pas de baton = offre fixe
+      
+      // Si offre fixe, vérifier que l'utilisateur possède au moins des tokens
+      if (isFixedSupply) {
+        try {
+          const tokenBalance = await wallet.getTokenBalance(tokenId);
+          const balance = BigInt(tokenBalance.balance || '0');
+          
+          if (balance === 0n) {
+            setNotification({
+              type: 'error',
+              message: `❌ Ce jeton a une offre fixe et vous n'en possédez aucun. Vous devez avoir des tokens dans votre wallet pour l'importer.`
+            });
+            setIsImporting(false);
+            return;
+          }
+          
+          console.log('✅ Offre fixe - Balance détectée:', tokenBalance.balance);
+        } catch (balanceErr) {
+          console.error('Erreur vérification balance:', balanceErr);
+          setNotification({
+            type: 'error',
+            message: `❌ Impossible de vérifier votre solde pour ce jeton à offre fixe.`
+          });
+          setIsImporting(false);
+          return;
+        }
       }
 
       // Vérifier si l'utilisateur a déjà une ferme
@@ -74,7 +104,6 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
       setHasExistingFarm(!!existingFarm);
 
       // Construire l'objet tokenPreview avec TOUTES les données blockchain
-      const genesisInfo = info.genesisInfo;
       const decimals = genesisInfo.decimals || 0;
       
       setTokenPreview({
@@ -87,7 +116,8 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
         image: genesisInfo.url || '',
         url: genesisInfo.url || '',
         timeFirstSeen: info.timeFirstSeen || null,
-        hasMintBaton: true
+        hasMintBaton: hasMintBaton,
+        isFixedSupply: isFixedSupply
       });
       setStep('preview');
     } catch (err) {
@@ -480,6 +510,20 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
                     <div style={{ 
                       display: 'flex',
                       justifyContent: 'space-between',
+                      padding: '10px 0',
+                      borderBottom: '1px solid var(--border-color, #e5e5e5)'
+                    }}>
+                      <span style={{ color: 'var(--text-secondary, #666)', fontWeight: '500' }}>Type d'offre:</span>
+                      <span style={{ 
+                        fontWeight: '600', 
+                        color: tokenPreview.isFixedSupply ? '#ef4444' : '#10b981'
+                      }}>
+                        {tokenPreview.isFixedSupply ? '🔒 Offre Fixe' : '🔄 Offre Variable'}
+                      </span>
+                    </div>
+                    <div style={{ 
+                      display: 'flex',
+                      justifyContent: 'space-between',
                       padding: '10px 0'
                     }}>
                       <span style={{ color: 'var(--text-secondary, #666)', fontWeight: '500' }}>Décimales:</span>
@@ -490,6 +534,35 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Avertissement Offre Fixe */}
+              {tokenPreview.isFixedSupply && (
+                <Card style={{ marginBottom: '16px', border: '2px solid #f59e0b', backgroundColor: '#fffbeb' }}>
+                  <CardContent style={{ padding: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'start', gap: '12px' }}>
+                      <span style={{ fontSize: '24px' }}>⚠️</span>
+                      <div>
+                        <h4 style={{ 
+                          fontSize: '0.95rem',
+                          fontWeight: 'bold',
+                          color: '#b45309',
+                          margin: '0 0 8px 0'
+                        }}>
+                          Jeton à Offre Fixe
+                        </h4>
+                        <p style={{ 
+                          fontSize: '0.85rem',
+                          color: '#92400e',
+                          margin: 0,
+                          lineHeight: '1.5'
+                        }}>
+                          Ce jeton a une offre fixe (pas de MintBaton). Vous ne pourrez pas émettre de nouveaux jetons, uniquement les envoyer ou les détruire.
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Scénario 1: Compléter l'importation (pas de profil) */}
               <Card style={{ marginBottom: '16px' }}>

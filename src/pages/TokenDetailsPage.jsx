@@ -27,9 +27,7 @@ const TokenDetailsPage = () => {
   const [isCreator, setIsCreator] = useState(false);
   
   // États des onglets
-  const [activeTab, setActiveTab] = useState('send'); // 'send' ou 'airdrop'
-  const [managementPanelOpen, setManagementPanelOpen] = useState(false);
-  const [managementTab, setManagementTab] = useState('mint'); // 'mint' ou 'burn'
+  const [activeTab, setActiveTab] = useState('send'); // 'send', 'airdrop', 'mint' ou 'burn'
   
   // États des formulaires
   const [sendAddress, setSendAddress] = useState('');
@@ -88,10 +86,35 @@ const TokenDetailsPage = () => {
         const farm = farms.find((f) => f.tokenId === tokenId);
         console.log('🗂️ Farm Info:', farm);
 
-        // 5. Vérifier si je suis le créateur (j'ai un Mint Baton)
+        // 5. Vérifier si je suis le créateur (j'ai un Mint Baton OU j'ai créé le jeton à offre fixe)
         const batons = await wallet.getMintBatons();
         const hasBaton = batons.some((b) => b.tokenId === tokenId);
-        setIsCreator(hasBaton);
+        
+        // Pour offre fixe: vérifier si je possède des tokens (créateur probable)
+        let isFixedSupplyCreator = false;
+        if (!hasBaton) {
+          // Pour un jeton à offre fixe, on considère qu'on est créateur si:
+          // 1. On possède des tokens
+          // 2. Le jeton est référencé dans Farm-Wallet (créé via l'app)
+          const balance = await wallet.getTokenBalance(tokenId);
+          const hasTokens = balance && BigInt(balance.balance || '0') > 0n;
+          const farm = farms.find(f => f.tokenId === tokenId);
+          const isFromFarmWallet = !!farm || farms.some(f => 
+            Array.isArray(f.tokens) && f.tokens.some(t => t.tokenId === tokenId)
+          );
+          
+          isFixedSupplyCreator = hasTokens && isFromFarmWallet;
+          
+          console.log(`🔍 Vérification créateur offre fixe:`, {
+            tokenId: tokenId.substring(0, 8),
+            hasTokens,
+            isFromFarmWallet,
+            isCreator: isFixedSupplyCreator,
+            farm: farm?.name
+          });
+        }
+        
+        setIsCreator(hasBaton || isFixedSupplyCreator);
 
         // 6. Récupérer mon solde
         let balance = '0';
@@ -617,15 +640,29 @@ const TokenDetailsPage = () => {
             {/* Badges */}
             <div className="flex gap-2 flex-wrap">
               <Badge variant="primary">{protocol}</Badge>
-              <Badge variant={isCreator ? 'success' : 'warning'}>
-                {isCreator ? '🔄 Variable' : '🔒 Fixe'}
-              </Badge>
-              <Badge variant={isListed ? 'success' : 'default'}>
-                {isListed ? '✓ Listé' : 'Non Listé'}
-              </Badge>
-              <Badge variant={isActive ? 'success' : 'danger'}>
-                {isActive ? '✓ Actif' : '⚠ Inactif'}
-              </Badge>
+              {isCreator ? (
+                <Badge variant="success">
+                  {genesisInfo.authPubkey ? '🔄 Variable' : '🔒 Fixe'}
+                </Badge>
+              ) : (
+                <Badge variant="warning">🔒 Fixe</Badge>
+              )}
+              {/* Badge: Actif dans l'annuaire (visible par tous) */}
+              {isListed && (
+                <Badge variant="success">
+                  🏡 Actif dans l'annuaire
+                </Badge>
+              )}
+              {/* Badge En Circulation/Inactif: basé sur circulatingSupply */}
+              {BigInt(genesisInfo.circulatingSupply || '0') > 0n ? (
+                <Badge variant="success">
+                  🟢 En Circulation
+                </Badge>
+              ) : (
+                <Badge variant="secondary">
+                  ⚫ Inactif
+                </Badge>
+              )}
             </div>
             </CardContent>
           </Card>
@@ -692,8 +729,10 @@ const TokenDetailsPage = () => {
           {/* ACTIONS UTILISATEUR */}
           <Tabs
             tabs={[
-              { id: 'send', label: '📤 Envoyer ' + ticker },
-              { id: 'airdrop', label: '🎁 Distribuer XEC' }
+              { id: 'send', label: `📤 Envoyer` },
+              { id: 'airdrop', label: '🎁 Distribuer' },
+              ...(isCreator && genesisInfo.authPubkey ? [{ id: 'mint', label: '🏭 Émettre' }] : []),
+              ...(isCreator ? [{ id: 'burn', label: '🔥 Détruire' }] : [])
             ]}
             activeTab={activeTab}
             onChange={setActiveTab}
@@ -767,9 +806,13 @@ const TokenDetailsPage = () => {
             <Card>
               <CardContent className="p-6">
               <form className="space-y-4">
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Distribuez des XEC automatiquement à tous les détenteurs de {ticker}
-                </p>
+                <Card className="border-blue-200 dark:border-blue-800">
+                  <CardContent className="p-4 bg-blue-50 dark:bg-blue-950/30">
+                  <p className="text-sm text-blue-900 dark:text-blue-100 m-0">
+                    💡 <strong>Distribution de XEC uniquement</strong> : Envoyez des eCash (XEC) à tous les détenteurs de {ticker} pour couvrir leurs frais de transactions.
+                  </p>
+                  </CardContent>
+                </Card>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -902,118 +945,96 @@ const TokenDetailsPage = () => {
             </Card>
           )}
 
-          {/* ACTIONS DE GESTION (Si Créateur) */}
-          {isCreator && (
-            <>
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => setManagementPanelOpen(!managementPanelOpen)}
-              >
-                ⚙️ Actions de Gestion {managementPanelOpen ? '▼' : '▶'}
-              </Button>
+          {/* Contenu Onglet MINT */}
+          {activeTab === 'mint' && isCreator && (
+            <Card>
+              <CardContent className="p-6">
+              <form onSubmit={handleMint} className="space-y-4">
+                <Card className="border-blue-200 dark:border-blue-800">
+                  <CardContent className="p-4 bg-blue-50 dark:bg-blue-950/30">
+                  <p className="text-sm text-blue-900 dark:text-blue-100 m-0">
+                    💡 Créez de nouveaux jetons {ticker} (offre variable uniquement)
+                  </p>
+                  </CardContent>
+                </Card>
+                
+                <Input
+                  label="Quantité à émettre"
+                  type="number"
+                  step="1"
+                  value={mintAmount}
+                  onChange={(e) => setMintAmount(e.target.value)}
+                  placeholder="1000"
+                  disabled={!isCreator || processing}
+                />
 
-              {managementPanelOpen && (
-                <>
-                  <Tabs
-                    tabs={[
-                      { id: 'mint', label: '🏭 Émettre' },
-                      { id: 'burn', label: '🔥 Détruire' }
-                    ]}
-                    activeTab={managementTab}
-                    onChange={setManagementTab}
-                  />
+                <Card>
+                  <CardContent className="p-4 bg-muted/50">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 m-0">
+                    💡 Frais de réseau estimés : ~5 XEC
+                  </p>
+                  </CardContent>
+                </Card>
 
-                  {/* Contenu MINT */}
-                  {managementTab === 'mint' && (
-                    <Card>
-                      <CardContent className="p-6">
-                      <form onSubmit={handleMint} className="space-y-4">
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          Créez de nouveaux jetons {ticker} si votre supply est variable
-                        </p>
-                        
-                        <Input
-                          label="Quantité à émettre"
-                          type="number"
-                          step="1"
-                          value={mintAmount}
-                          onChange={(e) => setMintAmount(e.target.value)}
-                          placeholder="1000"
-                          disabled={!isCreator || processing}
-                        />
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={!genesisInfo.authPubkey || processing || !mintAmount}
+                >
+                  {!genesisInfo.authPubkey ? '🔒 Offre Fixe (Mint impossible)' : processing ? '⏳ Émission...' : "✔️ Confirmer l'émission"}
+                </Button>
+              </form>
+              </CardContent>
+            </Card>
+          )}
 
-                        <Card>
-                          <CardContent className="p-4 bg-muted/50">
-                          <p className="text-sm text-gray-600 dark:text-gray-400 m-0">
-                            💡 Frais de réseau estimés : ~5 XEC
-                          </p>
-                          </CardContent>
-                        </Card>
+          {/* Contenu Onglet BURN */}
+          {activeTab === 'burn' && isCreator && (
+            <Card>
+              <CardContent className="p-6">
+              <form onSubmit={handleBurn} className="space-y-4">
+                <Card className="border-yellow-200 dark:border-yellow-800">
+                  <CardContent className="p-4 bg-yellow-50 dark:bg-yellow-950/30">
+                  <p className="text-sm font-medium m-0">
+                    ⚠️ Action irréversible : les jetons détruits ne peuvent pas être récupérés
+                  </p>
+                  </CardContent>
+                </Card>
+                
+                <Input
+                  label="Quantité à détruire"
+                  type="number"
+                  step="0.01"
+                  value={burnAmount}
+                  onChange={(e) => setBurnAmount(e.target.value)}
+                  placeholder="100"
+                  disabled={processing}
+                  actionButton={{
+                    label: 'MAX',
+                    onClick: handleSetMaxBurn
+                  }}
+                  helperText={`Solde: ${formatAmount(myBalance, decimals)} ${ticker}`}
+                  className="border-red-500 dark:border-red-400"
+                />
 
-                        <Button
-                          type="submit"
-                          className="w-full"
-                          disabled={!isCreator || processing || !mintAmount}
-                        >
-                          {!isCreator ? '🔒 Offre Fixe' : processing ? '⏳ Émission...' : "✔️ Confirmer l'émission"}
-                        </Button>
-                      </form>
-                      </CardContent>
-                    </Card>
-                  )}
+                <Card className="border-red-200 dark:border-red-800">
+                  <CardContent className="p-4 bg-red-50 dark:bg-red-950/30">
+                  <p className="text-sm text-red-600 dark:text-red-400 m-0">
+                    💡 Frais de réseau estimés : ~5 XEC
+                  </p>
+                  </CardContent>
+                </Card>
 
-                  {/* Contenu BURN */}
-                  {managementTab === 'burn' && (
-                    <Card>
-                      <CardContent className="p-6">
-                      <form onSubmit={handleBurn} className="space-y-4">
-                        <Card className="border-yellow-200 dark:border-yellow-800">
-                          <CardContent className="p-4 bg-yellow-50 dark:bg-yellow-950/30">
-                          <p className="text-sm font-medium m-0">
-                            ⚠️ Action irréversible : les jetons détruits ne peuvent pas être récupérés
-                          </p>
-                          </CardContent>
-                        </Card>
-                        
-                        <Input
-                          label="Quantité à détruire"
-                          type="number"
-                          step="0.01"
-                          value={burnAmount}
-                          onChange={(e) => setBurnAmount(e.target.value)}
-                          placeholder="100"
-                          disabled={processing}
-                          actionButton={{
-                            label: 'MAX',
-                            onClick: handleSetMaxBurn
-                          }}
-                          helperText={`Solde: ${formatAmount(myBalance, decimals)} ${ticker}`}
-                          className="border-red-500 dark:border-red-400"
-                        />
-
-                        <Card className="border-red-200 dark:border-red-800">
-                          <CardContent className="p-4 bg-red-50 dark:bg-red-950/30">
-                          <p className="text-sm text-red-600 dark:text-red-400 m-0">
-                            💡 Frais de réseau estimés : ~5 XEC
-                          </p>
-                          </CardContent>
-                        </Card>
-
-                        <Button
-                          type="submit"
-                          className="w-full bg-red-600 hover:bg-red-700 text-white"
-                          disabled={processing || !burnAmount}
-                        >
-                          {processing ? '⏳ Destruction...' : '🔥 Détruire Définitivement'}
-                        </Button>
-                      </form>
-                      </CardContent>
-                    </Card>
-                  )}
-                </>
-              )}
-            </>
+                <Button
+                  type="submit"
+                  className="w-full bg-red-600 hover:bg-red-700 text-white"
+                  disabled={processing || !burnAmount}
+                >
+                  {processing ? '⏳ Destruction...' : '🔥 Détruire Définitivement'}
+                </Button>
+              </form>
+              </CardContent>
+            </Card>
           )}
 
           {/* STATISTIQUES */}
@@ -1118,35 +1139,6 @@ const TokenDetailsPage = () => {
             </Card>
             </CardContent>
           </Card>
-
-          {/* Actions Listing */}
-          {!isListed && (
-            <Card className="border-blue-200 dark:border-blue-800">
-              <CardContent className="p-6">
-              <h3 className="text-lg font-bold mb-2 text-gray-900 dark:text-white">
-                📋 Référencer ce jeton
-              </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                Votre jeton n'est pas encore listé dans l'annuaire public. Demandez son référencement pour le rendre visible à tous.
-              </p>
-              <Button
-                className="w-full bg-blue-600 hover:bg-blue-700"
-                onClick={() => navigate(`/request-listing/${tokenId}`)}
-              >
-                📝 Demander le listing
-              </Button>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Bouton Retour */}
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => navigate('/manage-token')}
-          >
-            ← Retour à la liste
-          </Button>
 
           {/* Footer */}
           <BlockchainStatus />

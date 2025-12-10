@@ -599,8 +599,8 @@ const WalletDashboard = () => {
                           }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                               <span>{farm.name}</span>
-                              {/* Badge vérifié/non-référencé */}
-                              {farm.verified ? (
+                              {/* Badge: Actif dans l'annuaire */}
+                              {farm.verified && (
                                 <span style={{
                                   fontSize: '10px',
                                   padding: '2px 6px',
@@ -609,20 +609,8 @@ const WalletDashboard = () => {
                                   color: '#2e7d32',
                                   fontWeight: '600',
                                   whiteSpace: 'nowrap'
-                                }} title="Ferme référencée dans l'annuaire">
-                                  ✅ Vérifié
-                                </span>
-                              ) : (
-                                <span style={{
-                                  fontSize: '10px',
-                                  padding: '2px 6px',
-                                  borderRadius: '10px',
-                                  backgroundColor: '#fff3e0',
-                                  color: '#e65100',
-                                  fontWeight: '600',
-                                  whiteSpace: 'nowrap'
-                                }} title="Jeton non référencé dans l'annuaire">
-                                  ⚠️ Non-référencé
+                                }} title="Jeton actif dans l'annuaire Farm Wallet">
+                                  🏡 Actif dans l'annuaire
                                 </span>
                               )}
                             </div>
