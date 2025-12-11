@@ -4,11 +4,27 @@
 /**
  * Card - Simple container component
  */
-export const Card = ({ children, className = '' }) => (
-  <div className={`card ${className}`} >
-    {children}
-  </div>
-);
+export const Card = ({ children, className = '', variant = 'default' }) => {
+  const variantStyles = {
+    default: {},
+    infobox: {
+      backgroundColor: 'var(--bg-secondary, #f9fafb)',
+      border: 'none',
+      borderRadius: '8px',
+      padding: '0.75rem',
+      fontSize: '0.875rem'
+    }
+  };
+
+  return (
+    <div 
+      className={`card ${className}`}
+      style={variantStyles[variant]}
+    >
+      {children}
+    </div>
+  );
+};
 
 /**
  * CardContent - Content wrapper for cards
@@ -20,13 +36,99 @@ export const CardContent = ({ children, className = '' }) => (
 );
 
 /**
- * Button - Simple button component
+ * InfoBox - Zone d'information grisée (frais, avertissements)
+ * Fond gris clair, coins arrondis, padding réduit, texte petit
  */
-export const Button = ({ children, className = '', ...props }) => (
-  <button className={`btn ${className}`} {...props}>
-    {children}
-  </button>
+export const InfoBox = ({ children, className = '', icon = '' }) => (
+  <div 
+    className={className}
+    style={{
+      backgroundColor: 'var(--bg-secondary, #f9fafb)',
+      border: 'none',
+      borderRadius: '8px',
+      padding: '0.75rem',
+      fontSize: '0.875rem',
+      color: 'var(--text-secondary)',
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: '0.5rem'
+    }}
+  >
+    {icon && <span style={{ flexShrink: 0 }}>{icon}</span>}
+    <div style={{ flex: 1 }}>{children}</div>
+  </div>
 );
+
+/**
+ * Button - Simple button component with variants
+ */
+export const Button = ({ children, className = '', variant = 'default', ...props }) => {
+  const variantStyles = {
+    default: {
+      backgroundColor: 'var(--bg-secondary)',
+      color: 'var(--text-primary)',
+      border: '1px solid var(--border-primary)'
+    },
+    primary: {
+      backgroundColor: 'var(--primary-color)',
+      color: '#fff',
+      border: 'none'
+    },
+    outline: {
+      backgroundColor: 'transparent',
+      color: 'var(--primary-color)',
+      border: '1px solid var(--primary-color)'
+    },
+    danger: {
+      backgroundColor: '#dc3545',
+      color: '#fff',
+      border: 'none'
+    },
+    success: {
+      backgroundColor: '#28a745',
+      color: '#fff',
+      border: 'none'
+    }
+  };
+
+  const baseStyle = {
+    padding: '0.75rem 1.5rem',
+    fontSize: '1rem',
+    fontWeight: '600',
+    borderRadius: '8px',
+    cursor: props.disabled ? 'not-allowed' : 'pointer',
+    transition: 'all 0.2s ease',
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+    minHeight: variant === 'primary' || variant === 'success' || variant === 'danger' ? '50px' : 'auto',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    opacity: props.disabled ? 0.6 : 1,
+    ...variantStyles[variant]
+  };
+
+  return (
+    <button 
+      className={`btn ${className}`} 
+      style={baseStyle}
+      onMouseEnter={(e) => {
+        if (!props.disabled) {
+          e.target.style.transform = 'translateY(-1px)';
+          e.target.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.15)';
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!props.disabled) {
+          e.target.style.transform = 'translateY(0)';
+          e.target.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)';
+        }
+      }}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+};
 
 /**
  * PageLayout - Layout wrapper for pages
@@ -50,12 +152,42 @@ export const Badge = ({ children, className = '', variant = 'default' }) => (
  * Tabs - Tabbed interface
  */
 export const Tabs = ({ tabs, activeTab, onChange, className = '' }) => (
-  <div className={`tabs-container ${className}`}>
+  <div 
+    className={`tabs-container ${className}`}
+    style={{ 
+      display: 'flex', 
+      width: '100%', 
+      gap: '2px',
+      backgroundColor: 'transparent',
+      borderBottom: 'none',
+      marginBottom: 0,
+      overflowX: 'visible'
+    }}
+  >
     {tabs.map((tab) => (
       <button
         key={tab.id}
-        className={`tab ${activeTab === tab.id ? 'active' : ''}`}
         onClick={() => onChange(tab.id)}
+        className={`tab ${activeTab === tab.id ? 'active' : ''}`}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          padding: '12px',
+          textAlign: 'center',
+          border: 'none',
+          borderBottom: activeTab === tab.id ? '3px solid var(--primary-color, #007bff)' : '1px solid transparent',
+          fontWeight: activeTab === tab.id ? '600' : '500',
+          fontSize: '0.9rem',
+          color: activeTab === tab.id ? 'var(--primary-color, #007bff)' : 'var(--text-secondary, #6b7280)',
+          backgroundColor: activeTab === tab.id ? 'var(--bg-primary, #fff)' : 'var(--bg-secondary, #f5f5f5)',
+          borderTopLeftRadius: '8px',
+          borderTopRightRadius: '8px',
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          transition: 'all 0.2s ease'
+        }}
       >
         {tab.label}
       </button>
@@ -205,7 +337,7 @@ export const Input = ({ className = '', label = '', rightIcon, actionButton, hel
         className="input"
         style={{
           width: '100%',
-          padding: rightIcon ? '0.75rem 3rem 0.75rem 1rem' : actionButton ? '0.75rem 5rem 0.75rem 1rem' : '0.75rem 1rem',
+          padding: rightIcon ? '1rem 3rem 1rem 1rem' : actionButton ? '1rem 4rem 1rem 1rem' : '1rem 1rem',
           fontSize: '1rem',
           border: '1px solid var(--border-primary)',
           borderRadius: '8px',
@@ -221,43 +353,35 @@ export const Input = ({ className = '', label = '', rightIcon, actionButton, hel
       {rightIcon && (
         <div style={{
           position: 'absolute',
-          right: '0.5rem',
+          right: '1rem',
           top: '50%',
-          transform: 'translateY(-50%)'
+          transform: 'translateY(-50%)',
+          display: 'flex',
+          alignItems: 'center'
         }}>
           {rightIcon}
         </div>
       )}
       {actionButton && (
-        <button
-          type="button"
+        <span
           onClick={actionButton.onClick}
           style={{
             position: 'absolute',
-            right: '0.5rem',
+            right: '1rem',
             top: '50%',
             transform: 'translateY(-50%)',
-            padding: '0.25rem 0.75rem',
-            fontSize: '0.75rem',
-            fontWeight: '600',
-            color: 'var(--accent-primary)',
-            background: 'transparent',
-            border: '1px solid var(--accent-primary)',
-            borderRadius: '4px',
+            color: 'var(--primary-color)',
+            fontWeight: 'bold',
+            fontSize: '0.8rem',
             cursor: 'pointer',
-            transition: 'all 0.2s'
+            userSelect: 'none',
+            transition: 'opacity 0.2s'
           }}
-          onMouseEnter={(e) => {
-            e.target.style.background = 'var(--accent-primary)';
-            e.target.style.color = 'white';
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.background = 'transparent';
-            e.target.style.color = 'var(--accent-primary)';
-          }}
+          onMouseEnter={(e) => e.target.style.opacity = '0.7'}
+          onMouseLeave={(e) => e.target.style.opacity = '1'}
         >
           {actionButton.label}
-        </button>
+        </span>
       )}
     </div>
     {helperText && (
@@ -479,4 +603,57 @@ Modal.Footer = ({ children, className = '' }) => (
   >
     {children}
   </div>
+);
+
+/**
+ * Switch - Toggle switch component
+ */
+export const Switch = ({ checked, onChange, disabled = false, className = '' }) => (
+  <label
+    className={`switch ${className}`}
+    style={{
+      position: 'relative',
+      display: 'inline-block',
+      width: '52px',
+      height: '28px',
+      cursor: disabled ? 'not-allowed' : 'pointer',
+      opacity: disabled ? 0.5 : 1
+    }}
+  >
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={(e) => !disabled && onChange(e.target.checked)}
+      disabled={disabled}
+      style={{ opacity: 0, width: 0, height: 0 }}
+    />
+    <span
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: checked ? 'var(--primary-color, #007bff)' : 'var(--bg-secondary, #ccc)',
+        borderRadius: '28px',
+        transition: 'background-color 0.3s',
+        boxShadow: 'inset 0 1px 3px rgba(0, 0, 0, 0.1)'
+      }}
+    >
+      <span
+        style={{
+          position: 'absolute',
+          content: '',
+          height: '20px',
+          width: '20px',
+          left: checked ? '28px' : '4px',
+          bottom: '4px',
+          backgroundColor: 'white',
+          borderRadius: '50%',
+          transition: 'left 0.3s',
+          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
+        }}
+      />
+    </span>
+  </label>
 );

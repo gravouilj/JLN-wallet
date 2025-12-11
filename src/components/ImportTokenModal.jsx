@@ -103,6 +103,27 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
       const existingFarm = await FarmService.getMyFarm(address);
       setHasExistingFarm(!!existingFarm);
 
+      // 🔒 NOUVEAU: Vérifier la disponibilité du token (sécurité anti-conflit)
+      console.log('🔍 Vérification disponibilité token...');
+      const availability = await FarmService.checkTokenAvailability(tokenId, address);
+      
+      if (!availability.isAvailable) {
+        setNotification({
+          type: 'error',
+          message: `⛔ Ce jeton est déjà géré par la ferme "${availability.existingFarmName}". Vous ne pouvez pas l'importer.`
+        });
+        setIsImporting(false);
+        return;
+      }
+      
+      if (availability.isReimport) {
+        console.log('ℹ️ Ré-import détecté (token déjà dans votre ferme)');
+        setNotification({
+          type: 'info',
+          message: `💡 Ce jeton est déjà dans votre ferme. Vous pouvez le mettre à jour.`
+        });
+      }
+
       // Construire l'objet tokenPreview avec TOUTES les données blockchain
       const decimals = genesisInfo.decimals || 0;
       
@@ -183,6 +204,20 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
     setIsImporting(true);
     try {
       const { FarmService } = await import('../services/farmService');
+      
+      // 🔒 NOUVEAU: Vérifier la disponibilité du token avant import
+      console.log('🔍 Vérification disponibilité avant import rapide...');
+      const availability = await FarmService.checkTokenAvailability(tokenPreview.tokenId, address);
+      
+      if (!availability.isAvailable) {
+        setNotification({
+          type: 'error',
+          message: `⛔ Ce jeton est déjà géré par la ferme "${availability.existingFarmName}". Vous ne pouvez pas l'importer.`
+        });
+        setIsImporting(false);
+        return;
+      }
+      
       const existingFarm = await FarmService.getMyFarm(address);
 
       const newTokenData = {
@@ -205,7 +240,7 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
         if (tokenExists) {
           setNotification({
             type: 'warning',
-            message: '⚠️ Ce token est déjà importé dans votre ferme'
+            message: 'Ce token est déjà importé dans votre ferme'
           });
           handleClose();
           return;
@@ -219,7 +254,7 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
         await FarmService.saveFarm(updatedFarm, address);
         setNotification({
           type: 'success',
-          message: `✅ Token "${tokenPreview.name}" ajouté à votre ferme !`
+          message: `Token "${tokenPreview.name}" ajouté à votre ferme !`
         });
       } else {
         // Pas de ferme: créer une ferme minimale
@@ -235,7 +270,7 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
         await FarmService.saveFarm(farmData, address);
         setNotification({
           type: 'success',
-          message: `✅ Token "${tokenPreview.name}" importé ! Pour apparaître dans l'annuaire, complétez votre profil.`
+          message: `Token "${tokenPreview.name}" importé ! Pour apparaître dans l'annuaire, complétez votre profil.`
         });
       }
 
@@ -246,7 +281,7 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
       console.error('Erreur import rapide:', err);
       setNotification({
         type: 'error',
-        message: `❌ Erreur: ${err.message}`
+        message: `Erreur: ${err.message}`
       });
     } finally {
       setIsImporting(false);

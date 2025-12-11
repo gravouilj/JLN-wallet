@@ -16,6 +16,11 @@ export const FarmService = {
     if (error && error.code !== 'PGRST116') console.error("Erreur fetch ferme:", error);
     return data || null; // Retourne null si pas encore de ferme
   },
+  
+  // 1b. Alias pour getFarmByOwner (compatibilité)
+  async getFarmByOwner(ownerAddress) {
+    return this.getMyFarm(ownerAddress);
+  },
 
   // 2. Sauvegarder/Mettre à jour la ferme (ManageFarmPage)
   // Gère automatiquement le statut "unverified" si modification
@@ -64,6 +69,280 @@ export const FarmService = {
     
     console.log('✅ Sauvegarde réussie:', data);
     return data;
+  },
+  
+  // 2b. Mise à jour partielle d'une ferme (sans reset du statut de vérification)
+  // Utilisé pour les modifications mineures comme la visibilité des tokens
+  async updateFarm(ownerAddress, updates) {
+    console.log('🔵 updateFarm appelé avec:', { ownerAddress, updates });
+    
+    const payload = {
+      ...updates,
+      updated_at: new Date().toISOString()
+    };
+    
+    const { data, error } = await supabase
+      .from('farms')
+      .update(payload)
+      .eq('owner_address', ownerAddress)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ Erreur Supabase updateFarm:', error);
+      throw error;
+    }
+    
+    console.log('✅ Mise à jour réussie:', data);
+    return data;
+  },
+
+  // 2c. Mise à jour des métadonnées d'un token spécifique
+  // Seuls les champs modifiables sont mis à jour : purpose, counterpart, isVisible
+  // Les données blockchain (ticker, name, etc.) sont IMMUABLES
+  async updateTokenMetadata(ownerAddress, tokenId, metadata) {
+    console.log('🔵 updateTokenMetadata appelé:', { ownerAddress, tokenId, metadata });
+    
+    // Récupérer la ferme actuelle
+    const farm = await this.getMyFarm(ownerAddress);
+    if (!farm) {
+      throw new Error('Ferme introuvable pour cet utilisateur');
+    }
+    
+    // Vérifier que le token existe dans la ferme
+    const tokens = farm.tokens || [];
+    const tokenIndex = tokens.findIndex(t => t.tokenId === tokenId);
+    
+    if (tokenIndex === -1) {
+      throw new Error('Token non trouvé dans cette ferme');
+    }
+    
+    // Créer le tableau mis à jour avec SEULEMENT les champs modifiables
+    const updatedTokens = tokens.map(t => {
+      if (t.tokenId === tokenId) {
+        return {
+          ...t,
+          // Champs modifiables uniquement
+          ...(metadata.purpose !== undefined && { 
+            purpose: metadata.purpose,
+            purposeUpdatedAt: new Date().toISOString()
+          }),
+          ...(metadata.counterpart !== undefined && { 
+            counterpart: metadata.counterpart,
+            counterpartUpdatedAt: new Date().toISOString()
+          }),
+          ...(metadata.isVisible !== undefined && { 
+            isVisible: metadata.isVisible 
+          })
+        };
+      }
+      return t;
+    });
+    
+    // Sauvegarder via updateFarm (pas de reset du statut de vérification)
+    const result = await this.updateFarm(ownerAddress, {
+      tokens: updatedTokens
+    });
+    
+    console.log('✅ Métadonnées token mises à jour:', result);
+    return result;
+  },
+
+  // 2d. Mise à jour de l'image d'un token
+  // Seul le champ image est modifié avec timestamp
+  async updateTokenImage(ownerAddress, tokenId, imageUrl) {
+    console.log('🔵 updateTokenImage appelé:', { ownerAddress, tokenId, imageUrl });
+    
+    // Récupérer la ferme actuelle
+    const farm = await this.getMyFarm(ownerAddress);
+    if (!farm) {
+      throw new Error('Ferme introuvable pour cet utilisateur');
+    }
+    
+    // Vérifier que le token existe dans la ferme
+    const tokens = farm.tokens || [];
+    const tokenIndex = tokens.findIndex(t => t.tokenId === tokenId);
+    
+    if (tokenIndex === -1) {
+      throw new Error('Token non trouvé dans cette ferme');
+    }
+    
+    // Créer le tableau mis à jour avec le nouveau champ image
+    const updatedTokens = tokens.map(t => {
+      if (t.tokenId === tokenId) {
+        return {
+          ...t,
+          image: imageUrl,
+          imageUpdatedAt: new Date().toISOString()
+        };
+      }
+      return t;
+    });
+    
+    // Sauvegarder via updateFarm (pas de reset du statut de vérification)
+    const result = await this.updateFarm(ownerAddress, {
+      tokens: updatedTokens
+    });
+    
+    console.log('✅ Image token mise à jour:', result);
+    return result;
+  },
+
+  // 2d. Mettre à jour l'image d'un token spécifique
+  async updateTokenImage(ownerAddress, tokenId, imageUrl) {
+    console.log('🖼️ updateTokenImage appelé:', { ownerAddress, tokenId, imageUrl });
+    
+    // Récupérer la ferme actuelle
+    const farm = await this.getMyFarm(ownerAddress);
+    if (!farm) {
+      throw new Error('Ferme introuvable pour cet utilisateur');
+    }
+    
+    // Vérifier que le token existe dans la ferme
+    const tokens = farm.tokens || [];
+    const tokenIndex = tokens.findIndex(t => t.tokenId === tokenId);
+    
+    if (tokenIndex === -1) {
+      throw new Error('Token non trouvé dans cette ferme');
+    }
+    
+    // Créer le tableau mis à jour avec la nouvelle image
+    const updatedTokens = tokens.map(t => {
+      if (t.tokenId === tokenId) {
+        return {
+          ...t,
+          image: imageUrl,
+          imageUpdatedAt: new Date().toISOString()
+        };
+      }
+      return t;
+    });
+    
+    // Sauvegarder via updateFarm
+    const result = await this.updateFarm(ownerAddress, {
+      tokens: updatedTokens
+    });
+    
+    console.log('✅ Image du token mise à jour:', result);
+    return result;
+  },
+
+  // 2e. Ajouter un token au tableau tokens d'une ferme existante
+  // Utilisé pour associer un token créé (Mint Baton) à la ferme du créateur
+  async addTokenToFarm(ownerAddress, tokenData) {
+    console.log('🔗 addTokenToFarm appelé:', { ownerAddress, tokenId: tokenData.tokenId });
+    
+    try {
+      // Récupérer la ferme actuelle
+      const farm = await this.getMyFarm(ownerAddress);
+      if (!farm) {
+        throw new Error('Ferme introuvable pour cet utilisateur');
+      }
+      
+      // Vérifier que le token n'est pas déjà dans le tableau
+      const tokens = farm.tokens || [];
+      const tokenExists = tokens.some(t => t.tokenId === tokenData.tokenId);
+      
+      if (tokenExists) {
+        console.log('ℹ️ Token déjà dans la ferme');
+        return farm; // Pas d'erreur, juste retourner la ferme
+      }
+      
+      // Ajouter le token au tableau
+      const updatedTokens = [...tokens, {
+        tokenId: tokenData.tokenId,
+        ticker: tokenData.ticker,
+        name: tokenData.name || tokenData.ticker,
+        decimals: tokenData.decimals || 0,
+        image: tokenData.image || '',
+        purpose: tokenData.purpose || '',
+        counterpart: tokenData.counterpart || '',
+        isVisible: true, // Par défaut visible
+        addedAt: new Date().toISOString()
+      }];
+      
+      // Sauvegarder via updateFarm
+      const result = await this.updateFarm(ownerAddress, {
+        tokens: updatedTokens
+      });
+      
+      console.log('✅ Token ajouté à la ferme:', tokenData.ticker);
+      return result;
+      
+    } catch (err) {
+      console.error('❌ Erreur addTokenToFarm:', err);
+      throw err;
+    }
+  },
+
+  // 2d. Vérifier la disponibilité d'un token avant import
+  // Empêche qu'un token soit revendiqué par plusieurs fermes différentes
+  async checkTokenAvailability(tokenId, currentUserAddress) {
+    console.log('🔍 Vérification disponibilité token:', { tokenId, currentUserAddress });
+    
+    try {
+      // Récupérer TOUTES les fermes actives
+      const { data: allFarms, error } = await supabase
+        .from('farms')
+        .select('*')
+        .in('status', ['active', 'hidden', 'pending_deletion']); // Exclure seulement les supprimées
+      
+      if (error) {
+        console.error('❌ Erreur query farms:', error);
+        throw error;
+      }
+      
+      console.log(`📊 ${allFarms?.length || 0} fermes à vérifier`);
+      
+      // Chercher si le token existe dans une autre ferme
+      const farmWithToken = allFarms?.find(farm => {
+        // Vérifier le token principal
+        if (farm.tokenId === tokenId) {
+          return true;
+        }
+        
+        // Vérifier dans le tableau tokens (tokens importés)
+        if (Array.isArray(farm.tokens)) {
+          return farm.tokens.some(t => t.tokenId === tokenId);
+        }
+        
+        return false;
+      });
+      
+      if (!farmWithToken) {
+        console.log('✅ Token disponible (non utilisé)');
+        return {
+          isAvailable: true,
+          existingFarmName: null,
+          existingFarmOwner: null
+        };
+      }
+      
+      // Token trouvé : vérifier si c'est la ferme de l'utilisateur actuel
+      const isOwnFarm = farmWithToken.owner_address === currentUserAddress;
+      
+      if (isOwnFarm) {
+        console.log('✅ Token disponible (déjà dans votre ferme - ré-import autorisé)');
+        return {
+          isAvailable: true,
+          existingFarmName: farmWithToken.name,
+          existingFarmOwner: farmWithToken.owner_address,
+          isReimport: true
+        };
+      }
+      
+      // Token appartient à une autre ferme
+      console.log('❌ Token déjà utilisé par:', farmWithToken.name);
+      return {
+        isAvailable: false,
+        existingFarmName: farmWithToken.name,
+        existingFarmOwner: farmWithToken.owner_address
+      };
+      
+    } catch (err) {
+      console.error('❌ Erreur checkTokenAvailability:', err);
+      throw err;
+    }
   },
 
   // 3. ADMIN: Récupérer les demandes (Pending + Unverified + Info_requested)
@@ -353,4 +632,6 @@ export const FarmService = {
     if (error) throw error;
     return data;
   }
-}
+};
+
+export default FarmService;

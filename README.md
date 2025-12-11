@@ -11,10 +11,12 @@ A beautiful, lightweight wallet for **eCash (XEC)** and farm tokens, built with 
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 **Recent Updates:**
+- ✅ Fixed-supply token support (import & management)
+- ✅ TokenDetailsPage UI refactor with unified action tabs
+- ✅ ManageTokenPage compact card design (48x48 images)
 - ✅ Dashboard v2 with farm selector & responsive design
 - ✅ Real-time balance updates via Chronik WebSocket
 - ✅ Complete E2E test infrastructure (Playwright)
-- ✅ Enhanced TokenSend component with validation UI
 
 ---
 
@@ -41,10 +43,19 @@ A beautiful, lightweight wallet for **eCash (XEC)** and farm tokens, built with 
 
 ### Core Wallet
 - 🪙 **Multi-token support** - XEC + farm tokens with dynamic filtering
+- 🔒 **Fixed & Variable supply** - Support for both token types (mint/burn/import)
 - 🏪 **Farm selector** - Filter tokens by farm with persistent selection
 - 💰 **Smart balance display** - 70% XEC / 30% USD split with real-time rates
 - 📷 **QR codes** - Scan & generate QR codes for payments
 - 🔐 **Secure** - Non-custodial, keys stored locally
+
+### Token Management
+- 📊 **Unified action tabs** - Send/Airdrop/Mint/Burn on single row
+- 🎁 **XEC Airdrop** - Distribute XEC to token holders (equal or pro-rata)
+- 🏭 **Mint tokens** - Create new tokens (variable supply only)
+- 🔥 **Burn tokens** - Destroy tokens permanently
+- 📥 **Import tokens** - Import fixed-supply tokens (balance validation)
+- 🟢 **Status badges** - En Circulation / Inactif based on supply
 
 ### User Experience
 - 🎨 **Custom UI Components** - Zero frameworks (no Tailwind, no Shadcn, no Bootstrap)
@@ -212,6 +223,52 @@ Support multi-langue avec **i18next** :
 
 Les traductions sont dans `src/i18n/locales/`
 
+## 🪙 Token Management
+
+### Token Types
+
+**Variable Supply (🔄):**
+- Has MintBaton (authPubkey present)
+- Can mint new tokens
+- Can burn existing tokens
+- Creator detected via MintBaton ownership
+
+**Fixed Supply (🔒):**
+- No MintBaton (authPubkey empty)
+- Immutable total supply
+- Can only burn tokens (no minting)
+- Creator detected via: balance > 0 AND Farm-Wallet reference
+
+### Token Actions
+
+**TokenDetailsPage** - Unified action tabs:
+1. **📤 Envoyer ** - Send tokens to address
+2. **🎁 Distribuer ** - Airdrop XEC to token holders (equal/pro-rata)
+3. **🏭 Émettre** - Mint new tokens (variable supply only, creator only)
+4. **🔥 Détruire** - Burn tokens permanently (creator only)
+
+**ManageTokenPage** - Token overview:
+- 🟢 **En Circulation** - Tokens with supply > 0
+- ⚫ **Inactifs** - Tokens with supply = 0
+- 🗑️ **Supprimés** - Deleted tokens (admin only)
+- 📋 **Tous** - All Farm-Wallet tokens (admin only)
+
+### Import Tokens
+
+**Fixed-supply import:**
+```javascript
+// Import token without MintBaton
+// Validation: balance > 0 (must own tokens)
+await wallet.importToken(tokenId);
+```
+
+**Variable-supply import:**
+```javascript
+// Import token with MintBaton
+// Validation: must own MintBaton
+await wallet.importToken(tokenId);
+```
+
 ## 🔧 State Management (Jotai)
 
 **Fichier** : `src/atoms.js`
@@ -232,6 +289,8 @@ Atoms principaux :
 | `/` | DirectoryPage | Annuaire des fermes (public) |
 | `/wallet` | WalletDashboard | Dashboard principal (privé) |
 | `/send` | SendPage | Envoi XEC/Tokens (privé) |
+| `/token/:tokenId` | TokenDetailsPage | Détails & actions token (privé) |
+| `/manage-token` | ManageTokenPage | Gestion tokens créateur (privé) |
 | `/settings` | SettingsPage | Paramètres (privé) |
 | `/favorites` | FavoritesPage | Fermes favorites (privé) |
 | `/farmer-info` | FarmerInfoPage | Info fermier (public) |
@@ -350,9 +409,11 @@ farm-wallet-independant/
 │   │   ├── WalletDashboard.jsx    # Dashboard v2 (farm selector, tabs)
 │   │   ├── DirectoryPage.jsx      # Farm directory (public)
 │   │   ├── SendPage.jsx           # Send XEC/Tokens
-│   │   ├── SettingsPage.jsx       # User settings
-│   │   ├── ManageTokenPage.jsx    # Token management (creators)
+│   │   ├── TokenDetailsPage.jsx   # Token details & actions (send/airdrop/mint/burn)
+│   │   ├── ManageTokenPage.jsx    # Token management (creators) - compact cards
 │   │   ├── CreateTokenPage.jsx    # Token creation (admin)
+│   │   ├── ImportTokenModal.jsx   # Import token modal (fixed/variable)
+│   │   ├── SettingsPage.jsx       # User settings
 │   │   └── FavoritesPage.jsx      # Favorite farms
 │   ├── hooks/                # Custom React hooks
 │   │   ├── useEcashWallet.js      # Wallet initialization

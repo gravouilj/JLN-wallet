@@ -644,6 +644,109 @@ const CreateTokenPage = () => {
             </p>
           </div>
 
+          {/* Supply Type (Radio Buttons) */}
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '0.95rem',
+              fontWeight: '600',
+              color: 'var(--text-primary, #000)',
+              marginBottom: '12px'
+            }}>
+              {t('createToken.supply')} <span style={{ color: '#dc2626' }}>*</span>
+              <span style={{ fontSize: '0.75rem', fontWeight: '400', color: '#ef4444', marginLeft: '8px' }}>
+                🔒 Immuable
+              </span>
+            </label>
+            
+            {/* Variable Supply */}
+            <div style={{
+              padding: '12px',
+              border: `2px solid ${!formData.isFixedSupply ? 'var(--primary-color, #0074e4)' : 'var(--border-color, #ddd)'}`,
+              borderRadius: '8px',
+              marginBottom: '10px',
+              cursor: 'pointer',
+              backgroundColor: !formData.isFixedSupply ? 'var(--bg-secondary, #f0f9ff)' : 'var(--bg-primary, #fff)',
+              transition: 'all 0.2s'
+            }}
+            onClick={() => handleInputChange('isFixedSupply', false)}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <input
+                  type="radio"
+                  id="supply-variable"
+                  name="supply"
+                  checked={!formData.isFixedSupply}
+                  onChange={() => handleInputChange('isFixedSupply', false)}
+                  disabled={creating}
+                  style={{ cursor: 'pointer' }}
+                />
+                <label htmlFor="supply-variable" style={{
+                  fontSize: '0.95rem',
+                  fontWeight: '600',
+                  color: 'var(--text-primary, #000)',
+                  cursor: 'pointer',
+                  flex: 1
+                }}>
+                  🔄 {t('createToken.supplyVariable')}
+                </label>
+              </div>
+              <small style={{
+                display: 'block',
+                marginTop: '6px',
+                marginLeft: '30px',
+                fontSize: '0.8rem',
+                color: 'var(--text-secondary, #666)',
+                lineHeight: '1.4'
+              }}>
+                {t('createToken.supplyVariableHelp')}
+              </small>
+            </div>
+
+            {/* Fixed Supply */}
+            <div style={{
+              padding: '12px',
+              border: `2px solid ${formData.isFixedSupply ? '#dc2626' : 'var(--border-color, #ddd)'}`,
+              borderRadius: '8px',
+              cursor: 'pointer',
+              backgroundColor: formData.isFixedSupply ? '#fef2f2' : 'var(--bg-primary, #fff)',
+              transition: 'all 0.2s'
+            }}
+            onClick={() => handleInputChange('isFixedSupply', true)}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <input
+                  type="radio"
+                  id="supply-fixed"
+                  name="supply"
+                  checked={formData.isFixedSupply}
+                  onChange={() => handleInputChange('isFixedSupply', true)}
+                  disabled={creating}
+                  style={{ cursor: 'pointer' }}
+                />
+                <label htmlFor="supply-fixed" style={{
+                  fontSize: '0.95rem',
+                  fontWeight: '600',
+                  color: 'var(--text-primary, #000)',
+                  cursor: 'pointer',
+                  flex: 1
+                }}>
+                  🔒 {t('createToken.supplyFixed')}
+                </label>
+              </div>
+              <small style={{
+                display: 'block',
+                marginTop: '6px',
+                marginLeft: '30px',
+                fontSize: '0.8rem',
+                color: 'var(--text-secondary, #666)',
+                lineHeight: '1.4'
+              }}>
+                {t('createToken.supplyFixedHelp')}
+              </small>
+            </div>
+          </div>
+          
           {/* Token Name */}
           <div style={{ marginBottom: '20px' }}>
             <label htmlFor="token-name" style={{
@@ -831,109 +934,6 @@ const CreateTokenPage = () => {
                 </>
               )}
             </small>
-          </div>
-
-          {/* Supply Type (Radio Buttons) */}
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{
-              display: 'block',
-              fontSize: '0.95rem',
-              fontWeight: '600',
-              color: 'var(--text-primary, #000)',
-              marginBottom: '12px'
-            }}>
-              {t('createToken.supply')} <span style={{ color: '#dc2626' }}>*</span>
-              <span style={{ fontSize: '0.75rem', fontWeight: '400', color: '#ef4444', marginLeft: '8px' }}>
-                🔒 Immuable
-              </span>
-            </label>
-            
-            {/* Variable Supply */}
-            <div style={{
-              padding: '12px',
-              border: `2px solid ${!formData.isFixedSupply ? 'var(--primary-color, #0074e4)' : 'var(--border-color, #ddd)'}`,
-              borderRadius: '8px',
-              marginBottom: '10px',
-              cursor: 'pointer',
-              backgroundColor: !formData.isFixedSupply ? 'var(--bg-secondary, #f0f9ff)' : 'var(--bg-primary, #fff)',
-              transition: 'all 0.2s'
-            }}
-            onClick={() => handleInputChange('isFixedSupply', false)}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <input
-                  type="radio"
-                  id="supply-variable"
-                  name="supply"
-                  checked={!formData.isFixedSupply}
-                  onChange={() => handleInputChange('isFixedSupply', false)}
-                  disabled={creating}
-                  style={{ cursor: 'pointer' }}
-                />
-                <label htmlFor="supply-variable" style={{
-                  fontSize: '0.95rem',
-                  fontWeight: '600',
-                  color: 'var(--text-primary, #000)',
-                  cursor: 'pointer',
-                  flex: 1
-                }}>
-                  🔄 {t('createToken.supplyVariable')}
-                </label>
-              </div>
-              <small style={{
-                display: 'block',
-                marginTop: '6px',
-                marginLeft: '30px',
-                fontSize: '0.8rem',
-                color: 'var(--text-secondary, #666)',
-                lineHeight: '1.4'
-              }}>
-                {t('createToken.supplyVariableHelp')}
-              </small>
-            </div>
-
-            {/* Fixed Supply */}
-            <div style={{
-              padding: '12px',
-              border: `2px solid ${formData.isFixedSupply ? '#dc2626' : 'var(--border-color, #ddd)'}`,
-              borderRadius: '8px',
-              cursor: 'pointer',
-              backgroundColor: formData.isFixedSupply ? '#fef2f2' : 'var(--bg-primary, #fff)',
-              transition: 'all 0.2s'
-            }}
-            onClick={() => handleInputChange('isFixedSupply', true)}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <input
-                  type="radio"
-                  id="supply-fixed"
-                  name="supply"
-                  checked={formData.isFixedSupply}
-                  onChange={() => handleInputChange('isFixedSupply', true)}
-                  disabled={creating}
-                  style={{ cursor: 'pointer' }}
-                />
-                <label htmlFor="supply-fixed" style={{
-                  fontSize: '0.95rem',
-                  fontWeight: '600',
-                  color: 'var(--text-primary, #000)',
-                  cursor: 'pointer',
-                  flex: 1
-                }}>
-                  🔒 {t('createToken.supplyFixed')}
-                </label>
-              </div>
-              <small style={{
-                display: 'block',
-                marginTop: '6px',
-                marginLeft: '30px',
-                fontSize: '0.8rem',
-                color: 'var(--text-secondary, #666)',
-                lineHeight: '1.4'
-              }}>
-                {t('createToken.supplyFixedHelp')}
-              </small>
-            </div>
           </div>
 
           {/* Site internet du Jeton (Optional mais immuable) */}

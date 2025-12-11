@@ -12,7 +12,7 @@ const ManageFarmPage = () => {
   const { tokenId } = useParams();
   const navigate = useNavigate();
   const { wallet, address } = useEcashWallet();
-  const { farms } = useFarms();
+  const { farms, refreshFarms } = useFarms();
   const setNotification = useSetAtom(notificationAtom);
 
   const [loading, setLoading] = useState(true);
@@ -47,6 +47,21 @@ const ManageFarmPage = () => {
     internationalcertificationweblink: '',
   });
   const [submitting, setSubmitting] = useState(false);
+
+  // Recharger les données quand on revient sur la page
+  useEffect(() => {
+    if (address && wallet && tokenId) {
+      // Recharger la ferme depuis Supabase pour voir les modifications
+      FarmService.getMyFarm(address).then(farm => {
+        if (farm) {
+          setExistingFarm(farm);
+          console.log('🔄 Ferme rechargée:', farm);
+        }
+      }).catch(err => {
+        console.error('❌ Erreur rechargement ferme:', err);
+      });
+    }
+  }, [address, wallet, tokenId, farms]); // Se déclenche quand farms change (après refreshFarms)
 
   useEffect(() => {
     const loadData = async () => {
@@ -265,31 +280,87 @@ const ManageFarmPage = () => {
   }
 
   return (
-    <MobileLayout title={existingFarm ? "Modifier ma Ferme" : "Référencer ma Ferme"}>
+    <MobileLayout title={existingFarm ? "Profil de mon établissement" : "Référencer mon établissement"}>
       <PageLayout hasBottomNav>
         <Stack spacing="md">
           <Card>
             <CardContent className="p-6">
               <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-                {existingFarm ? '🏡 Modifier les informations' : '🌱 Demander le référencement'}
+                {existingFarm ? '🏡 Profil de mon établissement' : '🌱 Demander le référencement'}
               </h1>
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 {existingFarm 
-                  ? 'Mettez à jour les informations de votre ferme dans l\'annuaire.'
-                  : 'Remplissez ce formulaire pour apparaître dans l\'annuaire public des fermes.'}
+                  ? 'Mettez à jour les informations de votre établissement dans l\'annuaire.'
+                  : 'Remplissez ce formulaire pour apparaître dans l\'annuaire public des établissements.'}
               </p>
             </CardContent>
           </Card>
 
-          {tokenInfo && (
+          {/* TABLEAU RÉCAPITULATIF DES TOKENS */}
+          {existingFarm && existingFarm.tokens && existingFarm.tokens.length > 0 && (
             <Card>
-              <CardContent className="p-4 bg-blue-50 dark:bg-blue-950/30">
-                <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">Token associé</div>
-                <div className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                  {tokenInfo.genesisInfo?.tokenName || 'Unknown'} ({tokenInfo.genesisInfo?.tokenTicker || 'UNK'})
+              <CardContent className="p-6">
+                <h2 className="text-lg font-bold mb-4 text-gray-900 dark:text-white">
+                  🪙 Les Jetons de mon Etablissement
+                </h2>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-100 dark:bg-gray-800">
+                      <tr>
+                        <th className="text-left p-3 font-semibold">Ticker</th>
+                        <th className="text-left p-3 font-semibold">Nom</th>
+                        <th className="text-left p-3 font-semibold">Objectif</th>
+                        <th className="text-left p-3 font-semibold">Contrepartie</th>
+                        <th className="text-center p-3 font-semibold">Visible</th>
+                        <th className="text-center p-3 font-semibold">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {existingFarm.tokens.map((token, index) => (
+                        <tr key={token.tokenId || index} className="border-b border-gray-200 dark:border-gray-700">
+                          <td className="p-3 font-mono font-semibold text-blue-600 dark:text-blue-400">
+                            {token.ticker || 'N/A'}
+                          </td>
+                          <td className="p-3 text-gray-900 dark:text-white">
+                            {token.tokenName || 'Sans nom'}
+                          </td>
+                          <td className="p-3 text-gray-600 dark:text-gray-400 max-w-xs truncate">
+                            {token.purpose || (
+                              <span className="text-gray-400 italic">Non défini</span>
+                            )}
+                          </td>
+                          <td className="p-3 text-gray-600 dark:text-gray-400 max-w-xs truncate">
+                            {token.counterpart || (
+                              <span className="text-gray-400 italic">Non définie</span>
+                            )}
+                          </td>
+                          <td className="p-3 text-center">
+                            {token.isVisible !== false ? (
+                              <span className="text-green-600">👁️ Oui</span>
+                            ) : (
+                              <span className="text-gray-400">🙈 Non</span>
+                            )}
+                          </td>
+                          <td className="p-3 text-center">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => navigate(`/token/${token.tokenId}`)}
+                            >
+                              Modifier
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-                <div className="text-xs font-mono text-gray-600 dark:text-gray-400 mt-1 truncate">
-                  {tokenId}
+                <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
+                  <p className="text-xs text-blue-900 dark:text-blue-100">
+                    💡 <strong>Info :</strong> Le Ticker et le Nom du jeton ne sont pas modifiables car récupérés sur la blockchain. 
+                    Pour modifier l'objectif du jeton, sa contrepartie ou sa visibilité, cliquez sur "Modifier" 
+                    pour accéder à la page de détails du jeton.
+                  </p>
                 </div>
               </CardContent>
             </Card>

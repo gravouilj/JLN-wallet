@@ -94,6 +94,23 @@ const CompleteTokenImportPage = () => {
     try {
       const { FarmService } = await import('../services/farmService');
       
+      // 🔒 NOUVEAU: Vérifier la disponibilité du token avant import
+      console.log('🔍 Vérification disponibilité token...');
+      const availability = await FarmService.checkTokenAvailability(tokenData.tokenId, address);
+      
+      if (!availability.isAvailable) {
+        setNotification({
+          type: 'error',
+          message: `⛔ Ce jeton est déjà géré par la ferme "${availability.existingFarmName}". Vous ne pouvez pas l'importer.`
+        });
+        setIsSubmitting(false);
+        return;
+      }
+      
+      if (availability.isReimport) {
+        console.log('ℹ️ Ré-import détecté (token déjà dans votre ferme)');
+      }
+      
       // Vérifier si l'utilisateur a déjà une ferme
       const existingFarm = await FarmService.getMyFarm(address);
       

@@ -685,12 +685,9 @@ const ManageTokenPage = () => {
                     </button>
                   </div>
                 </CardContent>
-              </Card>
-            )}
 
-            {/* Info : Filtre actuel */}
-            <Card>
-              <CardContent className="p-4 bg-blue-50 dark:bg-blue-950/30">
+                {/* Info : Filtre actuel */}
+                <CardContent className="p-4 bg-blue-50 dark:bg-blue-950/30">
               <p className="text-sm text-gray-600 dark:text-gray-400 m-0">
                 {isAdmin ? (
                   activeFilter === 'active' ? '🟢 Jetons avec offre en circulation (offre > 0)' :
@@ -704,7 +701,8 @@ const ManageTokenPage = () => {
                 )}
               </p>
               </CardContent>
-            </Card>
+              </Card>
+            )}
             
             {(() => {
               // Logique de filtrage unifiée
