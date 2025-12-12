@@ -3,12 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useAtom } from 'jotai';
 import { selectedFarmAtom, favoriteFarmsAtom, toggleFarmFavoriteAtom, walletConnectedAtom, currentTokenIdAtom, walletModalOpenAtom } from '../atoms';
 import { useFarms } from '../hooks';
-import { useToken } from '../hooks/useToken';
 import { useTranslation } from '../hooks/useTranslation';
-import { useEcashWallet } from '../hooks/useEcashWallet';
+import { useEcashWallet, useEcashToken } from '../hooks/useEcashWallet';
 import TopBar from '../components/Layout/TopBar';
 import BottomNavigation from '../components/Layout/BottomNavigation';
-import ECashWallet from '../components/ECashWallet';
+import WalletConnect from '../components/WalletConnect';
 import '../styles/directory.css';
 
 /**
@@ -621,23 +620,32 @@ const DirectoryPage = () => {
             <button 
               className="modal-close-btn"
               onClick={() => setIsWalletModalOpen(false)}
-              aria-label="Close"
             >
               ✕
             </button>
-            <div className="modal-content">
-              <h2 className="wallet-modal-title">{t('common.connect') || 'Connexion'}</h2>
-              <ECashWallet onWalletConnected={() => setIsWalletModalOpen(false)} />
-              <div className="wallet-modal-help">
+            
+            <div className="modal-content" style={{ padding: '32px 24px', textAlign: 'center' }}>
+              <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🔐</div>
+              
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '8px', color: 'var(--text-primary)' }}>
+                Connexion Requise
+              </h2>
+              
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', lineHeight: '1.5' }}>
+                Connectez votre portefeuille eCash pour gérer vos fermes, vos jetons et accéder à toutes les fonctionnalités.
+              </p>
+
+              {/* Le composant gère lui-même les boutons (Importer / Créer) */}
+              <div style={{ textAlign: 'left' }}>
+                <WalletConnect onConnected={() => setIsWalletModalOpen(false)} />
+              </div>
+
+              <div style={{ marginTop: '24px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
                 <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsWalletModalOpen(false);
-                    navigate('/faq');
-                  }}
-                  className="faq-link-btn"
+                  onClick={() => { setIsWalletModalOpen(false); navigate('/faq'); }}
+                  style={{ background: 'none', border: 'none', color: 'var(--accent-primary)', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.9rem' }}
                 >
-                  ❓ {t('common.help') || 'Besoin d\'aide ?'}
+                  Besoin d'aide ?
                 </button>
               </div>
             </div>
@@ -667,9 +675,9 @@ const FarmCard = ({ farm, isFavorite, onCardClick, onSelectClick, onReport, farm
   const [, toggleFavorite] = useAtom(toggleFarmFavoriteAtom);
   
   // Check token balance for this farm
-  const { balance, loading: balanceLoading } = useToken(farm.tokenId);
+  const { tokenBalance, loading: balanceLoading } = useEcashToken(farm.tokenId);
   
-  const hasTokens = walletConnected && balance > 0;
+  const hasTokens = walletConnected && Number(tokenBalance) > 0;
 
   const handleSelectFarm = (e) => {
     e.stopPropagation();
@@ -731,7 +739,7 @@ const FarmCard = ({ farm, isFavorite, onCardClick, onSelectClick, onReport, farm
         {/* Token balance - show if user has tokens */}
         {hasTokens && !balanceLoading && (
           <div className="farm-balance-display">
-            💰 {t('directory.yourBalance') || 'Your balance'}: <strong>{balance.toLocaleString()} {farmTickers[farm.tokenId] || 'tokens'}</strong>
+            💰 {t('directory.yourBalance') || 'Your balance'}: <strong>{Number(tokenBalance).toLocaleString()} {farmTickers[farm.tokenId] || 'tokens'}</strong>
           </div>
         )}
         

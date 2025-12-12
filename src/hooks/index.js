@@ -1,19 +1,26 @@
-// Legacy hooks (wrap new EcashWallet service for backward compatibility)
-export { default as useBalance } from './useBalance';
-export { useToken } from './useToken';
+/**
+ * Hooks Exports
+ * Central export point for all React hooks in the application
+ */
 
-// New professional hooks
+// eCash Wallet hooks (professional implementation)
 export { 
-  useEcashWallet, 
-  useEcashBalance, 
-  useEcashToken, 
-  useEcashXec 
+  useEcashWallet,    // Main wallet management
+  useEcashBalance,   // Balance tracking with WebSocket updates
+  useEcashToken,     // Token-specific operations
+  useEcashXec        // XEC transaction utilities
 } from './useEcashWallet';
 
-// Utility hooks
-export { useTranslation } from './useTranslation';
+// Farm & Token Management
 export { useFarms, useFarm } from './useFarms';
-export { useChronikWebSocket } from './useChronikWebSocket';
-export { useXecPrice } from './useXecPrice';
+
+// Admin & Permissions
 export { useAdmin } from './useAdmin';
 export { useIsCreator } from './useIsCreator';
+
+// Blockchain & Network
+export { useChronikWebSocket } from './useChronikWebSocket';
+export { useXecPrice } from './useXecPrice';
+
+// Utilities
+export { useTranslation } from './useTranslation';

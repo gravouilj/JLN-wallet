@@ -8,6 +8,7 @@ import { useXecPrice } from '../hooks/useXecPrice';
 import { useAdmin } from '../hooks/useAdmin';
 import { walletConnectedAtom, walletAtom, notificationAtom, walletModalOpenAtom } from '../atoms';
 import { FarmService } from '../services/farmService';
+import { addEntry, ACTION_TYPES } from '../services/historyService';
 import '../styles/fund.css';
 
 const CreateTokenPage = () => {
@@ -278,6 +279,26 @@ const CreateTokenPage = () => {
         } catch (farmErr) {
           console.warn('⚠️ Erreur pré-enregistrement farm (non bloquant):', farmErr);
         }
+      }
+      
+      // Enregistrer dans l'historique
+      try {
+        await addEntry({
+          owner_address: address,
+          token_id: result.txid,
+          token_ticker: formData.ticker.trim().toUpperCase(),
+          action_type: ACTION_TYPES.CREATE,
+          amount: formData.quantity.toString(),
+          tx_id: result.txid,
+          details: {
+            name: formData.name,
+            decimals: parseInt(formData.decimals),
+            isFixedSupply: formData.isFixedSupply
+          }
+        });
+        console.log('✅ Création enregistrée dans l\'historique');
+      } catch (histErr) {
+        console.warn('⚠️ Erreur enregistrement historique:', histErr);
       }
       
       setNotification({

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAtom, useSetAtom } from 'jotai';
 import MobileLayout from '../components/Layout/MobileLayout';
 import BlockchainStatus from '../components/BlockchainStatus';
 import QrCodeScanner from '../components/QrCodeScanner';
+import HistoryList from '../components/HistoryList';
 import { Card, CardContent, Button, PageLayout, Badge, Tabs, BalanceCard, Stack, Input, Modal, Switch } from '../components/UI';
 import { useEcashWallet } from '../hooks/useEcashWallet';
 import { useFarms } from '../hooks/useFarms';
@@ -11,11 +12,12 @@ import { useXecPrice } from '../hooks/useXecPrice';
 import { notificationAtom, currencyAtom } from '../atoms';
 import { syncTokenData, getCachedTokenData, cacheTokenData } from '../utils/tokenSync';
 import FarmService from '../services/farmService';
-import '../styles/token-details.css';
+import { addEntry, getHistoryByToken, ACTION_TYPES } from '../services/historyService';
 
 const TokenDetailsPage = () => {
   const { tokenId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { wallet } = useEcashWallet();
   const { farms, refreshFarms, loading: loadingFarms } = useFarms();
   const setNotification = useSetAtom(notificationAtom);
@@ -27,8 +29,8 @@ const TokenDetailsPage = () => {
   const [myBalance, setMyBalance] = useState('0');
   const [isCreator, setIsCreator] = useState(false);
   
-  // États des onglets
-  const [activeTab, setActiveTab] = useState('send'); // 'send', 'airdrop', 'mint' ou 'burn'
+  // États des onglets - Récupère l'onglet depuis la navigation
+  const [activeTab, setActiveTab] = useState(location.state?.activeTab || 'send'); // 'send', 'airdrop', 'mint' ou 'burn'
   
   // États des formulaires
   const [sendAddress, setSendAddress] = useState('');
@@ -48,6 +50,10 @@ const TokenDetailsPage = () => {
   const [holdersCount, setHoldersCount] = useState(null);
   const [loadingHolders, setLoadingHolders] = useState(false);
   const [calculatedHolders, setCalculatedHolders] = useState([]);
+  
+  // États historique
+  const [history, setHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const [isCalculationValid, setIsCalculationValid] = useState(false);
   
   // État visibilité du jeton dans l'annuaire
@@ -215,6 +221,9 @@ const TokenDetailsPage = () => {
 
         // 8. Charger le nombre de détenteurs
         fetchHolderCount();
+        
+        // 9. Charger l'historique
+        loadHistory();
 
         // Marquer comme chargé avec succès
         hasLoadedOnce.current = true;
@@ -271,6 +280,9 @@ const TokenDetailsPage = () => {
       setHoldersCount(holderAddresses.size);
       console.log(`✅ ${holderAddresses.size} détenteurs trouvés`);
       
+      // Charger l'historique après le chargement initial
+      loadHistory();
+      
     } catch (err) {
       console.warn('⚠️ Impossible de compter les détenteurs:', err);
       setHoldersCount(null);
@@ -311,12 +323,30 @@ const TokenDetailsPage = () => {
         }
       }
       
+      // Recharger l'historique
+      loadHistory();
+      
       // Synchroniser avec les autres pages
       refreshFarms();
       
       console.log('✅ Données rafraîchies avec succès');
     } catch (err) {
       console.warn('⚠️ Erreur lors du rafraîchissement:', err);
+    }
+  };
+
+  // Charger l'historique du token
+  const loadHistory = async () => {
+    if (!tokenId) return;
+    
+    setLoadingHistory(true);
+    try {
+      const historyData = await getHistoryByToken(tokenId);
+      setHistory(historyData);
+    } catch (err) {
+      console.error('❌ Erreur chargement historique:', err);
+    } finally {
+      setLoadingHistory(false);
     }
   };
 
@@ -346,6 +376,31 @@ const TokenDetailsPage = () => {
         type: 'success',
         message: `✅ ${sendAmount} jetons envoyés ! TXID: ${result.txid.substring(0, 8)}...`
       });
+      
+      // Enregistrer dans l'historique
+      try {
+        // Récupération sécurisée des données pour l'historique
+        const safeTicker = tokenInfo?.genesisInfo?.tokenTicker || 'UNK';
+        const safeOwner = typeof wallet?.getAddress === 'function' ? wallet.getAddress() : (wallet?.address || '');
+
+        console.log('📝 Enregistrement historique Send...', { safeTicker, safeOwner });
+
+        await addEntry({
+          owner_address: safeOwner,
+          token_id: tokenId,
+          token_ticker: safeTicker,
+          action_type: ACTION_TYPES.SEND,
+          amount: sendAmount,
+          tx_id: result.txid,
+          details: { recipient: sendAddress }
+        });
+        
+        // Rechargement immédiat de l'historique local pour affichage
+        const historyData = await getHistoryByToken(tokenId);
+        setHistory(historyData || []);
+      } catch (histErr) {
+        console.warn('⚠️ Erreur enregistrement historique:', histErr);
+      }
       
       setSendAddress('');
       setSendAmount('');
@@ -384,6 +439,31 @@ const TokenDetailsPage = () => {
         type: 'success',
         message: `✅ ${mintAmount} jetons émis ! TXID: ${txid.substring(0, 8)}...`
       });
+      
+      // Enregistrer dans l'historique
+      try {
+        // Récupération sécurisée des données pour l'historique
+        const safeTicker = tokenInfo?.genesisInfo?.tokenTicker || 'UNK';
+        const safeOwner = typeof wallet?.getAddress === 'function' ? wallet.getAddress() : (wallet?.address || '');
+
+        console.log('📝 Enregistrement historique Mint...', { safeTicker, safeOwner });
+
+        await addEntry({
+          owner_address: safeOwner,
+          token_id: tokenId,
+          token_ticker: safeTicker,
+          action_type: ACTION_TYPES.MINT,
+          amount: mintAmount,
+          tx_id: txid,
+          details: null
+        });
+        
+        // Rechargement immédiat de l'historique local pour affichage
+        const historyData = await getHistoryByToken(tokenId);
+        setHistory(historyData || []);
+      } catch (histErr) {
+        console.warn('⚠️ Erreur enregistrement historique:', histErr);
+      }
       
       setMintAmount('');
       
@@ -435,6 +515,31 @@ const TokenDetailsPage = () => {
         type: 'success',
         message: `🔥 ${burnAmount} jetons détruits ! TXID: ${txid.substring(0, 8)}...`
       });
+      
+      // Enregistrer dans l'historique
+      try {
+        // Récupération sécurisée des données pour l'historique
+        const safeTicker = tokenInfo?.genesisInfo?.tokenTicker || 'UNK';
+        const safeOwner = typeof wallet?.getAddress === 'function' ? wallet.getAddress() : (wallet?.address || '');
+
+        console.log('📝 Enregistrement historique Burn...', { safeTicker, safeOwner });
+
+        await addEntry({
+          owner_address: safeOwner,
+          token_id: tokenId,
+          token_ticker: safeTicker,
+          action_type: ACTION_TYPES.BURN,
+          amount: burnAmount,
+          tx_id: txid,
+          details: null
+        });
+        
+        // Rechargement immédiat de l'historique local pour affichage
+        const historyData = await getHistoryByToken(tokenId);
+        setHistory(historyData || []);
+      } catch (histErr) {
+        console.warn('⚠️ Erreur enregistrement historique:', histErr);
+      }
       
       setBurnAmount('');
       
@@ -599,6 +704,35 @@ const TokenDetailsPage = () => {
         type: 'success',
         message: `🎉 Distribution réussie vers ${result.recipientsCount} destinataires ! TXID: ${result.txid.substring(0, 8)}...`
       });
+      
+      // Enregistrer dans l'historique
+      try {
+        // Récupération sécurisée des données pour l'historique
+        const safeTicker = tokenInfo?.genesisInfo?.tokenTicker || 'UNK';
+        const safeOwner = typeof wallet?.getAddress === 'function' ? wallet.getAddress() : (wallet?.address || '');
+
+        console.log('📝 Enregistrement historique Airdrop...', { safeTicker, safeOwner });
+
+        await addEntry({
+          owner_address: safeOwner,
+          token_id: tokenId,
+          token_ticker: safeTicker,
+          action_type: ACTION_TYPES.AIRDROP,
+          amount: airdropTotal.toString(),
+          tx_id: result.txid,
+          details: {
+            recipients_count: result.recipientsCount,
+            mode: airdropMode,
+            ignore_creator: ignoreCreator
+          }
+        });
+        
+        // Rechargement immédiat de l'historique local pour affichage
+        const historyData = await getHistoryByToken(tokenId);
+        setHistory(historyData || []);
+      } catch (histErr) {
+        console.warn('⚠️ Erreur enregistrement historique:', histErr);
+      }
       
       // Afficher détails dans la console
       console.log('📊 Résultat Airdrop:', result);
@@ -1052,7 +1186,10 @@ const TokenDetailsPage = () => {
                   src={tokenDetails?.image || genesisInfo.url || 'https://placehold.co/64x64?text=Token'}
                   alt={name}
                   className="w-16 h-16 rounded-xl object-cover border-2 border-gray-200 dark:border-gray-700 flex-shrink-0"
-                  onError={(e) => { e.target.src = 'https://placehold.co/64x64?text=Token'; }}
+                  onError={(e) => {
+                    e.currentTarget.onerror = null; // Empêche la boucle infinie
+                    e.currentTarget.src = 'https://placehold.co/64x64?text=Token';
+                  }}
                   style={{
                     cursor: isCreator && farmInfo ? 'pointer' : 'default'
                   }}
@@ -1091,55 +1228,36 @@ const TokenDetailsPage = () => {
                 <div className="text-xl font-semibold text-gray-600 dark:text-gray-400">
                   {ticker}
                 </div>
-                {/* Token ID avec raccourcis oneClick */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  marginTop: '8px',
-                  padding: '6px 10px',
-                  backgroundColor: 'var(--bg-secondary)',
-                  borderRadius: '6px',
-                  fontSize: '0.75rem',
-                  fontFamily: 'monospace'
-                }}>
-                  <span style={{ color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {tokenId}
-                  </span>
-                  <button
-                    onClick={handleCopyTokenId}
-                    style={{
-                      padding: '4px 8px',
-                      fontSize: '0.75rem',
-                      backgroundColor: 'var(--primary-color)',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      flexShrink: 0
-                    }}
-                    title="Copier le Token ID"
-                  >
-                    📋
-                  </button>
-                  <a
-                    href={`https://explorer.e.cash/tx/${tokenId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      padding: '4px 8px',
-                      fontSize: '0.75rem',
-                      backgroundColor: 'var(--primary-color)',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '4px',
-                      textDecoration: 'none',
-                      flexShrink: 0
-                    }}
-                    title="Voir sur Explorer"
-                  >
-                    🔍
-                  </a>
+                {/* Token ID Compact & Lien Explorer */}
+                <div className="flex justify-center mt-4 mb-2 px-4">
+                  <div className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded-full border border-gray-200 dark:border-gray-700 w-full max-w-xs transition-colors hover:border-blue-300 dark:hover:border-blue-700">
+                    <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 tracking-wider flex-shrink-0 select-none">
+                      ID
+                    </span>
+                    {/* Affichage tronqué intelligent */}
+                    <span className="font-mono text-xs text-gray-700 dark:text-gray-300 truncate flex-1 text-center select-all">
+                      {tokenId.substring(0, 8)}...{tokenId.substring(tokenId.length - 8)}
+                    </span>
+                    
+                    <div className="flex items-center gap-1 border-l border-gray-300 dark:border-gray-600 pl-2">
+                      <button
+                        onClick={handleCopyTokenId}
+                        className="p-1.5 hover:bg-white dark:hover:bg-gray-700 rounded-md transition-colors text-gray-500 hover:text-blue-600"
+                        title="Copier le Token ID"
+                      >
+                        📋
+                      </button>
+                      <a 
+                        href={`https://explorer.e.cash/tx/${tokenId}`} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="p-1.5 hover:bg-white dark:hover:bg-gray-700 rounded-md transition-colors text-gray-500 hover:text-blue-600 no-underline"
+                        title="Voir sur l'explorer eCash"
+                      >
+                        🔍
+                      </a>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1290,287 +1408,398 @@ const TokenDetailsPage = () => {
           />
           {/* Contenu Onglet ENVOYER */}
           {activeTab === 'send' && (
-            <Card className="rounded-t-none border-t-0" style={{ marginTop: '0' }}>
-              <CardContent className="p-6">
-              <form onSubmit={handleSendToken} className="space-y-6">
-                <Input
-                  label="Destinataire"
-                  value={sendAddress}
-                  onChange={(e) => setSendAddress(e.target.value)}
-                  placeholder="ecash:qp..."
-                  disabled={processing}
-                  rightIcon={
-                    <button
-                      type="button"
-                      onClick={() => setShowQrScanner(true)}
-                      disabled={processing}
-                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-                    >
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <rect x="3" y="3" width="7" height="7" />
-                        <rect x="14" y="3" width="7" height="7" />
-                        <rect x="14" y="14" width="7" height="7" />
-                        <rect x="3" y="14" width="7" height="7" />
-                      </svg>
-                    </button>
-                  }
-                />
+            <div style={{ 
+              backgroundColor: 'white', 
+              border: '1px solid #e5e7eb', 
+              borderTop: 'none', 
+              borderBottomLeftRadius: '12px', 
+              borderBottomRightRadius: '12px', 
+              padding: '32px 24px', 
+              marginBottom: '24px' 
+            }}>
+                <form onSubmit={handleSendToken} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                  
+                    {/* Info Box */}
+                  <div style={{ 
+                    padding: '12px 16px', 
+                    backgroundColor: '#eff6ff', 
+                    border: '1px solid #dbeafe', 
+                    borderRadius: '8px', 
+                    color: '#1e40af', 
+                    fontSize: '0.9rem',
+                    marginBottom: '20px'
+                  }}>
+                    💡 <strong>Envoyer des {ticker}</strong>
+                  </div>
 
-                <Input
-                  label="Montant"
-                  type="number"
-                  step="0.01"
-                  value={sendAmount}
-                  onChange={(e) => setSendAmount(e.target.value)}
-                  placeholder="0.00"
-                  disabled={processing}
-                  actionButton={{
-                    label: 'MAX',
-                    onClick: () => setSendAmount(formatAmount(myBalance, decimals))
-                  }}
-                  helperText={`Solde disponible : ${formatAmount(myBalance, decimals)} ${ticker}`}
-                />
+                  <Input
+                    label="Destinataire"
+                    value={sendAddress}
+                    onChange={(e) => setSendAddress(e.target.value)}
+                    placeholder="ecash:qp..."
+                    disabled={processing}
+                    rightIcon={
+                      <button type="button" onClick={() => setShowQrScanner(true)} className="p-2 text-gray-400 hover:text-blue-600 transition-colors">📷</button>
+                    }
+                  />
 
-                <div className="mt-2 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                  <span>💡</span>
-                  <span>Frais de réseau estimés : ~5 XEC</span>
+                  <Input
+                    label="Montant"
+                    type="number"
+                    value={sendAmount}
+                    onChange={(e) => setSendAmount(e.target.value)}
+                    placeholder="0.00"
+                    disabled={processing}
+                    actionButton={{
+                      label: 'MAX',
+                      onClick: () => setSendAmount(formatAmount(myBalance, decimals))
+                    }}
+                    helperText={`Solde disponible : ${formatAmount(myBalance, decimals)} ${ticker}`}
+                  />
+
+                  {/* Bloc Frais Standardisé */}
+                  <div style={{ 
+                    padding: '12px 16px', 
+                    backgroundColor: '#f8fafc', 
+                    borderRadius: '8px', 
+                    fontSize: '0.9rem', 
+                    color: '#475569', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '10px' 
+                  }}>
+                    <span style={{ fontSize: '1.2rem' }}>💡</span> 
+                    <span>Frais de réseau estimés : ~5 XEC</span>
+                  </div>
+
+                  <Button type="submit" variant="primary" fullWidth disabled={processing || !sendAddress || !sendAmount} style={{ height: '56px', fontSize: '1.1rem' }}>
+                    {processing ? '⏳ Envoi en cours...' : 'Envoyer'}
+                  </Button>
+                </form>
+                
+                {/* Historique des envois */}
+                <div style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid #e2e8f0' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: '600', color: '#1e293b', marginBottom: '16px' }}>
+                    📜 Historique des envois
+                  </h3>
+                  {loadingHistory ? (
+                    <div style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>⏳ Chargement...</div>
+                  ) : (
+                    <HistoryList history={history.filter(h => h.action_type === 'SEND')} compact />
+                  )}
                 </div>
-
-                <Button
-                  type="submit"
-                  variant="primary"
-                  className="w-full"
-                  disabled={processing || !sendAddress || !sendAmount}
-                >
-                  {processing ? '⏳ Envoi en cours...' : '✔️ Confirmer l\'envoi'}
-                </Button>
-              </form>
-              </CardContent>
-            </Card>
+            </div>
           )}
 
-          {/* Contenu Onglet AIRDROP */}
+          {/* Contenu Onglet DISTRIBUER (Airdrop) */}
           {activeTab === 'airdrop' && (
-            <Card className="rounded-t-none border-t-0" style={{ marginTop: '0' }}>
-              <CardContent className="p-6">
-              <form className="space-y-6">
-                <Card className="border-blue-200 dark:border-blue-800">
-                  <CardContent className="p-4 bg-blue-50 dark:bg-blue-950/30">
-                  <p className="text-sm text-blue-900 dark:text-blue-100 m-0">
-                    💡 <strong>Distribution de XEC uniquement</strong> : Envoyez des eCash (XEC) à tous les détenteurs de {ticker} pour couvrir leurs frais de transactions.
-                  </p>
-                  </CardContent>
-                </Card>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                    Mode de distribution
-                  </label>
-                  <div className="flex items-center justify-center gap-3 p-3 bg-gray-100 dark:bg-gray-900 rounded-lg">
-                    <span className={`text-sm font-medium ${airdropMode === 'equal' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                      Égalitaire
-                    </span>
-                    <Switch
-                      checked={airdropMode === 'prorata'}
-                      onChange={(checked) => setAirdropMode(checked ? 'prorata' : 'equal')}
-                    />
-                    <span className={`text-sm font-medium ${airdropMode === 'prorata' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                      Pro-Rata
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs text-gray-600 dark:text-gray-400 text-center">
-                    {airdropMode === 'equal' ? 'Montant identique pour tous' : 'Proportionnel au solde'}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="ignoreCreator"
-                    checked={ignoreCreator}
-                    onChange={(e) => setIgnoreCreator(e.target.checked)}
-                    className="w-4 h-4 cursor-pointer"
-                  />
-                  <label htmlFor="ignoreCreator" className="text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
-                    Ignorer le créateur
-                  </label>
-                </div>
-
-                <Input
-                  label="Montant total XEC à distribuer"
-                  type="number"
-                  step="0.01"
-                  value={airdropTotal}
-                  onChange={(e) => setAirdropTotal(e.target.value)}
-                  placeholder="1000.00"
-                  actionButton={{
-                    label: 'MAX',
-                    onClick: handleSetMaxAirdrop
-                  }}
-                  helperText={`Disponible : ${xecBalance.toFixed(2)} XEC`}
-                />
-
-                <Input
-                  label="Solde minimum éligible (optionnel)"
-                  type="number"
-                  step="0.01"
-                  value={minEligible}
-                  onChange={(e) => setMinEligible(e.target.value)}
-                  placeholder="0.00"
-                  helperText="Seuls les détenteurs avec au moins ce montant recevront des XEC"
-                />
-
-                <div className="mt-2 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                  <span>💡</span>
-                  <span>Scan des détenteurs et distribution automatique en 1 clic</span>
-                </div>
-
-                <div className="space-y-3">
-                  <Button
-                    type="button"
-                    className="w-full bg-blue-600 hover:bg-blue-700"
-                    onClick={handleCalculateAirdrop}
-                    disabled={loadingHolders || !airdropTotal}
-                  >
-                    {loadingHolders ? '⏳ Calcul en cours...' : '🔍 Calculer les détenteurs'}
-                  </Button>
+            <div style={{ 
+              backgroundColor: 'white', 
+              border: '1px solid #e5e7eb', 
+              borderTop: 'none', 
+              borderBottomLeftRadius: '12px', 
+              borderBottomRightRadius: '12px', 
+              padding: '32px 24px', 
+              marginBottom: '24px' 
+            }}>
+                <form className="space-y-6" onSubmit={(e) => e.preventDefault()}>
                   
-                  {holdersCount !== null && (
-                    <>
-                      <p className="text-sm text-center font-semibold">
-                        ✅ {holdersCount} détenteur{holdersCount > 1 ? 's' : ''} éligible{holdersCount > 1 ? 's' : ''}
-                      </p>
-                      
-                      {calculatedHolders.length > 0 && (
-                        <div className="max-h-60 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded p-3 bg-gray-50 dark:bg-gray-800">
-                          <p className="text-xs font-semibold mb-2 text-gray-600 dark:text-gray-400">
-                            📋 Détails de la distribution ({airdropMode === 'prorata' ? 'Proportionnelle' : 'Égalitaire'}) :
-                          </p>
-                          <div className="space-y-1">
+                  {/* Info Box */}
+                  <div style={{ padding: '12px 16px', backgroundColor: '#eff6ff', border: '1px solid #dbeafe', borderRadius: '8px', color: '#1e40af', fontSize: '0.9rem' }}>
+                    💡 <strong>Distribution de XEC</strong> : Envoyez des eCash à tous les détenteurs de {ticker}.
+                  </div>
+                  <br />
+                  {/* Mode de distribution */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '600', marginBottom: '8px', color: 'var(--text-primary)' }}>
+                      Mode de distribution
+                    </label>
+                    <div style={{ display: 'flex', backgroundColor: '#f1f5f9', padding: '4px', borderRadius: '10px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setAirdropMode('equal')}
+                        style={{
+                          flex: 1, padding: '8px', borderRadius: '8px', border: 'none', fontSize: '0.9rem', fontWeight: '600', cursor: 'pointer', transition: 'all 0.2s',
+                          backgroundColor: airdropMode === 'equal' ? '#ffffff' : 'transparent',
+                          color: airdropMode === 'equal' ? '#0f172a' : '#64748b',
+                          boxShadow: airdropMode === 'equal' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
+                        }}
+                      >
+                        Égalitaire
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAirdropMode('prorata')}
+                        style={{
+                          flex: 1, padding: '8px', borderRadius: '8px', border: 'none', fontSize: '0.9rem', fontWeight: '600', cursor: 'pointer', transition: 'all 0.2s',
+                          backgroundColor: airdropMode === 'prorata' ? '#ffffff' : 'transparent',
+                          color: airdropMode === 'prorata' ? '#0f172a' : '#64748b',
+                          boxShadow: airdropMode === 'prorata' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
+                        }}
+                      >
+                        Pro-Rata
+                      </button>
+                    </div>
+                  </div>
+                  <br />
+                  {/* Checkbox Ignorer Créateur */}
+                  <div 
+                    onClick={() => setIgnoreCreator(!ignoreCreator)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px',
+                      border: `1px solid ${ignoreCreator ? '#3b82f6' : '#e2e8f0'}`,
+                      backgroundColor: ignoreCreator ? '#eff6ff' : '#ffffff',
+                      borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s'
+                    }}
+                  >
+                    <input type="checkbox" checked={ignoreCreator} readOnly style={{ width: '18px', height: '18px', accentColor: '#3b82f6', cursor: 'pointer' }} />
+                    <span style={{ fontSize: '0.95rem', fontWeight: '500', color: '#1e293b' }}>Ignorer le créateur (Moi)</span>
+                  </div>
+                  <br />
+                  <Input
+                    label="Montant total à distribuer (XEC)"
+                    type="number"
+                    value={airdropTotal}
+                    onChange={(e) => setAirdropTotal(e.target.value)}
+                    placeholder="1000.00"
+                    actionButton={{ label: 'MAX', onClick: handleSetMaxAirdrop }}
+                    helperText={`Disponible : ${xecBalance.toFixed(2)} XEC`}
+                  />
+
+                  <Input
+                    label="Solde minimum requis (Optionnel)"
+                    type="number"
+                    value={minEligible}
+                    onChange={(e) => setMinEligible(e.target.value)}
+                    placeholder="0.00"
+                    helperText="Ex: 10 (Seuls ceux qui ont > 10 jetons recevront)"
+                  />
+
+                  {/* Actions & Résultats */}
+                  <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    
+                    {/* Bouton Calculer (Toujours visible si invalide ou non calculé) */}
+                    {(!isCalculationValid || holdersCount === null) && (
+                      <Button onClick={handleCalculateAirdrop} variant="secondary" fullWidth disabled={loadingHolders || !airdropTotal} style={{ height: '56px' }}>
+                        {loadingHolders ? '⏳ Calcul en cours...' : '🔍 Calculer les détenteurs'}
+                      </Button>
+                    )}
+
+                    {/* RÉSULTAT DÉTAILLÉ (Le retour de la liste !) */}
+                    {holdersCount !== null && (
+                      <div style={{ backgroundColor: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                        <div style={{ padding: '12px 16px', backgroundColor: '#f1f5f9', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontWeight: '600', color: '#475569', fontSize: '0.9rem' }}>Résultat du scan</span>
+                          <span style={{ backgroundColor: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 'bold' }}>
+                            {holdersCount} éligible{holdersCount > 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        
+                        {/* Liste scrollable des adresses */}
+                        {calculatedHolders.length > 0 && (
+                          <div style={{ maxHeight: '200px', overflowY: 'auto', padding: '8px' }}>
                             {calculatedHolders.map((holder, idx) => (
-                              <div key={idx} className="text-xs font-mono bg-white dark:bg-gray-900 p-2 rounded border border-gray-200 dark:border-gray-700">
-                                <div className="text-blue-600 dark:text-blue-400 truncate mb-1">
-                                  {holder.address}
-                                </div>
-                                <div className="flex justify-between items-center text-[10px]">
-                                  <span className="text-gray-600 dark:text-gray-400">
-                                    {holder.balanceFormatted.toLocaleString()} tokens
+                              <div key={idx} style={{ 
+                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                padding: '8px 12px', marginBottom: '4px', backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #f1f5f9', fontSize: '0.85rem'
+                              }}>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                  <span style={{ fontFamily: 'monospace', color: '#64748b' }}>
+                                    {holder.address.substring(6, 16)}...{holder.address.substring(holder.address.length - 6)}
                                   </span>
-                                  <span className="text-green-600 dark:text-green-400 font-bold">
-                                    → {holder.xecAmount} XEC
+                                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                                    {Number(holder.balanceFormatted).toLocaleString()} jetons
                                   </span>
                                 </div>
+                                <span style={{ fontWeight: '700', color: '#16a34a' }}>
+                                  + {holder.xecAmount} XEC
+                                </span>
                               </div>
                             ))}
                           </div>
-                        </div>
-                      )}
-                      
-                      <Button
-                        type="button"
-                        className="w-full bg-green-600 hover:bg-green-700"
-                        onClick={handleExecuteAirdrop}
-                        disabled={airdropProcessing || holdersCount === 0 || !isCalculationValid}
-                      >
-                        {airdropProcessing ? '⏳ Distribution en cours...' : '🎁 Distribuer maintenant'}
-                      </Button>
-                      
-                      {!isCalculationValid && holdersCount > 0 && (
-                        <p className="text-xs text-orange-600 dark:text-orange-400 text-center">
-                          ⚠️ Paramètres modifiés - Recalculer avant de distribuer
-                        </p>
-                      )}
-                    </>
+                        )}
+                        
+                        {holdersCount === 0 && (
+                          <div style={{ padding: '20px', textAlign: 'center', color: '#ef4444', fontSize: '0.9rem' }}>
+                            Aucun détenteur ne correspond aux critères.
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* AVERTISSEMENT SI MODIFIÉ */}
+                    {!isCalculationValid && holdersCount !== null && (
+                      <div style={{ padding: '12px', backgroundColor: '#fff7ed', border: '1px solid #fdba74', borderRadius: '8px', color: '#9a3412', fontSize: '0.9rem', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                        <span>⚠️</span> Paramètres modifiés, veuillez recalculer.
+                      </div>
+                    )}
+
+ {/* Bloc Frais Standardisé */}
+                  <div style={{ 
+                    padding: '12px 16px', 
+                    backgroundColor: '#f8fafc', 
+                    borderRadius: '8px', 
+                    fontSize: '0.9rem', 
+                    color: '#475569', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '10px' 
+                  }}>
+                    <span style={{ fontSize: '1.2rem' }}>💡</span> 
+                    <span>Frais de réseau estimés : ~5 XEC</span>
+                  </div>
+
+                    {/* Bouton Distribuer (Uniquement si valide) */}
+                    <Button 
+                      onClick={handleExecuteAirdrop} 
+                      variant="primary" 
+                      fullWidth
+                      disabled={airdropProcessing || !isCalculationValid || holdersCount === 0}
+                      style={{ height: '56px', backgroundColor: isCalculationValid ? '#16a34a' : '#94a3b8' }} 
+                    >
+                      {airdropProcessing ? '⏳ Distribution en cours...' : '🎁 Distribuer maintenant'}
+                    </Button>
+                  </div>
+                </form>
+                
+                {/* Historique des distributions */}
+                <div style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid #e2e8f0' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: '600', color: '#1e293b', marginBottom: '16px' }}>
+                    📜 Historique des distributions
+                  </h3>
+                  {loadingHistory ? (
+                    <div style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>⏳ Chargement...</div>
+                  ) : (
+                    <HistoryList history={history.filter(h => h.action_type === 'AIRDROP')} compact />
                   )}
                 </div>
-              </form>
-              </CardContent>
-            </Card>
+            </div>
           )}
 
           {/* Contenu Onglet MINT */}
           {activeTab === 'mint' && isCreator && (
-            <Card className="rounded-t-none border-t-0" style={{ marginTop: '0' }}>
-              <CardContent className="p-6">
-              <form onSubmit={handleMint} className="space-y-6">
-                <Card className="border-blue-200 dark:border-blue-800">
-                  <CardContent className="p-4 bg-blue-50 dark:bg-blue-950/30">
-                  <p className="text-sm text-blue-900 dark:text-blue-100 m-0">
-                    💡 Créez de nouveaux jetons {ticker} (offre variable uniquement)
-                  </p>
-                  </CardContent>
-                </Card>
+            <div style={{ 
+              backgroundColor: 'white', 
+              border: '1px solid #e5e7eb', 
+              borderTop: 'none', 
+              borderBottomLeftRadius: '12px', 
+              borderBottomRightRadius: '12px', 
+              padding: '32px 24px', 
+              marginBottom: '24px' 
+            }}>
+                <form onSubmit={handleMint} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                  
+                  <div style={{ 
+                    padding: '16px', 
+                    backgroundColor: '#eff6ff', 
+                    border: '1px solid #dbeafe', 
+                    borderRadius: '8px', 
+                    color: '#1e40af', 
+                    fontSize: '0.9rem' 
+                  }}>
+                    🏭 <strong>Émission de jetons</strong> : Créez de nouveaux jetons {ticker} (Offre variable).
+                  </div>
+
+                  <Input
+                    label="Quantité à émettre"
+                    type="number"
+                    value={mintAmount}
+                    onChange={(e) => setMintAmount(e.target.value)}
+                    placeholder="1000"
+                    disabled={!isCreator || processing}
+                  />
+
+                  <div style={{ padding: '12px 16px', backgroundColor: '#f8fafc', borderRadius: '8px', fontSize: '0.9rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '1.2rem' }}>💡</span> 
+                    <span>Frais de réseau estimés : ~5 XEC</span>
+                  </div>
+
+                  <Button type="submit" variant="primary" fullWidth disabled={!genesisInfo.authPubkey || processing || !mintAmount} style={{ height: '56px', fontSize: '1.1rem' }}>
+                    {processing ? '⏳ Émission...' : 'Confirmer l\'\u00e9mission'}
+                  </Button>
+                </form>
                 
-                <Input
-                  label="Quantité à émettre"
-                  type="number"
-                  step="1"
-                  value={mintAmount}
-                  onChange={(e) => setMintAmount(e.target.value)}
-                  placeholder="1000"
-                  disabled={!isCreator || processing}
-                />
-
-                <div className="mt-2 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                  <span>💡</span>
-                  <span>Frais de réseau estimés : ~5 XEC</span>
+                {/* Historique des émissions */}
+                <div style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid #e2e8f0' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: '600', color: '#1e293b', marginBottom: '16px' }}>
+                    📜 Historique des émissions
+                  </h3>
+                  {loadingHistory ? (
+                    <div style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>⏳ Chargement...</div>
+                  ) : (
+                    <HistoryList history={history.filter(h => h.action_type === 'MINT')} compact />
+                  )}
                 </div>
-
-                <Button
-                  type="submit"
-                  variant="primary"
-                  className="w-full"
-                  disabled={!genesisInfo.authPubkey || processing || !mintAmount}
-                >
-                  {!genesisInfo.authPubkey ? '🔒 Offre Fixe (Mint impossible)' : processing ? '⏳ Émission...' : "✔️ Confirmer l'émission"}
-                </Button>
-              </form>
-              </CardContent>
-            </Card>
+            </div>
           )}
 
           {/* Contenu Onglet BURN */}
           {activeTab === 'burn' && isCreator && (
-            <Card className="rounded-t-none border-t-0" style={{ marginTop: '0' }}>
-              <CardContent className="p-6">
-              <form onSubmit={handleBurn} className="space-y-6">
-                <div className="p-3 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-                  <p className="text-sm text-yellow-900 dark:text-yellow-200 font-medium m-0">
-                    ⚠️ Action irréversible : les jetons détruits ne peuvent pas être récupérés
-                  </p>
-                </div>
+            <div style={{ 
+              backgroundColor: 'white', 
+              border: '1px solid #e5e7eb', 
+              borderTop: 'none', 
+              borderBottomLeftRadius: '12px', 
+              borderBottomRightRadius: '12px', 
+              padding: '32px 24px', 
+              marginBottom: '24px' 
+            }}>
+                <form onSubmit={handleBurn} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                  
+                  {/* Avertissement style "Alert" */}
+                  <div style={{ 
+                    padding: '16px', 
+                    backgroundColor: '#fefce8', 
+                    border: '1px solid #fde047', 
+                    borderRadius: '8px', 
+                    color: '#854d0e', 
+                    fontSize: '0.9rem',
+                    display: 'flex',
+                    alignItems: 'start',
+                    gap: '12px'
+                  }}>
+                    <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+                    <div>
+                      <strong>Action irréversible :</strong> Les jetons détruits seront définitivement retirés de la circulation.
+                    </div>
+                  </div>
+                  
+                  <Input
+                    label="Quantité à détruire"
+                    type="number"
+                    value={burnAmount}
+                    onChange={(e) => setBurnAmount(e.target.value)}
+                    placeholder="100"
+                    disabled={processing}
+                    actionButton={{
+                      label: 'MAX',
+                      onClick: handleSetMaxBurn
+                    }}
+                    helperText={`Solde disponible : ${formatAmount(myBalance, decimals)} ${ticker}`}
+                  />
+
+                  <div style={{ padding: '12px 16px', backgroundColor: '#f8fafc', borderRadius: '8px', fontSize: '0.9rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '1.2rem' }}>💡</span> 
+                    <span>Frais de réseau estimés : ~5 XEC</span>
+                  </div>
+
+                  <Button type="submit" variant="danger" fullWidth disabled={processing || !burnAmount} style={{ height: '56px', fontSize: '1.1rem', marginTop: '8px' }}>
+                    {processing ? '⏳ Destruction...' : '🔥 Détruire définitivement'}
+                  </Button>
+                </form>
                 
-                <Input
-                  label="Quantité à détruire"
-                  type="number"
-                  step="0.01"
-                  value={burnAmount}
-                  onChange={(e) => setBurnAmount(e.target.value)}
-                  placeholder="100"
-                  disabled={processing}
-                  actionButton={{
-                    label: 'MAX',
-                    onClick: handleSetMaxBurn
-                  }}
-                  helperText={`Solde disponible : ${formatAmount(myBalance, decimals)} ${ticker}`}
-                />
-
-                <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                  <span>💡</span>
-                  <span>Frais de réseau estimés : ~5 XEC</span>
+                {/* Historique des destructions */}
+                <div style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid #e2e8f0' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: '600', color: '#1e293b', marginBottom: '16px' }}>
+                    📜 Historique des destructions
+                  </h3>
+                  {loadingHistory ? (
+                    <div style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>⏳ Chargement...</div>
+                  ) : (
+                    <HistoryList history={history.filter(h => h.action_type === 'BURN')} compact />
+                  )}
                 </div>
-
-                <Button
-                  type="submit"
-                  variant="danger"
-                  className="w-full mt-6"
-                  disabled={processing || !burnAmount}
-                >
-                  {processing ? '⏳ Destruction...' : '🔥 Détruire Définitivement'}
-                </Button>
-              </form>
-              </CardContent>
-            </Card>
+            </div>
           )}
 
           {/* OBJECTIF ET CONTREPARTIE DU JETON - Toujours visible */}

@@ -4,6 +4,7 @@ import { useSetAtom } from 'jotai';
 import { notificationAtom } from '../atoms';
 import { Card, CardContent, Button } from './UI';
 import { useEcashWallet } from '../hooks/useEcashWallet';
+import { addEntry, ACTION_TYPES } from '../services/historyService';
 
 const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
   const navigate = useNavigate();
@@ -256,6 +257,25 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
           type: 'success',
           message: `Token "${tokenPreview.name}" ajouté à votre ferme !`
         });
+        
+        // Enregistrer dans l'historique
+        try {
+          await addEntry({
+            owner_address: address,
+            token_id: tokenPreview.tokenId,
+            token_ticker: tokenPreview.ticker,
+            action_type: ACTION_TYPES.IMPORT,
+            amount: null,
+            tx_id: null,
+            details: {
+              name: tokenPreview.name,
+              hasMintBaton: tokenPreview.hasMintBaton,
+              isFixedSupply: tokenPreview.isFixedSupply
+            }
+          });
+        } catch (histErr) {
+          console.warn('⚠️ Erreur enregistrement historique:', histErr);
+        }
       } else {
         // Pas de ferme: créer une ferme minimale
         const farmData = {
@@ -272,6 +292,25 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
           type: 'success',
           message: `Token "${tokenPreview.name}" importé ! Pour apparaître dans l'annuaire, complétez votre profil.`
         });
+        
+        // Enregistrer dans l'historique
+        try {
+          await addEntry({
+            owner_address: address,
+            token_id: tokenPreview.tokenId,
+            token_ticker: tokenPreview.ticker,
+            action_type: ACTION_TYPES.IMPORT,
+            amount: null,
+            tx_id: null,
+            details: {
+              name: tokenPreview.name,
+              hasMintBaton: tokenPreview.hasMintBaton,
+              isFixedSupply: tokenPreview.isFixedSupply
+            }
+          });
+        } catch (histErr) {
+          console.warn('⚠️ Erreur enregistrement historique:', histErr);
+        }
       }
 
       if (onImportSuccess) onImportSuccess();

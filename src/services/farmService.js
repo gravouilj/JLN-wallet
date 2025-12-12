@@ -347,14 +347,28 @@ export const FarmService = {
 
   // 3. ADMIN: Récupérer les demandes (Pending + Unverified + Info_requested)
   async getPendingFarms() {
+    console.log('🔍 getPendingFarms: Tentative de récupération des fermes en attente...');
+    
     const { data, error } = await supabase
       .from('farms')
       .select('*')
-      .in('verification_status', ['pending', 'unverified', 'info_requested'])
-      .in('status', ['active', 'hidden', 'pending_deletion']) // Inclure tous sauf deleted
+      .in('verification_status', ['pending', 'info_requested', 'unverified'])
       .order('updated_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      console.error('❌ getPendingFarms ERROR:', error);
+      console.error('Code:', error.code);
+      console.error('Message:', error.message);
+      console.error('Details:', error.details);
+      console.error('Hint:', error.hint);
+      throw error;
+    }
+    
+    console.log('✅ getPendingFarms SUCCESS:', {
+      count: data?.length || 0,
+      farms: data
+    });
+    
     return data || [];
   },
 
@@ -564,6 +578,8 @@ export const FarmService = {
 
   // 14. ADMIN: Récupérer les fermes signalées (seulement pending)
   async getReportedFarms() {
+    console.log('🔍 getReportedFarms: Tentative de récupération des signalements...');
+    
     const { data, error } = await supabase
       .from('farm_reports')
       .select(`
@@ -580,7 +596,17 @@ export const FarmService = {
       .eq('admin_status', 'pending')
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      console.error('❌ getReportedFarms ERROR:', error);
+      console.error('Code:', error.code);
+      console.error('Message:', error.message);
+      throw error;
+    }
+    
+    console.log('✅ getReportedFarms SUCCESS:', {
+      count: data?.length || 0,
+      reports: data
+    });
     
     // Grouper par ferme et compter les signalements
     const farmReports = {};
@@ -597,7 +623,10 @@ export const FarmService = {
       farmReports[farmId].count++;
     });
     
-    return Object.values(farmReports).sort((a, b) => b.count - a.count);
+    const result = Object.values(farmReports).sort((a, b) => b.count - a.count);
+    console.log('📊 Fermes signalées groupées:', result.length);
+    
+    return result;
   },
 
   // 15. ADMIN: Ignorer les signalements d'une ferme
@@ -630,6 +659,177 @@ export const FarmService = {
       .select();
 
     if (error) throw error;
+    return data;
+  },
+
+  // 17. Ajouter un message à l'historique de communication
+  async addMessage(ownerAddress, author, message) {
+    console.log('💬 addMessage appelé:', { ownerAddress, author, message });
+    
+    try {
+      // Récupérer la ferme actuelle
+      const farm = await this.getMyFarm(ownerAddress);
+      if (!farm) {
+        throw new Error('Ferme introuvable');
+      }
+      
+      // Récupérer l'historique existant ou créer un nouveau tableau
+      const history = farm.communication_history || [];
+      
+      // Ajouter le nouveau message
+      const newMessage = {
+        author: author, // 'admin' ou 'creator'
+        message: message,
+        timestamp: new Date().toISOString()
+      };
+      
+      const updatedHistory = [...history, newMessage];
+      
+      // Mettre à jour la ferme
+      const result = await this.updateFarm(ownerAddress, {
+        communication_history: updatedHistory
+      });
+      
+      console.log('✅ Message ajouté à l\'historique');
+      return result;
+      
+    } catch (err) {
+      console.error('❌ Erreur addMessage:', err);
+      throw err;
+    }
+  },
+
+  // 18. Suppression soft delete du profil (respecte logique Web3)
+  async deleteFarmProfile(ownerAddress) {
+    console.log('🗑️ deleteFarmProfile appelé:', { ownerAddress });
+    
+    try {
+      // Récupérer la ferme actuelle
+      const farm = await this.getMyFarm(ownerAddress);
+      if (!farm) {
+        throw new Error('Ferme introuvable');
+      }
+      
+      // Soft delete : nettoyage des données personnelles, conservation des données techniques
+      const payload = {
+        // Statut deleted
+        status: 'deleted',
+        
+        // VIDER les données personnelles
+        name: null,
+        email: null,
+        phone: null,
+        description: null,
+        address: null,
+        location_country: null,
+        location_region: null,
+        location_department: null,
+        website: null,
+        image_url: null,
+        
+        // Vider socials (JSONB)
+        socials: null,
+        
+        // Vider certifications (JSONB)
+        certifications: null,
+        
+        // Vider produits et services
+        products: null,
+        services: null,
+        
+        // Vider historique communication
+        communication_history: null,
+        
+        // CONSERVER les données techniques (pas dans le payload = pas modifié)
+        // - owner_address (conservé automatiquement car clé)
+        // - id (conservé automatiquement car clé primaire)
+        // - tokens (conservé pour référence blockchain)
+        // - created_at (conservé pour historique)
+        // - verification_status, verified, verified_at (historique sécurité)
+        
+        // Timestamp de suppression
+        updated_at: new Date().toISOString(),
+        deleted_at: new Date().toISOString()
+      };
+      
+      // Mettre à jour la ferme
+      const { data, error } = await supabase
+        .from('farms')
+        .update(payload)
+        .eq('owner_address', ownerAddress)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Erreur Supabase deleteFarmProfile:', error);
+        throw error;
+      }
+      
+      console.log('✅ Profil supprimé (soft delete):', data);
+      return data;
+      
+    } catch (err) {
+      console.error('❌ Erreur deleteFarmProfile:', err);
+      throw err;
+    }
+  },
+
+  // ADMIN: Récupérer les fermes bannies
+  async getBannedFarms() {
+    console.log('🔍 getBannedFarms: Tentative de récupération des fermes bannies...');
+    
+    const { data, error } = await supabase
+      .from('farms')
+      .select('*')
+      .in('status', ['banned', 'pending_deletion'])
+      .order('updated_at', { ascending: false });
+
+    if (error) {
+      console.error('❌ getBannedFarms ERROR:', error);
+      throw error;
+    }
+    
+    console.log('✅ getBannedFarms SUCCESS:', {
+      count: data?.length || 0
+    });
+    
+    return data || [];
+  },
+
+  // ADMIN: Bannir une ferme
+  async banFarm(farmId, reason) {
+    console.log('🛑 banFarm:', { farmId, reason });
+    
+    const { data, error } = await supabase
+      .from('farms')
+      .update({
+        status: 'banned',
+        verification_status: 'rejected',
+        verified: false,
+        admin_message: `🛑 FERME BANNIE - ${reason}`,
+        banned_at: new Date().toISOString(),
+        deletion_reason: reason
+      })
+      .eq('id', farmId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ banFarm ERROR:', error);
+      throw error;
+    }
+    
+    // Marquer tous les signalements comme resolved
+    await supabase
+      .from('farm_reports')
+      .update({
+        admin_status: 'resolved',
+        admin_action_at: new Date().toISOString()
+      })
+      .eq('farm_id', farmId)
+      .eq('admin_status', 'pending');
+    
+    console.log('✅ banFarm SUCCESS:', data);
     return data;
   }
 };

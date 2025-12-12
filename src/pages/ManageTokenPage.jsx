@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useSetAtom, useAtom } from 'jotai';
 import MobileLayout from '../components/Layout/MobileLayout';
 import BlockchainStatus from '../components/BlockchainStatus';
+import HistoryList from '../components/HistoryList';
 import { useEcashWallet } from '../hooks/useEcashWallet';
 import { useAdmin } from '../hooks/useAdmin';
 import { useFarms } from '../hooks/useFarms';
@@ -10,7 +11,7 @@ import { useXecPrice } from '../hooks/useXecPrice';
 import { notificationAtom, currencyAtom } from '../atoms';
 import { Card, CardContent, Button, PageLayout, Stack, PageHeader } from '../components/UI';
 import ImportTokenModal from '../components/ImportTokenModal';
-import '../styles/token-details.css';
+import { getGlobalHistory } from '../services/historyService';
 
 const ManageTokenPage = () => {
   const navigate = useNavigate();
@@ -28,6 +29,9 @@ const ManageTokenPage = () => {
   const [activeFilter, setActiveFilter] = useState('active'); // 'active', 'inactive', 'pending', 'all'
   const [myFarm, setMyFarm] = useState(null);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [globalHistory, setGlobalHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
 
   // Debug: tracker les changements du modal
   useEffect(() => {
@@ -52,6 +56,18 @@ const ManageTokenPage = () => {
           console.log('🏠 Ma ferme:', myFarmData);
           console.log('📍 Mon address:', address);
           console.log('📋 Farms disponibles:', farms.map(f => ({ name: f.name, owner: f.owner_address })));
+        }
+        
+        // Si admin: charger le nombre de demandes en attente
+        if (isAdmin) {
+          try {
+            const { default: FarmService } = await import('../services/farmService');
+            const pendingFarms = await FarmService.FarmService.getPendingFarms();
+            setPendingCount(pendingFarms?.length || 0);
+            console.log('🔔 Demandes en attente:', pendingFarms?.length || 0);
+          } catch (err) {
+            console.error('❌ Erreur chargement demandes admin:', err);
+          }
         }
         
         // Charger le solde XEC
@@ -132,7 +148,7 @@ const ManageTokenPage = () => {
               name: info.genesisInfo?.tokenName || tokenEntry.farmName || 'Inconnu',
               ticker: info.genesisInfo?.tokenTicker || tokenEntry.ticker || 'UNK',
               decimals: info.genesisInfo?.decimals || 0,
-              image: 'data:image/svg+xml,%3Csvg xmlns=\"http://www.w3.org/2000/svg\" width=\"400\" height=\"400\"%3E%3Crect fill=\"%23ddd\" width=\"400\" height=\"400\"/%3E%3Ctext fill=\"%23999\" font-size=\"48\" x=\"50%25\" y=\"50%25\" text-anchor=\"middle\" dy=\".3em\"%3EToken%3C/text%3E%3C/svg%3E',
+              image: tokenEntry.image || info.genesisInfo?.url || 'data:image/svg+xml,%3Csvg xmlns=\"http://www.w3.org/2000/svg\" width=\"400\" height=\"400\"%3E%3Crect fill=\"%23ddd\" width=\"400\" height=\"400\"/%3E%3Ctext fill=\"%23999\" font-size=\"48\" x=\"50%25\" y=\"50%25\" text-anchor=\"middle\" dy=\".3em\"%3EToken%3C/text%3E%3C/svg%3E',
               protocol: 'ALP',
               website: '',
               farmName: tokenEntry.farmName || null, // Nom de la ferme associée
@@ -366,6 +382,35 @@ const ManageTokenPage = () => {
     loadData();
   }, [wallet, farms, isAdmin, address]); // Dependencies: recharger si wallet/farms/admin/address change
 
+  // Charger l'historique global
+  useEffect(() => {
+    const loadGlobalHistory = async () => {
+      if (!address) return;
+      
+      setLoadingHistory(true);
+      try {
+        const historyData = await getGlobalHistory(address);
+        setGlobalHistory(historyData);
+        console.log(`📜 Historique global chargé: ${historyData.length} entrées`);
+      } catch (err) {
+        console.error('❌ Erreur chargement historique global:', err);
+      } finally {
+        setLoadingHistory(false);
+      }
+    };
+    
+    loadGlobalHistory();
+    
+    // Polling toutes les 10 secondes pour rafraîchir l'historique
+    const intervalId = setInterval(() => {
+      if (address) {
+        loadGlobalHistory();
+      }
+    }, 10000);
+    
+    return () => clearInterval(intervalId);
+  }, [address]);
+
   // Callback après import réussi pour recharger les données
   const handleImportSuccess = () => {
     // Recharger les farms (cela déclenchera useEffect)
@@ -453,180 +498,263 @@ const ManageTokenPage = () => {
     <MobileLayout title="Gestionnaire de Jetons">
       <PageLayout hasBottomNav className="max-w-2xl">
         <Stack spacing="md">
-        <PageHeader 
-          icon="🔑"
-          title="Gestionnaire de Jetons"
-          subtitle={
-            myFarm ? (
-              <>
-                <span>Gérez vos jetons à offre variable</span>
-                <br />
-                {myFarm.verification_status === 'verified' && (
-                  <span className="verified-badge verified" style={{ fontSize: '14px', padding: '4px 12px' }}>
-                    ✅ Ferme vérifiée
-                  </span>
-                )}
-                {myFarm.verification_status === 'pending' && (
-                  <span className="verified-badge pending" style={{ fontSize: '14px', padding: '4px 12px' }}>
-                    ⏳ Validation en cours
-                  </span>
-                )}
-                {myFarm.verification_status === 'unverified' && (
-                  <span className="verified-badge unverified" style={{ fontSize: '14px', padding: '4px 12px' }}>
-                    ⚠️ Ferme non vérifiée
-                  </span>
-                )}
-                {myFarm.verification_status === 'info_requested' && (
-                  <span 
-                    className="verified-badge" 
+        {/* En-tête avec statut ferme */}
+        {myFarm && (
+          <Card>
+            <CardContent style={{ padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                <span style={{ fontSize: '32px' }}>🏡</span>
+                <div style={{ flex: 1 }}>
+                  <h2 style={{ fontSize: '1.25rem', fontWeight: '700', margin: 0, color: 'var(--text-primary)' }}>
+                    {myFarm.name}
+                  </h2>
+                  <p style={{ fontSize: '0.875rem', margin: '4px 0 0 0', color: 'var(--text-secondary)' }}>
+                    Créez, Importez & Gérez vos jetons à offre variable ou fixe.
+                  </p>
+                </div>
+              </div>
+              {myFarm.verification_status === 'verified' && (
+                <div style={{ padding: '8px 12px', backgroundColor: '#10b981', color: '#fff', borderRadius: '8px', fontSize: '0.875rem', fontWeight: '600', textAlign: 'center' }}>
+                  ✅ Ferme vérifiée
+                </div>
+              )}
+              {myFarm.verification_status === 'pending' && (
+                <div style={{ padding: '8px 12px', backgroundColor: '#f59e0b', color: '#fff', borderRadius: '8px', fontSize: '0.875rem', fontWeight: '600', textAlign: 'center' }}>
+                  ⏳ Validation en cours
+                </div>
+              )}
+              {myFarm.verification_status === 'unverified' && (
+                <div style={{ padding: '8px 12px', backgroundColor: '#6b7280', color: '#fff', borderRadius: '8px', fontSize: '0.875rem', fontWeight: '600', textAlign: 'center' }}>
+                  ⚠️ Profil non vérifié
+                </div>
+              )}
+              {myFarm.verification_status === 'rejected' && (
+                <div style={{ padding: '8px 12px', backgroundColor: '#fee2e2', color: '#991b1b', borderRadius: '8px', fontSize: '0.875rem', fontWeight: '600', textAlign: 'center', border: '1px solid #f87171' }}>
+                  🚫 Refusé : {myFarm.admin_message || "Voir détails dans 'Gérer mon profil'"}
+                </div>
+              )}
+              {(myFarm.status === 'banned' || myFarm.status === 'pending_deletion') && (
+                <div style={{ padding: '8px 12px', backgroundColor: '#450a0a', color: '#fff', borderRadius: '8px', fontSize: '0.875rem', fontWeight: '600', textAlign: 'center', border: '2px solid #ef4444' }}>
+                  🛑 {myFarm.status === 'banned' ? 'FERME BANNIE' : 'SUPPRESSION EN COURS'} - {myFarm.deletion_reason || myFarm.admin_message || 'Contactez l\'administrateur'}
+                </div>
+              )}
+              {myFarm.verification_status === 'info_requested' && (() => {
+                // Ne montrer le badge que si le dernier message est de l'admin
+                const history = myFarm.communication_history;
+                const hasAdminMessage = Array.isArray(history) && history.length > 0 && 
+                  history[history.length - 1].author === 'admin';
+                
+                if (!hasAdminMessage) return null;
+                
+                return (
+                  <button
+                    onClick={() => navigate('/manage-farm')}
                     style={{ 
-                      fontSize: '14px', 
-                      padding: '4px 12px', 
+                      width: '100%',
+                      padding: '8px 12px', 
                       backgroundColor: '#f59e0b', 
+                      color: '#fff', 
+                      borderRadius: '8px', 
+                      fontSize: '0.875rem', 
+                      fontWeight: '600', 
+                      border: 'none',
                       cursor: 'pointer',
-                      display: 'inline-flex',
+                      display: 'flex',
                       alignItems: 'center',
-                      gap: '6px'
-                    }}
-                    onClick={() => {
-                      const firstToken = tokens.find(t => t.hasMintBaton && t.isFromFarmWallet);
-                      if (firstToken) {
-                        navigate(`/manage-farm/${firstToken.tokenId}`);
-                      }
+                      justifyContent: 'center',
+                      gap: '8px'
                     }}
                   >
                     🔔 Message admin - Cliquez ici
-                  </span>
-                )}
-              </>
-            ) : "Gérez vos jetons à offre variable"
-          }
-          action={
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  </button>
+                );
+              })()}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Boutons d'action principaux - Grille 2 colonnes */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <Button
+            onClick={() => navigate('/create-token')}
+            variant="primary"
+            fullWidth
+            style={{ height: '80px', fontSize: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+          >
+            <span style={{ fontSize: '1.5rem' }}>🔨</span>
+            <span>Créer un jeton</span>
+          </Button>
+          <Button
+            onClick={() => {
+              console.log('🔘 Clic sur Importer un jeton');
+              setShowImportModal(true);
+            }}
+            style={{ 
+              height: '80px', 
+              fontSize: '1rem', 
+              backgroundColor: '#8b5cf6', 
+              color: '#fff',
+              border: '2px solid #8b5cf6',
+              borderRadius: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              fontWeight: '600'
+            }}
+            fullWidth
+          >
+            <span style={{ fontSize: '1.5rem' }}>📥</span>
+            <span>Importer</span>
+          </Button>
+        </div>
+
+        {/* Actions contextuelles - Profil & Admin */}
+        <Card>
+          <CardContent style={{ padding: '12px' }}>
+            <Stack spacing="sm">
+              {/* CTA Vérification si profil non vérifié */}
+              {myFarm && myFarm.verification_status === 'unverified' && (
                 <Button
-                  onClick={() => navigate('/create-token')}
+                  onClick={() => navigate('/manage-farm', { state: { activeTab: 'verification' } })}
                   variant="primary"
-                  icon="➕"
+                  icon="✅"
                   fullWidth
                 >
-                  Créer un jeton
+                  Vérifier mon profil
                 </Button>
-                <Button
-                  onClick={() => {
-                    console.log('🔘 Clic sur Importer un jeton');
-                    console.log('📊 Wallet:', wallet ? 'Connecté' : 'Non connecté');
-                    console.log('📊 showImportModal avant:', showImportModal);
-                    setShowImportModal(true);
-                    console.log('📊 setShowImportModal(true) appelé');
-                  }}
-                  variant="secondary"
-                  icon="📥"
-                  fullWidth
-                  style={{ backgroundColor: '#8b5cf6', borderColor: '#8b5cf6', color: '#fff' }}
-                >
-                  Importer un jeton
-                </Button>
-              </div>
+              )}
               <Button
-                onClick={() => {
-                  // Trouver le premier token actif du créateur
-                  const firstToken = tokens.find(t => t.hasMintBaton && t.isFromFarmWallet);
-                  if (firstToken) {
-                    navigate(`/manage-farm/${firstToken.tokenId}`);
-                  } else {
-                    navigate('/manage-farm');
-                  }
-                }}
+                onClick={() => navigate('/manage-farm')}
                 variant="secondary"
-                icon="🏡"
+                icon={myFarm ? "🏡" : "🌱"}
                 fullWidth
               >
-                Gérer ma ferme
+                {myFarm ? 'Gérer mon profil' : 'Créer mon profil'}
               </Button>
               {isAdmin && (
                 <Button
                   onClick={() => {
-                    console.log('🔘 Clic sur "Vérifier les fermes" - Navigation vers /admin/verification');
-                    console.log('👤 isAdmin:', isAdmin);
+                    console.log('🔘 Navigation vers /admin/verification');
                     navigate('/admin/verification');
                   }}
-                  variant="secondary"
-                  icon="🛡️"
+                  variant={pendingCount > 0 ? 'primary' : 'secondary'}
                   fullWidth
-                  style={{ backgroundColor: '#f59e0b', borderColor: '#f59e0b', color: '#fff' }}
+                  style={{ 
+                    backgroundColor: pendingCount > 0 ? '#ef4444' : '#6b7280', 
+                    borderColor: pendingCount > 0 ? '#ef4444' : '#6b7280', 
+                    color: '#fff',
+                    height: '56px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '12px'
+                  }}
                 >
-                  Vérifier les fermes
+                  <span style={{ fontSize: '1.2rem' }}>🛡️</span>
+                  <span style={{ fontWeight: '600' }}>Vérification de profils</span>
+                  {pendingCount > 0 && (
+                    <span style={{
+                      backgroundColor: '#fff',
+                      color: '#e6a118ff',
+                      padding: '2px 8px',
+                      borderRadius: '99px',
+                      fontSize: '0.8rem',
+                      fontWeight: 'bold'
+                    }}>
+                      {pendingCount}
+                    </span>
+                  )}
                 </Button>
               )}
-            </div>
-          }
-        />
+            </Stack>
+          </CardContent>
+        </Card>
 
-        {/* Balance Card (WalletDashboard style) */}
+        {/* Balance XEC */}
         <Card>
-          <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">💰 eCash disponible</div>
-              <div className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                {xecBalance.toFixed(2)} XEC
+          <CardContent style={{ padding: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: '500' }}>
+                  💰 eCash disponible
+                </div>
+                <div style={{ fontSize: '2rem', fontWeight: '700', color: 'var(--text-primary)' }}>
+                  {xecBalance.toFixed(2)} XEC
+                </div>
               </div>
+              
+              <div style={{ width: '1px', height: '60px', backgroundColor: 'var(--border-primary)', margin: '0 16px' }}></div>
+              
+              <button
+                onClick={() => navigate('/settings')}
+                style={{
+                  flex: 1,
+                  textAlign: 'right',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '8px',
+                  borderRadius: '8px',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: '500' }}>
+                  💱 Valeur estimée
+                </div>
+                <div style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-primary)' }}>
+                  {price && typeof price.convert === 'function' 
+                    ? (() => {
+                        const converted = price.convert(xecBalance, currency);
+                        return converted !== null ? `${converted.toFixed(2)} ${currency}` : '...';
+                      })()
+                    : '...'
+                  }
+                </div>
+              </button>
             </div>
-            
-            <div className="w-px h-16 bg-gray-200 dark:bg-gray-700 mx-4"></div>
-            
-            <div 
-              className="flex-1 text-right cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors rounded-lg p-2"
-              onClick={() => navigate('/settings')}
-            >
-              <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">💱 Valeur estimée</div>
-              <div className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                {price && typeof price.convert === 'function' 
-                  ? (() => {
-                      const converted = price.convert(xecBalance, currency);
-                      return converted !== null ? `${converted.toFixed(2)} ${currency}` : '...';
-                    })()
-                  : '...'
-                }
-              </div>
-            </div>
-          </div>
           </CardContent>
         </Card>
 
         {/* État de chargement */}
         {loadingTokens ? (
           <Card>
-            <CardContent className="p-8 text-center">
-            <div className="text-5xl mb-4">🔍</div>
-            <p className="text-gray-600 dark:text-gray-400">
-              Recherche des jetons en cours...
-            </p>
+            <CardContent style={{ padding: '48px 24px', textAlign: 'center' }}>
+              <div style={{ fontSize: '4rem', marginBottom: '16px' }}>🔍</div>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', margin: 0 }}>
+                Recherche des jetons en cours...
+              </p>
             </CardContent>
           </Card>
         ) : tokens.length === 0 ? (
           /* Aucun jeton trouvé */
           <>
             <Card>
-              <CardContent className="p-8 text-center">
-              <div className="text-6xl mb-4 opacity-30">🔑</div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-3">
-                Aucun jeton géré
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-                Créez un jeton avec offre <strong>variable</strong> pour pouvoir le gérer ici.
-              </p>
+              <CardContent style={{ padding: '48px 24px', textAlign: 'center' }}>
+                <div style={{ fontSize: '5rem', marginBottom: '16px', opacity: 0.3 }}>🔑</div>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '12px' }}>
+                  Aucun jeton géré
+                </h3>
+                <p style={{ color: 'var(--text-secondary)', lineHeight: '1.6', margin: 0 }}>
+                  Créez un jeton avec offre <strong>variable</strong> pour pouvoir le gérer ici.
+                </p>
               </CardContent>
             </Card>
 
             {/* Carte de simulation pour les admins */}
             {isAdmin && (
               <>
-                <Card variant="highlight" padding="small" className="text-center">
-                  <p className="text-sm font-bold text-blue-600 dark:text-blue-400">
-                    👑 MODE ADMIN : Carte de débogage
-                  </p>
+                <Card style={{ border: '2px dashed var(--border-primary)', backgroundColor: 'var(--bg-secondary)' }}>
+                  <CardContent style={{ padding: '12px', textAlign: 'center' }}>
+                    <p style={{ fontSize: '0.875rem', fontWeight: '700', color: '#3b82f6', margin: 0 }}>
+                      👑 MODE ADMIN : Carte de débogage
+                    </p>
+                  </CardContent>
                 </Card>
                 {renderAdminDebugCard()}
               </>
@@ -637,71 +765,97 @@ const ManageTokenPage = () => {
           <>
             {/* Filtres Admin */}
             {isAdmin && (
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => setActiveFilter('active')}
-                      className={`px-4 py-2 rounded-lg font-semibold transition-all ${
-                        activeFilter === 'active'
-                          ? 'bg-green-500 text-white shadow-md'
-                          : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-                      }`}
-                    >
-                      🟢 En Circulation ({tokens.filter(t => t.isActive && !t.isDeleted && t.isFromFarmWallet).length})
-                    </button>
-                    <button
-                      onClick={() => setActiveFilter('inactive')}
-                      className={`px-4 py-2 rounded-lg font-semibold transition-all ${
-                        activeFilter === 'inactive'
-                          ? 'bg-gray-500 text-white shadow-md'
-                          : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-                      }`}
-                    >
-                      ⚫ Inactifs ({tokens.filter(t => !t.isActive && !t.isDeleted && t.isFromFarmWallet).length})
-                    </button>
-                    <button
-                      onClick={() => setActiveFilter('deleted')}
-                      className={`px-4 py-2 rounded-lg font-semibold transition-all ${
-                        activeFilter === 'deleted'
-                          ? 'bg-red-500 text-white shadow-md'
-                          : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-                      }`}
-                    >
-                      🗑️ Supprimés ({tokens.filter(t => t.isDeleted && t.isFromFarmWallet).length})
-                    </button>
-                    <button
-                      onClick={() => setActiveFilter('all')}
-                      className={`px-4 py-2 rounded-lg font-semibold transition-all ${
-                        activeFilter === 'all'
-                          ? 'bg-blue-500 text-white shadow-md'
-                          : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-                      }`}
-                    >
-                      📋 Tous ({(() => {
-                        const allTokensCreatedInApp = [...allFarmTokens, ...tokens.filter(t => t.isFromFarmWallet && !allFarmTokens.some(ft => ft.tokenId === t.tokenId))];
-                        return allTokensCreatedInApp.length;
-                      })()})
-                    </button>
-                  </div>
-                </CardContent>
+              <>
+                <Card>
+                  <CardContent style={{ padding: '16px' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      <button
+                        onClick={() => setActiveFilter('active')}
+                        style={{
+                          padding: '8px 16px',
+                          borderRadius: '8px',
+                          fontWeight: '600',
+                          fontSize: '0.875rem',
+                          border: 'none',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          backgroundColor: activeFilter === 'active' ? '#10b981' : 'var(--bg-secondary)',
+                          color: activeFilter === 'active' ? '#fff' : 'var(--text-primary)',
+                          boxShadow: activeFilter === 'active' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
+                        }}
+                      >
+                        🟢 En Circulation ({tokens.filter(t => t.isActive && !t.isDeleted && t.isFromFarmWallet).length})
+                      </button>
+                      <button
+                        onClick={() => setActiveFilter('inactive')}
+                        style={{
+                          padding: '8px 16px',
+                          borderRadius: '8px',
+                          fontWeight: '600',
+                          fontSize: '0.875rem',
+                          border: 'none',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          backgroundColor: activeFilter === 'inactive' ? '#6b7280' : 'var(--bg-secondary)',
+                          color: activeFilter === 'inactive' ? '#fff' : 'var(--text-primary)',
+                          boxShadow: activeFilter === 'inactive' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
+                        }}
+                      >
+                        ⚫ Inactifs ({tokens.filter(t => !t.isActive && !t.isDeleted && t.isFromFarmWallet).length})
+                      </button>
+                      <button
+                        onClick={() => setActiveFilter('deleted')}
+                        style={{
+                          padding: '8px 16px',
+                          borderRadius: '8px',
+                          fontWeight: '600',
+                          fontSize: '0.875rem',
+                          border: 'none',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          backgroundColor: activeFilter === 'deleted' ? '#ef4444' : 'var(--bg-secondary)',
+                          color: activeFilter === 'deleted' ? '#fff' : 'var(--text-primary)',
+                          boxShadow: activeFilter === 'deleted' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
+                        }}
+                      >
+                        🗑️ Supprimés ({tokens.filter(t => t.isDeleted && t.isFromFarmWallet).length})
+                      </button>
+                      <button
+                        onClick={() => setActiveFilter('all')}
+                        style={{
+                          padding: '8px 16px',
+                          borderRadius: '8px',
+                          fontWeight: '600',
+                          fontSize: '0.875rem',
+                          border: 'none',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          backgroundColor: activeFilter === 'all' ? '#3b82f6' : 'var(--bg-secondary)',
+                          color: activeFilter === 'all' ? '#fff' : 'var(--text-primary)',
+                          boxShadow: activeFilter === 'all' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
+                        }}
+                      >
+                        📋 Tous ({(() => {
+                          const allTokensCreatedInApp = [...allFarmTokens, ...tokens.filter(t => t.isFromFarmWallet && !allFarmTokens.some(ft => ft.tokenId === t.tokenId))];
+                          return allTokensCreatedInApp.length;
+                        })()})
+                      </button>
+                    </div>
+                  </CardContent>
+                </Card>
 
                 {/* Info : Filtre actuel */}
-                <CardContent className="p-4 bg-blue-50 dark:bg-blue-950/30">
-              <p className="text-sm text-gray-600 dark:text-gray-400 m-0">
-                {isAdmin ? (
-                  activeFilter === 'active' ? '🟢 Jetons avec offre en circulation (offre > 0)' :
-                  activeFilter === 'inactive' ? '⚫ Jetons sans circulation (offre = 0)' :
-                  activeFilter === 'deleted' ? '🗑️ Jetons supprimés ou signalés' :
-                  '📋 Tous vos jetons créés ou importés'
-                ) : (
-                  activeFilter === 'active' ? '🟢 Jetons avec offre en circulation (offre > 0)' :
-                  activeFilter === 'inactive' ? '⚫ Jetons sans circulation (offre = 0)' :
-                  'ℹ️ Tous vos jetons sont affichés ci-dessous'
-                )}
-              </p>
-              </CardContent>
-              </Card>
+                <Card style={{ backgroundColor: '#dbeafe', border: '1px solid #93c5fd' }}>
+                  <CardContent style={{ padding: '12px' }}>
+                    <p style={{ fontSize: '0.875rem', color: '#1e40af', margin: 0 }}>
+                      {activeFilter === 'active' ? '🟢 Jetons avec offre en circulation (offre > 0)' :
+                       activeFilter === 'inactive' ? '⚫ Jetons sans circulation (offre = 0)' :
+                       activeFilter === 'deleted' ? '🗑️ Jetons supprimés ou signalés' :
+                       '📋 Tous vos jetons créés ou importés'}
+                    </p>
+                  </CardContent>
+                </Card>
+              </>
             )}
             
             {(() => {
@@ -747,133 +901,223 @@ const ManageTokenPage = () => {
                 return 0;
               })
               .map((token) => (
-              <Card
-                key={token.tokenId}
-                className="hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => navigate(`/token/${token.tokenId}`)}
-              >
-                <CardContent className="p-4">
-                {/* Header: Image + Info + Status */}
-                <div className="flex items-start gap-3 mb-3">
-                  {/* Image fixe 48x48 */}
-                  <img 
-                    src={token.image} 
-                    alt={token.name}
-                    className="w-12 h-12 rounded-lg object-cover border border-gray-200 dark:border-gray-700 flex-shrink-0"
-                    loading="lazy"
-                    onError={(e) => {
-                      if (e.target.src !== 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="48" height="48"%3E%3Crect fill="%23ddd" width="48" height="48"/%3E%3Ctext fill="%23999" font-size="10" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3E?%3C/text%3E%3C/svg%3E') {
-                        e.target.onerror = null;
-                        e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="48" height="48"%3E%3Crect fill="%23ddd" width="48" height="48"/%3E%3Ctext fill="%23999" font-size="10" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3E?%3C/text%3E%3C/svg%3E';
-                      }
-                    }}
-                  />
-                  
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <h3 className="text-base font-bold text-gray-900 dark:text-gray-100 truncate">
-                        {token.name}
-                      </h3>
-                      {token.isFromFarmWallet && token.isReferenced && (
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-500 text-white whitespace-nowrap">
-                          🏡
-                        </span>
-                      )}
+              <Card key={token.tokenId}>
+                <CardContent style={{ padding: '16px' }}>
+                  {/* Header: Image + Info + Status */}
+                  <div style={{ display: 'flex', alignItems: 'start', gap: '12px', marginBottom: '12px' }}>
+                    {/* Image 48x48 */}
+                    <img 
+                      src={token.image} 
+                      alt={token.name}
+                      style={{
+                        width: '48px',
+                        height: '48px',
+                        borderRadius: '8px',
+                        objectFit: 'cover',
+                        border: '1px solid var(--border-primary)',
+                        flexShrink: 0
+                      }}
+                      loading="lazy"
+                      onError={(e) => {
+                        if (e.target.src !== 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="48" height="48"%3E%3Crect fill="%23ddd" width="48" height="48"/%3E%3Ctext fill="%23999" font-size="10" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3E?%3C/text%3E%3C/svg%3E') {
+                          e.target.onerror = null;
+                          e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="48" height="48"%3E%3Crect fill="%23ddd" width="48" height="48"/%3E%3Ctext fill="%23999" font-size="10" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3E?%3C/text%3E%3C/svg%3E';
+                        }
+                      }}
+                    />
+                    
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                        <h3 style={{ 
+                          fontSize: '1rem', 
+                          fontWeight: '700', 
+                          color: 'var(--text-primary)', 
+                          margin: 0,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}>
+                          {token.name}
+                        </h3>
+                        {token.isFromFarmWallet && token.isReferenced && (
+                          <span style={{
+                            fontSize: '10px',
+                            fontWeight: '700',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            backgroundColor: '#10b981',
+                            color: '#fff',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            🏡
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ 
+                        fontSize: '0.75rem', 
+                        fontWeight: '700', 
+                        color: 'var(--text-secondary)', 
+                        textTransform: 'uppercase',
+                        marginBottom: '4px'
+                      }}>
+                        {token.ticker}
+                      </div>
+                      {/* Token ID cliquable */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCopyTokenId(token.tokenId, e);
+                        }}
+                        style={{
+                          fontSize: '10px',
+                          fontFamily: 'monospace',
+                          color: 'var(--text-tertiary)',
+                          background: 'transparent',
+                          border: 'none',
+                          padding: 0,
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          maxWidth: '100%',
+                          display: 'block'
+                        }}
+                        title="Cliquez pour copier"
+                        onMouseEnter={(e) => e.target.style.color = '#3b82f6'}
+                        onMouseLeave={(e) => e.target.style.color = 'var(--text-tertiary)'}
+                      >
+                        {token.tokenId}
+                      </button>
                     </div>
-                    <div className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-0.5">
-                      {token.ticker}
+                    
+                    {/* Badge statut */}
+                    <div style={{
+                      padding: '4px 8px',
+                      borderRadius: '6px',
+                      backgroundColor: token.isActive ? '#10b981' : '#6b7280',
+                      color: '#fff',
+                      fontSize: '10px',
+                      fontWeight: '700',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0
+                    }}>
+                      {token.isActive ? 'ACTIF' : 'INACTIF'}
                     </div>
-                    {/* Token ID cliquable */}
-                    <button
+                  </div>
+
+                  {/* Balance + Type */}
+                  <div style={{ 
+                    backgroundColor: 'var(--bg-secondary)', 
+                    borderRadius: '8px', 
+                    padding: '12px', 
+                    marginBottom: '12px' 
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ 
+                          fontSize: '10px', 
+                          color: 'var(--text-secondary)', 
+                          textTransform: 'uppercase',
+                          marginBottom: '4px'
+                        }}>
+                          💼 Solde
+                        </div>
+                        <div style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)' }}>
+                          {formatBalance(token.balance, token.decimals)}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ 
+                          fontSize: '10px', 
+                          color: 'var(--text-secondary)', 
+                          textTransform: 'uppercase',
+                          marginBottom: '4px'
+                        }}>
+                          Type
+                        </div>
+                        <div style={{ 
+                          fontSize: '0.75rem', 
+                          fontWeight: '700',
+                          color: token.hasMintBaton ? '#10b981' : '#f59e0b'
+                        }}>
+                          {token.hasMintBaton ? '🔄 Variable' : '🔒 Fixe'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Grille de boutons */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                    <Button
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleCopyTokenId(token.tokenId, e);
+                        navigate(`/token/${token.tokenId}`);
                       }}
-                      className="text-[10px] font-mono text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors text-left truncate max-w-full block"
-                      title="Cliquez pour copier"
+                      size="sm"
+                      variant="secondary"
+                      fullWidth
+                      style={{ fontSize: '0.75rem', padding: '8px' }}
                     >
-                      {token.tokenId}
-                    </button>
+                      📊 Détails
+                    </Button>
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/token/${token.tokenId}`, { state: { activeTab: 'send' } });
+                      }}
+                      size="sm"
+                      variant="secondary"
+                      fullWidth
+                      style={{ fontSize: '0.75rem', padding: '8px' }}
+                    >
+                      📤 Envoyer
+                    </Button>
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/token/${token.tokenId}`, { state: { activeTab: 'airdrop' } });
+                      }}
+                      size="sm"
+                      variant="secondary"
+                      fullWidth
+                      style={{ fontSize: '0.75rem', padding: '8px' }}
+                    >
+                      🎁 Distribuer
+                    </Button>
                   </div>
-                  
-                  {/* Badge statut compact */}
-                  {token.isActive ? (
-                    <div className="px-2 py-1 rounded bg-green-500 text-white text-[10px] font-bold whitespace-nowrap flex-shrink-0">
-                      ACTIF
-                    </div>
-                  ) : (
-                    <div className="px-2 py-1 rounded bg-gray-400 text-white text-[10px] font-bold whitespace-nowrap flex-shrink-0">
-                      INACTIF
-                    </div>
-                  )}
-                </div>
-
-                {/* Balance + Type d'offre */}
-                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 mb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 mb-0.5 uppercase">
-                        💼 Solde
-                      </div>
-                      <div className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                        {formatBalance(token.balance, token.decimals)}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 mb-0.5 uppercase">
-                        Type
-                      </div>
-                      <div className={`text-xs font-bold ${token.hasMintBaton ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}`}>
-                        {token.hasMintBaton ? '🔄 Variable' : '🔒 Fixe'}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Boutons d'actions - Grid responsive */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  <Button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigate(`/token/${token.tokenId}`);
-                    }}
-                    size="sm"
-                    variant="outline"
-                    fullWidth
-                    className="text-xs"
-                  >
-                    📊 Détails
-                  </Button>
-                  <Button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigate(`/token/${token.tokenId}`);
-                    }}
-                    size="sm"
-                    variant="outline"
-                    fullWidth
-                    className="text-xs"
-                  >
-                    📤 Envoyer
-                  </Button>
-                  <Button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigate(`/token/${token.tokenId}`);
-                    }}
-                    size="sm"
-                    variant="outline"
-                    fullWidth
-                    className="text-xs col-span-2 sm:col-span-1"
-                  >
-                    🎁 Airdrop
-                  </Button>
-                </div>
                 </CardContent>
               </Card>
             ));
             })()}
           </>
+        )}
+
+        {/* Section Historique Global */}
+        {address && (
+          <Card>
+            <CardContent style={{ padding: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+                <span style={{ fontSize: '2rem' }}>📜</span>
+                <div>
+                  <h2 style={{ fontSize: '1.25rem', fontWeight: '700', margin: 0, color: 'var(--text-primary)' }}>
+                    Historique Global
+                  </h2>
+                  <p style={{ fontSize: '0.875rem', margin: '4px 0 0 0', color: 'var(--text-secondary)' }}>
+                    Toutes vos actions sur les tokens
+                  </p>
+                </div>
+              </div>
+              
+              {loadingHistory ? (
+                <div style={{ textAlign: 'center', padding: '32px', color: '#94a3b8' }}>
+                  ⏳ Chargement de l'historique...
+                </div>
+              ) : (
+                <HistoryList history={globalHistory} compact={false} />
+              )}
+            </CardContent>
+          </Card>
         )}
 
         {/* Blockchain Status */}

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAtom } from 'jotai';
 import { favoriteFarmsAtom, selectedFarmAtom, toggleFarmFavoriteAtom, walletConnectedAtom } from '../atoms';
 import { useFarms } from '../hooks/useFarms';
-import { useToken } from '../hooks/useToken';
+import { useEcashToken } from '../hooks/useEcashWallet';
 import { useTranslation } from '../hooks/useTranslation';
 import { useNavigate } from 'react-router-dom';
 import TopBar from '../components/Layout/TopBar';
@@ -286,7 +286,7 @@ Découvre la plateforme : ${window.location.origin}
  */
 const FavoriteFarmCard = ({ farm, onCardClick, onRemoveFavorite }) => {
   const { t } = useTranslation();
-  const { tokenBalance, loading } = useToken(farm.tokenId);
+  const { tokenBalance, loading } = useEcashToken(farm.tokenId);
   
   return (
     <div className="farm-card" onClick={onCardClick}>

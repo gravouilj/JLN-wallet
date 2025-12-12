@@ -6,7 +6,7 @@
 import { useState, useEffect } from 'react';
 import { ChronikClient } from 'chronik-client';
 import { useTranslation } from '../hooks/useTranslation';
-import '../styles/blockchain-status.css';
+import { Badge } from './UI';
 
 // Direct Chronik client - same as ecashWallet.js
 const chronik = new ChronikClient('https://chronik-native2.fabien.cash');
@@ -54,29 +54,24 @@ const BlockchainStatus = () => {
 
   if (status.checking) {
     return (
-      <div className="blockchain-status checking">
-        <div className="status-indicator"></div>
-        <span>{t('blockchain.checking') || 'Checking blockchain...'}</span>
-      </div>
+      <Badge variant="neutral">
+        ⏳ {t('blockchain.checking') || 'Checking blockchain...'}
+      </Badge>
     );
   }
 
   if (!status.connected) {
     return (
-      <div className="blockchain-status error">
-        <div className="status-indicator"></div>
-        <span>{t('blockchain.disconnected') || 'Blockchain disconnected'}</span>
-      </div>
+      <Badge variant="danger">
+        🔴 {t('blockchain.disconnected') || 'Blockchain disconnected'}
+      </Badge>
     );
   }
 
   return (
-    <div className="blockchain-status connected">
-      <div className="status-indicator"></div>
-      <span>
-        {t('blockchain.connected') || 'Connected'} • Block {status.blockHeight.toLocaleString()}
-      </span>
-    </div>
+    <Badge variant="success">
+      🟢 {t('blockchain.connected') || 'Connected'} • Block {status.blockHeight.toLocaleString()}
+    </Badge>
   );
 };
 

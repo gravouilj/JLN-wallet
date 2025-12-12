@@ -1,60 +1,29 @@
-import { useNavigate } from 'react-router-dom';
-import ECashWallet from '../ECashWallet';
-import ThemeToggle from '../ThemeToggle';
-import LanguageToggle from '../LanguageToggle';
+import React from 'react';
+import { Card, CardContent } from '../UI';
+import WalletConnect from '../WalletConnect';
 import BlockchainStatus from '../BlockchainStatus';
-import { useTranslation } from '../../hooks/useTranslation';
-import { useAtom } from 'jotai';
-import { walletConnectedAtom, selectedFarmAtom } from '../../atoms';
-import '../../styles/disconnected.css';
+import TopBar from './TopBar';
 
 const DisconnectedView = () => {
-  const { t } = useTranslation();
-  const navigate = useNavigate();
-  const [walletConnected] = useAtom(walletConnectedAtom);
-  const [, setSelectedFarm] = useAtom(selectedFarmAtom);
-
-  const handleBackToDirectory = () => {
-    setSelectedFarm(null);
-    navigate('/');
-  };
-
   return (
-    <div className="disconnected-view">
-      <div className="app-header">
-        <div className="header-controls">
-          <LanguageToggle />
-          <ThemeToggle />
-        </div>
-      </div>
-
-      <div className="wallet-setup">
-        {!walletConnected && (
-          <div className="wallet-connect-prompt">
-            <h2 className="wallet-title-centered">{t('wallet.title') || 'Token Wallet'}</h2>
-            <ECashWallet />
-            <p className="wallet-hint-text">{t('wallet.loadingHint') || 'This may take a few moments during first connection...'}</p>
-            <div className="wallet-help-link">
-              <button 
-                onClick={() => navigate('/faq')}
-                className="faq-help-button"
-              >
-                ❓ {t('common.help') || 'Besoin d\'aide ?'}
-              </button>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+      <TopBar />
+      
+      <div className="flex-1 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-8">
+            <div className="text-center mb-8">
+              <div className="text-6xl mb-4">🔐</div>
+              <h2 className="text-2xl font-bold mb-2">Connexion requise</h2>
+              <p className="text-gray-500">Connectez votre portefeuille pour accéder à vos jetons.</p>
             </div>
-          </div>
-        )}
+            
+            <WalletConnect />
+          </CardContent>
+        </Card>
       </div>
-
-      {/* Back button outside the card */}
-      <div className="disconnected-back-button">
-        <button onClick={handleBackToDirectory} className="back-to-directory-btn">
-          ← {t('directory.backToDirectory') || 'Back to Directory'}
-        </button>
-      </div>
-
-      {/* Blockchain status as footer */}
-      <div className="disconnected-footer">
+      
+      <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2">
         <BlockchainStatus />
       </div>
     </div>
@@ -62,3 +31,4 @@ const DisconnectedView = () => {
 };
 
 export default DisconnectedView;
+
