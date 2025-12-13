@@ -374,11 +374,34 @@ export const FarmService = {
 
   // 4. ADMIN: Valider ou Demander Info
   async adminUpdateStatus(farmId, status, message = null) {
+    // Récupérer la ferme pour accéder à l'historique actuel
+    const { data: farm, error: fetchError } = await supabase
+      .from('farms')
+      .select('communication_history')
+      .eq('id', farmId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    const currentHistory = farm?.communication_history || [];
+    
+    // Si c'est un refus et qu'il y a un message, ajouter un message système
+    let updatedHistory = currentHistory;
+    if (status === 'rejected' && message) {
+      const systemMessage = {
+        author: 'system',
+        message: `🚫 REFUS : ${message}`,
+        timestamp: new Date().toISOString()
+      };
+      updatedHistory = [...currentHistory, systemMessage];
+    }
+
     const update = {
       verification_status: status,
       verified: status === 'verified',
       admin_message: message,
-      verified_at: status === 'verified' ? new Date() : null
+      verified_at: status === 'verified' ? new Date() : null,
+      communication_history: updatedHistory
     };
 
     const { data, error } = await supabase
@@ -685,10 +708,19 @@ export const FarmService = {
       
       const updatedHistory = [...history, newMessage];
       
-      // Mettre à jour la ferme
-      const result = await this.updateFarm(ownerAddress, {
+      // Préparer la mise à jour
+      const updateData = {
         communication_history: updatedHistory
-      });
+      };
+      
+      // Si c'est un message du créateur, repasser en 'pending' pour réapparaître dans AdminVerificationPage
+      if (author === 'creator' || author === 'user') {
+        updateData.verification_status = 'pending';
+        console.log('🔄 Statut repassé en "pending" après message creator');
+      }
+      
+      // Mettre à jour la ferme
+      const result = await this.updateFarm(ownerAddress, updateData);
       
       console.log('✅ Message ajouté à l\'historique');
       return result;

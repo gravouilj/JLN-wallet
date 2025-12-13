@@ -399,16 +399,8 @@ const ManageTokenPage = () => {
       }
     };
     
+    // Charger uniquement au montage (pas de polling automatique)
     loadGlobalHistory();
-    
-    // Polling toutes les 10 secondes pour rafraîchir l'historique
-    const intervalId = setInterval(() => {
-      if (address) {
-        loadGlobalHistory();
-      }
-    }, 10000);
-    
-    return () => clearInterval(intervalId);
   }, [address]);
 
   // Callback après import réussi pour recharger les données
@@ -529,9 +521,26 @@ const ManageTokenPage = () => {
                 </div>
               )}
               {myFarm.verification_status === 'rejected' && (
-                <div style={{ padding: '8px 12px', backgroundColor: '#fee2e2', color: '#991b1b', borderRadius: '8px', fontSize: '0.875rem', fontWeight: '600', textAlign: 'center', border: '1px solid #f87171' }}>
-                  🚫 Refusé : {myFarm.admin_message || "Voir détails dans 'Gérer mon profil'"}
-                </div>
+                <button
+                  onClick={() => navigate('/manage-farm')}
+                  style={{ 
+                    width: '100%',
+                    padding: '8px 12px', 
+                    backgroundColor: '#fee2e2', 
+                    color: '#991b1b', 
+                    borderRadius: '8px', 
+                    fontSize: '0.875rem', 
+                    fontWeight: '600', 
+                    textAlign: 'center', 
+                    border: '1px solid #f87171',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.target.style.backgroundColor = '#fecaca'}
+                  onMouseLeave={(e) => e.target.style.backgroundColor = '#fee2e2'}
+                >
+                  🚫 Refusé : {myFarm.admin_message?.substring(0, 40) || 'Voir détails'}{myFarm.admin_message?.length > 40 ? '...' : ''} - Profil masqué (Cliquez)
+                </button>
               )}
               {(myFarm.status === 'banned' || myFarm.status === 'pending_deletion') && (
                 <div style={{ padding: '8px 12px', backgroundColor: '#450a0a', color: '#fff', borderRadius: '8px', fontSize: '0.875rem', fontWeight: '600', textAlign: 'center', border: '2px solid #ef4444' }}>
@@ -629,9 +638,32 @@ const ManageTokenPage = () => {
               )}
               <Button
                 onClick={() => navigate('/manage-farm')}
-                variant="secondary"
+                variant="primary"
                 icon={myFarm ? "🏡" : "🌱"}
                 fullWidth
+                style={{
+                  backgroundColor: (() => {
+                    // Orange si message admin non lu
+                    if (myFarm?.verification_status === 'info_requested') {
+                      const history = myFarm.communication_history;
+                      if (Array.isArray(history) && history.length > 0 && history[history.length - 1].author === 'admin') {
+                        return '#f97316';
+                      }
+                    }
+                    // Bleu par défaut
+                    return '#3b82f6';
+                  })(),
+                  borderColor: (() => {
+                    if (myFarm?.verification_status === 'info_requested') {
+                      const history = myFarm.communication_history;
+                      if (Array.isArray(history) && history.length > 0 && history[history.length - 1].author === 'admin') {
+                        return '#f97316';
+                      }
+                    }
+                    return '#3b82f6';
+                  })(),
+                  color: '#fff'
+                }}
               >
                 {myFarm ? 'Gérer mon profil' : 'Créer mon profil'}
               </Button>
@@ -647,7 +679,6 @@ const ManageTokenPage = () => {
                     backgroundColor: pendingCount > 0 ? '#ef4444' : '#6b7280', 
                     borderColor: pendingCount > 0 ? '#ef4444' : '#6b7280', 
                     color: '#fff',
-                    height: '56px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -655,11 +686,11 @@ const ManageTokenPage = () => {
                   }}
                 >
                   <span style={{ fontSize: '1.2rem' }}>🛡️</span>
-                  <span style={{ fontWeight: '600' }}>Vérification de profils</span>
+                  <span style={{ fontWeight: '600' }}>Vérification des profils publics</span>
                   {pendingCount > 0 && (
                     <span style={{
                       backgroundColor: '#fff',
-                      color: '#e6a118ff',
+                      color: '#ef4444',
                       padding: '2px 8px',
                       borderRadius: '99px',
                       fontSize: '0.8rem',
@@ -1099,7 +1130,7 @@ const ManageTokenPage = () => {
             <CardContent style={{ padding: '24px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
                 <span style={{ fontSize: '2rem' }}>📜</span>
-                <div>
+                <div style={{ flex: 1 }}>
                   <h2 style={{ fontSize: '1.25rem', fontWeight: '700', margin: 0, color: 'var(--text-primary)' }}>
                     Historique Global
                   </h2>
@@ -1107,6 +1138,35 @@ const ManageTokenPage = () => {
                     Toutes vos actions sur les tokens
                   </p>
                 </div>
+                <button
+                  onClick={async () => {
+                    setLoadingHistory(true);
+                    try {
+                      const historyData = await getGlobalHistory(address);
+                      setGlobalHistory(historyData);
+                      setNotification({ type: 'success', message: 'Historique actualisé !' });
+                    } catch (err) {
+                      setNotification({ type: 'error', message: 'Erreur lors de l\'actualisation' });
+                    } finally {
+                      setLoadingHistory(false);
+                    }
+                  }}
+                  disabled={loadingHistory}
+                  style={{
+                    padding: '8px 12px',
+                    backgroundColor: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-primary)',
+                    borderRadius: '8px',
+                    cursor: loadingHistory ? 'not-allowed' : 'pointer',
+                    fontSize: '0.875rem',
+                    color: 'var(--text-primary)',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => !loadingHistory && (e.target.style.backgroundColor = 'var(--bg-tertiary)')}
+                  onMouseLeave={(e) => e.target.style.backgroundColor = 'var(--bg-secondary)'}
+                >
+                  🔄 {loadingHistory ? 'Chargement...' : 'Actualiser'}
+                </button>
               </div>
               
               {loadingHistory ? (

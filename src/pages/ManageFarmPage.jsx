@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useSetAtom } from 'jotai';
 import MobileLayout from '../components/Layout/MobileLayout';
@@ -25,7 +25,10 @@ const ManageFarmPage = () => {
     country: 'France',
     region: '',
     department: '',
-    address: '',
+    city: '',
+    postalCode: '',
+    streetAddress: '',
+    addressComplement: '',
     phone: '',
     email: '',
     website: '',
@@ -99,6 +102,39 @@ const ManageFarmPage = () => {
     'Vente directe', 'Cueillette', 'Paniers', 'Livraison',
     'Visite ferme', 'Ateliers', 'Hébergement', 'Restauration'
   ];
+
+  // Calculer le nombre de messages admin non lus (postérieurs au dernier message creator)
+  const unreadAdminCount = useMemo(() => {
+    if (!existingFarm?.communication_history || existingFarm.communication_history.length === 0) {
+      return 0;
+    }
+
+    const history = existingFarm.communication_history;
+    
+    // Trouver l'index du dernier message creator
+    let lastCreatorIndex = -1;
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i].author === 'creator' || history[i].author === 'user') {
+        lastCreatorIndex = i;
+        break;
+      }
+    }
+
+    // Si aucun message creator, tous les messages admin sont non lus
+    if (lastCreatorIndex === -1) {
+      return history.filter(msg => msg.author === 'admin').length;
+    }
+
+    // Compter les messages admin après le dernier message creator
+    let count = 0;
+    for (let i = lastCreatorIndex + 1; i < history.length; i++) {
+      if (history[i].author === 'admin') {
+        count++;
+      }
+    }
+
+    return count;
+  }, [existingFarm?.communication_history]);
 
   // Charger le nombre de détenteurs pour chaque token
   useEffect(() => {
@@ -374,7 +410,10 @@ const ManageFarmPage = () => {
             country: farm.location_country || 'France',
             region: farm.location_region || '',
             department: farm.location_department || '',
-            address: farm.address || '',
+            city: farm.city || '',
+            postalCode: farm.postal_code || '',
+            streetAddress: farm.street_address || '',
+            addressComplement: farm.address_complement || '',
             phone: farm.phone || '',
             email: farm.email || '',
             website: farm.website || '',
@@ -403,7 +442,7 @@ const ManageFarmPage = () => {
           // Sauvegarder les valeurs initiales des champs sensibles
           setInitialSensitiveFields({
             farmName: newFormData.farmName,
-            address: newFormData.address,
+            streetAddress: newFormData.streetAddress,
             companyid: newFormData.companyid
           });
         } else {
@@ -432,7 +471,7 @@ const ManageFarmPage = () => {
     
     // Vérifier si un champ sensible a été modifié (ferme vérifiée uniquement)
     if (existingFarm?.verified && initialSensitiveFields) {
-      const sensitiveFields = ['farmName', 'address', 'companyid'];
+      const sensitiveFields = ['farmName', 'streetAddress', 'companyid'];
       if (sensitiveFields.includes(name)) {
         // Comparer avec la valeur initiale
         const hasChanged = value !== initialSensitiveFields[name];
@@ -545,10 +584,13 @@ const ManageFarmPage = () => {
       const farmData = {
         name: formData.farmName,
         description: formData.description,
-        location_country: formData.address.toLowerCase().includes('france') ? 'France' : formData.country,
+        location_country: formData.country || 'France',
         location_region: formData.region || '',
         location_department: formData.department || '',
-        address: formData.address,
+        city: formData.city || '',
+        postal_code: formData.postalCode || '',
+        street_address: formData.streetAddress || '',
+        address_complement: formData.addressComplement || '',
         phone: formData.phone,
         email: formData.email,
         website: formData.website,
@@ -676,7 +718,7 @@ const ManageFarmPage = () => {
       setSensitiveFieldsChanged(false);
       setInitialSensitiveFields({
         farmName: updatedFarm.name,
-        address: updatedFarm.address,
+        streetAddress: updatedFarm.street_address,
         companyid: updatedFarm.certifications?.siret || ''
       });
 
@@ -1047,292 +1089,6 @@ const ManageFarmPage = () => {
             </Card>
           )}
 
-          {/* LISTE DES JETONS ASSOCIÉS */}
-          {existingFarm && (() => {
-            const hasTokens = existingFarm?.tokens && Array.isArray(existingFarm.tokens) && existingFarm.tokens.length > 0;
-            
-            return (
-              <Card>
-                <CardContent style={{ padding: '24px' }}>
-                  <h2 className="text-lg font-bold mb-6 text-gray-900 dark:text-white">
-                    🪙 Jetons associés à votre établissement
-                  </h2>
-                  
-                  {!hasTokens ? (
-                    <div style={{
-                      textAlign: 'center',
-                      padding: '48px 24px',
-                      backgroundColor: 'var(--bg-secondary)',
-                      borderRadius: '16px',
-                      border: '2px dashed var(--border-primary)'
-                    }}>
-                      <div style={{ fontSize: '4rem', marginBottom: '16px', opacity: 0.5 }}>📭</div>
-                      <p style={{ 
-                        fontSize: '1rem', 
-                        fontWeight: '600', 
-                        color: 'var(--text-primary)',
-                        marginBottom: '8px'
-                      }}>
-                        Aucun jeton associé à ce profil
-                      </p>
-                      <p style={{ 
-                        fontSize: '0.875rem', 
-                        color: 'var(--text-secondary)',
-                        marginBottom: '24px'
-                      }}>
-                        Créez ou importez un jeton pour commencer
-                      </p>
-                      <Button 
-                        variant="outline" 
-                        onClick={() => navigate('/create-token')}
-                        style={{ height: '40px' }}
-                      >
-                        🔨 Créer un jeton
-                      </Button>
-                    </div>
-                  ) : (
-                    <>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                        {(tokensWithStats.length > 0 ? tokensWithStats : existingFarm.tokens).map((token, idx) => {
-                          const isExpanded = expandedDescriptions[token.tokenId];
-                          const isIncomplete = token.isComplete === false;
-                          
-                          const truncateText = (text, maxLength = 60) => {
-                            if (!text) return null;
-                            if (text.length <= maxLength) return text;
-                            return text.substring(0, maxLength) + '...';
-                          };
-                          
-                          return (
-                            <div 
-                              key={token.tokenId || idx} 
-                              style={{
-                                padding: '20px',
-                                backgroundColor: isIncomplete ? '#fef2f2' : 'var(--bg-secondary)',
-                                borderRadius: '16px',
-                                border: isIncomplete ? '2px solid #ef4444' : '1px solid var(--border-primary)',
-                                transition: 'all 0.2s ease'
-                              }}
-                              onMouseEnter={(e) => {
-                                if (!isIncomplete) {
-                                  e.currentTarget.style.borderColor = 'var(--primary-color)';
-                                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
-                                }
-                              }}
-                              onMouseLeave={(e) => {
-                                if (!isIncomplete) {
-                                  e.currentTarget.style.borderColor = 'var(--border-primary)';
-                                  e.currentTarget.style.boxShadow = 'none';
-                                }
-                              }}
-                            >
-                              {/* Alerte incomplet */}
-                              {isIncomplete && (
-                                <div style={{
-                                  marginBottom: '12px',
-                                  padding: '10px 14px',
-                                  backgroundColor: '#fee2e2',
-                                  border: '1px solid #ef4444',
-                                  borderRadius: '8px',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px'
-                                }}>
-                                  <span style={{ fontSize: '1.2rem' }}>⚠️</span>
-                                  <div style={{ flex: 1 }}>
-                                    <div style={{ fontSize: '0.875rem', fontWeight: '700', color: '#dc2626', marginBottom: '2px' }}>
-                                      Jeton incomplet - Masqué de l'annuaire
-                                    </div>
-                                    <div style={{ fontSize: '0.75rem', color: '#991b1b' }}>
-                                      Ajoutez un objectif et une contrepartie pour le rendre visible
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                              
-                              {/* En-tête : Ticker + Nom */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                                <span style={{
-                                  padding: '6px 12px',
-                                  backgroundColor: '#3b82f6',
-                                  color: '#fff',
-                                  borderRadius: '8px',
-                                  fontWeight: '700',
-                                  fontSize: '0.875rem',
-                                  fontFamily: 'monospace'
-                                }}>
-                                  {token.ticker || 'UNK'}
-                                </span>
-                                <h3 style={{
-                                  fontSize: '1.125rem',
-                                  fontWeight: '700',
-                                  color: 'var(--text-primary)',
-                                  margin: 0,
-                                  flex: 1
-                                }}>
-                                  {token.tokenName || 'Sans nom'}
-                                </h3>
-                              </div>
-                              
-                              {/* Objectif */}
-                              {token.purpose ? (
-                                <div style={{ marginBottom: '8px' }}>
-                                  <div style={{ 
-                                    fontSize: '0.75rem', 
-                                    color: 'var(--text-tertiary)',
-                                    marginBottom: '4px',
-                                    fontWeight: '600',
-                                    textTransform: 'uppercase'
-                                  }}>
-                                    🎯 Objectif
-                                  </div>
-                                  <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                                    {isExpanded ? token.purpose : truncateText(token.purpose)}
-                                    {token.purpose.length > 60 && (
-                                      <button
-                                        onClick={() => setExpandedDescriptions(prev => ({
-                                          ...prev,
-                                          [token.tokenId]: !prev[token.tokenId]
-                                        }))}
-                                        style={{
-                                          marginLeft: '8px',
-                                          background: 'none',
-                                          border: 'none',
-                                          color: 'var(--primary-color)',
-                                          cursor: 'pointer',
-                                          fontSize: '0.8rem',
-                                          fontWeight: '600'
-                                        }}
-                                      >
-                                        {isExpanded ? 'Moins' : 'Plus'}
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              ) : (
-                                <div style={{ 
-                                  marginBottom: '8px',
-                                  padding: '8px 12px',
-                                  backgroundColor: '#fef3c7',
-                                  borderRadius: '6px',
-                                  fontSize: '0.8rem',
-                                  color: '#92400e'
-                                }}>
-                                  ⚠️ Objectif manquant
-                                </div>
-                              )}
-                              
-                              {/* Contrepartie */}
-                              {token.counterpart ? (
-                                <div style={{ marginBottom: '12px' }}>
-                                  <div style={{ 
-                                    fontSize: '0.75rem', 
-                                    color: 'var(--text-tertiary)',
-                                    marginBottom: '4px',
-                                    fontWeight: '600',
-                                    textTransform: 'uppercase'
-                                  }}>
-                                    🎁 Contrepartie
-                                  </div>
-                                  <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                                    {truncateText(token.counterpart)}
-                                  </div>
-                                </div>
-                              ) : (
-                                <div style={{ 
-                                  marginBottom: '12px',
-                                  padding: '8px 12px',
-                                  backgroundColor: '#fef3c7',
-                                  borderRadius: '6px',
-                                  fontSize: '0.8rem',
-                                  color: '#92400e'
-                                }}>
-                                  ⚠️ Contrepartie manquante
-                                </div>
-                              )}
-                              
-                              {/* Statistiques et Actions sur une ligne */}
-                              <div style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '12px',
-                                padding: '12px',
-                                backgroundColor: 'var(--bg-primary)',
-                                borderRadius: '12px',
-                                marginBottom: '12px',
-                                flexWrap: 'wrap'
-                              }}>
-                                {/* Détenteurs */}
-                                <div style={{ minWidth: '100px' }}>
-                                  <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginBottom: '2px' }}>
-                                    👥 Détenteurs
-                                  </div>
-                                  <div style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)' }}>
-                                    {token.holdersCount !== null && token.holdersCount !== undefined 
-                                      ? token.holdersCount 
-                                      : '...'}
-                                  </div>
-                                </div>
-                                
-                                <div style={{ width: '1px', height: '40px', backgroundColor: 'var(--border-primary)' }} />
-                                
-                                {/* Switch visibilité */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                  <Switch
-                                    checked={token.isVisible !== false && !isIncomplete}
-                                    onChange={(checked) => {
-                                      if (!isIncomplete && checked !== undefined) {
-                                        handleToggleVisibility(token.tokenId, token.isVisible !== false);
-                                      }
-                                    }}
-                                    disabled={togglingVisibility[token.tokenId] || isIncomplete}
-                                  />
-                                  <span style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)' }}>
-                                    {isIncomplete ? '🔒 Masqué' : (token.isVisible !== false ? '👁️ Visible' : '🙈 Masqué')}
-                                  </span>
-                                </div>
-                                
-                                <div style={{ width: '1px', height: '40px', backgroundColor: 'var(--border-primary)' }} />
-                                
-                                {/* Bouton Modifier compact */}
-                                <Button
-                                  variant="outline"
-                                  onClick={() => navigate(`/token/${token.tokenId}`)}
-                                  style={{ height: '40px', fontSize: '0.85rem', padding: '0 16px', flexShrink: 0 }}
-                                >
-                                  ⚙️ Modifier
-                                </Button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      
-                      <div style={{
-                        marginTop: '20px',
-                        padding: '16px',
-                        backgroundColor: '#dbeafe',
-                        borderRadius: '12px',
-                        border: '1px solid #93c5fd'
-                      }}>
-                        <p style={{ 
-                          fontSize: '0.8rem', 
-                          color: '#1e40af',
-                          margin: 0,
-                          lineHeight: '1.5'
-                        }}>
-                          💡 <strong>Info :</strong> Le Ticker, le Nom et le nombre de Détenteurs sont récupérés automatiquement de la blockchain. 
-                          Les jetons sans objectif ou contrepartie sont automatiquement masqués de l'annuaire. 
-                          Pour modifier l'objectif, la contrepartie ou la visibilité, cliquez sur "⚙️ Modifier".
-                        </p>
-                      </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })()}
-
           <form onSubmit={handleSubmit}>
             <Stack spacing="md">
               {/* Alerte : En attente de validation */}
@@ -1658,29 +1414,103 @@ const ManageFarmPage = () => {
                 <Card>
                   <CardContent style={{ padding: '24px' }}>
                     <Stack spacing="md">
+                      {/* Note informative en haut */}
+                      <div style={{
+                        padding: '12px 16px',
+                        backgroundColor: '#f0f9ff',
+                        borderLeft: '4px solid #3b82f6',
+                        borderRadius: '8px',
+                        fontSize: '0.875rem',
+                        color: '#1e40af'
+                      }}>
+                        🗺️ <strong>Localisation :</strong> Ces informations permettront aux visiteurs de trouver votre établissement et de filtrer les résultats par région.
+                      </div>
+
+                      {/* Grille responsive pour les champs */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
+                        {/* Ligne 1: Pays + Région */}
+                        <Input
+                          label="Pays *"
+                          type="select"
+                          name="locationCountry"
+                          value={formData.locationCountry}
+                          onChange={handleChange}
+                          required
+                          helperText="Pays où se situe votre établissement"
+                        >
+                          <option value="">-- Sélectionner --</option>
+                          <option value="France">🇫🇷 France</option>
+                          <option value="Belgique">🇧🇪 Belgique</option>
+                          <option value="Suisse">🇨🇭 Suisse</option>
+                          <option value="Luxembourg">🇱🇺 Luxembourg</option>
+                          <option value="Canada">🇨🇦 Canada</option>
+                          <option value="Autre">🌍 Autre</option>
+                        </Input>
+
+                        <Input
+                          label="Région"
+                          type="text"
+                          name="locationRegion"
+                          value={formData.locationRegion}
+                          onChange={handleChange}
+                          placeholder="Ex: Occitanie, Québec..."
+                          helperText="Région administrative"
+                        />
+
+                        {/* Ligne 2: Département + Ville */}
+                        <Input
+                          label="Département"
+                          type="text"
+                          name="locationDepartment"
+                          value={formData.locationDepartment}
+                          onChange={handleChange}
+                          placeholder="Ex: Haute-Garonne, 31..."
+                          helperText="Département ou province"
+                        />
+
+                        <Input
+                          label="Ville"
+                          type="text"
+                          name="city"
+                          value={formData.city}
+                          onChange={handleChange}
+                          placeholder="Ex: Toulouse"
+                          helperText="Ville ou commune"
+                        />
+
+                        {/* Ligne 3: Code postal + Rue */}
+                        <Input
+                          label="Code postal"
+                          type="text"
+                          name="postalCode"
+                          value={formData.postalCode}
+                          onChange={handleChange}
+                          placeholder="Ex: 31000"
+                          helperText="Code postal"
+                        />
+
+                        <Input
+                          label="Adresse de la rue *"
+                          type="text"
+                          name="streetAddress"
+                          value={formData.streetAddress}
+                          onChange={handleChange}
+                          placeholder="Ex: 123 Chemin des Champs"
+                          required
+                          helperText="Numéro et nom de rue"
+                        />
+                      </div>
+
+                      {/* Complément d'adresse en pleine largeur */}
                       <Input
-                        label="Adresse complète *"
+                        label="Complément d'adresse"
                         type="text"
-                        name="address"
-                        value={formData.address}
-                    onChange={handleChange}
-                    placeholder="Ex: 123 Chemin des Champs, 31000 Toulouse, France"
-                    required
-                    helperText="🗺️ L'adresse permettra de géolocaliser votre ferme sur la carte"
-                  />
-                  
-                  {/* Note informative */}
-                  <div style={{
-                    marginTop: '12px',
-                    padding: '12px 16px',
-                    backgroundColor: '#f0f9ff',
-                    borderLeft: '4px solid #3b82f6',
-                    borderRadius: '8px',
-                    fontSize: '0.875rem',
-                    color: '#1e40af'
-                  }}>
-                    💡 <strong>Astuce :</strong> Incluez le code postal, la ville et le pays pour un meilleur référencement.
-                  </div>
+                        name="addressComplement"
+                        value={formData.addressComplement}
+                        onChange={handleChange}
+                        placeholder="Ex: Bâtiment B, Porte 3, Lieu-dit..."
+                        helperText="Informations supplémentaires (optionnel)"
+                      />
                     </Stack>
                 </CardContent>
               </Card>
@@ -1782,17 +1612,18 @@ const ManageFarmPage = () => {
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Grille réseaux sociaux compacte 2x3 */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+                        {/* Colonne gauche */}
                         <div style={{ position: 'relative' }}>
                           <Input
-                            label="Facebook"
+                            label="📘 Facebook"
                             type="text"
                             name="facebook"
                             value={formData.facebook}
                             onChange={handleChange}
                             onBlur={() => handleUrlBlur('facebook')}
                             placeholder="facebook.com/maferme"
-                            leftIcon={<span style={{ fontSize: '1.2rem' }}>{getSocialIcon('facebook')}</span>}
                           />
                           {formData.facebook && (
                             <button
@@ -1820,36 +1651,15 @@ const ManageFarmPage = () => {
                           )}
                         </div>
 
-                        <Input
-                          label="Instagram"
-                          type="text"
-                          name="instagram"
-                          value={formData.instagram}
-                          onChange={handleChange}
-                          placeholder="@maferme"
-                          leftIcon={<span style={{ fontSize: '1.2rem' }}>{getSocialIcon('instagram')}</span>}
-                        />
-
-                        <Input
-                          label="TikTok"
-                          type="text"
-                          name="tiktok"
-                          value={formData.tiktok}
-                          onChange={handleChange}
-                          placeholder="@maferme"
-                          leftIcon={<span style={{ fontSize: '1.2rem' }}>{getSocialIcon('tiktok')}</span>}
-                        />
-
                         <div style={{ position: 'relative' }}>
                           <Input
-                            label="YouTube"
+                            label="📹 YouTube"
                             type="text"
                             name="youtube"
                             value={formData.youtube}
                             onChange={handleChange}
                             onBlur={() => handleUrlBlur('youtube')}
                             placeholder="youtube.com/@maferme"
-                            leftIcon={<span style={{ fontSize: '1.2rem' }}>{getSocialIcon('youtube')}</span>}
                           />
                           {formData.youtube && (
                             <button
@@ -1878,23 +1688,39 @@ const ManageFarmPage = () => {
                         </div>
 
                         <Input
-                          label="WhatsApp"
+                          label="📷 Instagram"
+                          type="text"
+                          name="instagram"
+                          value={formData.instagram}
+                          onChange={handleChange}
+                          placeholder="@maferme"
+                        />
+
+                        <Input
+                          label="🎵 TikTok"
+                          type="text"
+                          name="tiktok"
+                          value={formData.tiktok}
+                          onChange={handleChange}
+                          placeholder="@maferme"
+                        />
+
+                        <Input
+                          label="💬 WhatsApp"
                           type="tel"
                           name="whatsapp"
                           value={formData.whatsapp}
                           onChange={handleChange}
                           placeholder="6 12 34 56 78"
-                          leftIcon={<span style={{ fontSize: '1.2rem' }}>{getSocialIcon('whatsapp')}</span>}
                         />
 
                         <Input
-                          label="Telegram"
+                          label="✈️ Telegram"
                           type="text"
                           name="telegram"
                           value={formData.telegram}
                           onChange={handleChange}
                           placeholder="@maferme"
-                          leftIcon={<span style={{ fontSize: '1.2rem' }}>{getSocialIcon('telegram')}</span>}
                         />
                       </div>
                     </Stack>
@@ -2373,6 +2199,8 @@ const ManageFarmPage = () => {
               }}>
                 <span style={{ fontSize: '1.5rem' }}>💬</span>
                 <span>Historique des échanges</span>
+                
+                {/* Badge compteur total */}
                 <span style={{ 
                   marginLeft: 'auto',
                   fontSize: '0.75rem',
@@ -2384,6 +2212,21 @@ const ManageFarmPage = () => {
                 }}>
                   {existingFarm.communication_history?.length || 0} message(s)
                 </span>
+                
+                {/* Badge messages admin non lus */}
+                {unreadAdminCount > 0 && (
+                  <span style={{ 
+                    fontSize: '0.75rem',
+                    backgroundColor: '#ef4444',
+                    color: '#fff',
+                    padding: '4px 10px',
+                    borderRadius: '12px',
+                    fontWeight: '600',
+                    animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+                  }}>
+                    {unreadAdminCount} nouveau(x)
+                  </span>
+                )}
               </summary>
               
               <Card style={{ marginTop: '0.5rem', backgroundColor: '#f0f9ff', borderColor: '#3b82f6' }}>
@@ -2409,26 +2252,38 @@ const ManageFarmPage = () => {
                           const isAdmin = msg.author === 'admin';
                           const isUser = msg.author === 'creator' || msg.author === 'user';
                           
+                          // Détecter si c'est un message de refus
+                          const isRejectionMessage = isSystem && msg.message.includes('🚫 REFUS');
+                          
                           if (isSystem) {
                             return (
                               <div
                                 key={idx}
                                 style={{
                                   textAlign: 'center',
-                                  padding: '8px 12px',
-                                  backgroundColor: '#f3f4f6',
+                                  padding: '12px 16px',
+                                  backgroundColor: isRejectionMessage ? '#fee2e2' : '#f3f4f6',
                                   borderRadius: '8px',
-                                  fontSize: '0.8rem',
-                                  color: '#6b7280',
+                                  border: isRejectionMessage ? '2px solid #ef4444' : 'none',
+                                  fontSize: '0.875rem',
+                                  color: isRejectionMessage ? '#b91c1c' : '#6b7280',
+                                  fontWeight: isRejectionMessage ? '600' : '400',
                                   fontStyle: 'italic'
                                 }}
                               >
-                                🤖 {msg.message} • {new Date(msg.timestamp).toLocaleDateString('fr-FR', {
-                                  day: 'numeric',
-                                  month: 'short',
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })}
+                                {msg.message}
+                                <div style={{ 
+                                  fontSize: '0.75rem', 
+                                  marginTop: '4px',
+                                  color: isRejectionMessage ? '#991b1b' : '#9ca3af'
+                                }}>
+                                  {new Date(msg.timestamp).toLocaleDateString('fr-FR', {
+                                    day: 'numeric',
+                                    month: 'short',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </div>
                               </div>
                             );
                           }
@@ -2489,14 +2344,42 @@ const ManageFarmPage = () => {
                     </div>
                   )}
 
-                  {/* Zone de saisie nouveau message */}
-                  {(existingFarm.verification_status === 'pending' || existingFarm.verification_status === 'info_requested') && (
+                  {/* Zone de saisie nouveau message - Toujours disponible pour permettre contestation */}
+                  {existingFarm.verification_status !== 'banned' && (
                     <div style={{ 
                       padding: '16px', 
                       backgroundColor: '#fff', 
                       borderRadius: '12px',
                       border: '1px solid #e5e7eb'
                     }}>
+                      {/* Info contextuelle selon le statut */}
+                      {existingFarm.verification_status === 'rejected' && (
+                        <div style={{
+                          padding: '12px',
+                          backgroundColor: '#fef3c7',
+                          border: '1px solid #fbbf24',
+                          borderRadius: '8px',
+                          marginBottom: '12px',
+                          fontSize: '0.875rem',
+                          color: '#92400e'
+                        }}>
+                          💬 <strong>Votre demande a été refusée.</strong> Vous pouvez contester cette décision en envoyant un message.
+                        </div>
+                      )}
+                      {existingFarm.verification_status === 'verified' && (
+                        <div style={{
+                          padding: '12px',
+                          backgroundColor: '#d1fae5',
+                          border: '1px solid #10b981',
+                          borderRadius: '8px',
+                          marginBottom: '12px',
+                          fontSize: '0.875rem',
+                          color: '#065f46'
+                        }}>
+                          ✅ <strong>Votre établissement est vérifié.</strong> Vous pouvez signaler un problème ou poser une question.
+                        </div>
+                      )}
+                      
                       <Textarea
                         label="Votre message"
                         value={newMessage}
@@ -2535,6 +2418,292 @@ const ManageFarmPage = () => {
               </Card>
             </details>
           )}
+
+                    {/* LISTE DES JETONS ASSOCIÉS */}
+          {existingFarm && (() => {
+            const hasTokens = existingFarm?.tokens && Array.isArray(existingFarm.tokens) && existingFarm.tokens.length > 0;
+            
+            return (
+              <Card>
+                <CardContent style={{ padding: '24px' }}>
+                  <h2 className="text-lg font-bold mb-6 text-gray-900 dark:text-white">
+                    🪙 Jetons associés à votre établissement
+                  </h2>
+                  
+                  {!hasTokens ? (
+                    <div style={{
+                      textAlign: 'center',
+                      padding: '48px 24px',
+                      backgroundColor: 'var(--bg-secondary)',
+                      borderRadius: '16px',
+                      border: '2px dashed var(--border-primary)'
+                    }}>
+                      <div style={{ fontSize: '4rem', marginBottom: '16px', opacity: 0.5 }}>📭</div>
+                      <p style={{ 
+                        fontSize: '1rem', 
+                        fontWeight: '600', 
+                        color: 'var(--text-primary)',
+                        marginBottom: '8px'
+                      }}>
+                        Aucun jeton associé à ce profil
+                      </p>
+                      <p style={{ 
+                        fontSize: '0.875rem', 
+                        color: 'var(--text-secondary)',
+                        marginBottom: '24px'
+                      }}>
+                        Créez ou importez un jeton pour commencer
+                      </p>
+                      <Button 
+                        variant="outline" 
+                        onClick={() => navigate('/create-token')}
+                        style={{ height: '40px' }}
+                      >
+                        🔨 Créer un jeton
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        {(tokensWithStats.length > 0 ? tokensWithStats : existingFarm.tokens).map((token, idx) => {
+                          const isExpanded = expandedDescriptions[token.tokenId];
+                          const isIncomplete = token.isComplete === false;
+                          
+                          const truncateText = (text, maxLength = 60) => {
+                            if (!text) return null;
+                            if (text.length <= maxLength) return text;
+                            return text.substring(0, maxLength) + '...';
+                          };
+                          
+                          return (
+                            <div 
+                              key={token.tokenId || idx} 
+                              style={{
+                                padding: '20px',
+                                backgroundColor: isIncomplete ? '#fef2f2' : 'var(--bg-secondary)',
+                                borderRadius: '16px',
+                                border: isIncomplete ? '2px solid #ef4444' : '1px solid var(--border-primary)',
+                                transition: 'all 0.2s ease'
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!isIncomplete) {
+                                  e.currentTarget.style.borderColor = 'var(--primary-color)';
+                                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!isIncomplete) {
+                                  e.currentTarget.style.borderColor = 'var(--border-primary)';
+                                  e.currentTarget.style.boxShadow = 'none';
+                                }
+                              }}
+                            >
+                              {/* Alerte incomplet */}
+                              {isIncomplete && (
+                                <div style={{
+                                  marginBottom: '12px',
+                                  padding: '10px 14px',
+                                  backgroundColor: '#fee2e2',
+                                  border: '1px solid #ef4444',
+                                  borderRadius: '8px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px'
+                                }}>
+                                  <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+                                  <div style={{ flex: 1 }}>
+                                    <div style={{ fontSize: '0.875rem', fontWeight: '700', color: '#dc2626', marginBottom: '2px' }}>
+                                      Jeton incomplet - Masqué de l'annuaire
+                                    </div>
+                                    <div style={{ fontSize: '0.75rem', color: '#991b1b' }}>
+                                      Ajoutez un objectif et une contrepartie pour le rendre visible
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* En-tête : Ticker + Nom */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                                <span style={{
+                                  padding: '6px 12px',
+                                  backgroundColor: '#3b82f6',
+                                  color: '#fff',
+                                  borderRadius: '8px',
+                                  fontWeight: '700',
+                                  fontSize: '0.875rem',
+                                  fontFamily: 'monospace'
+                                }}>
+                                  {token.ticker || 'UNK'}
+                                </span>
+                                <h3 style={{
+                                  fontSize: '1.125rem',
+                                  fontWeight: '700',
+                                  color: 'var(--text-primary)',
+                                  margin: 0,
+                                  flex: 1
+                                }}>
+                                  {token.tokenName || 'Sans nom'}
+                                </h3>
+                              </div>
+                              
+                              {/* Objectif */}
+                              {token.purpose ? (
+                                <div style={{ marginBottom: '8px' }}>
+                                  <div style={{ 
+                                    fontSize: '0.75rem', 
+                                    color: 'var(--text-tertiary)',
+                                    marginBottom: '4px',
+                                    fontWeight: '600',
+                                    textTransform: 'uppercase'
+                                  }}>
+                                    🎯 Objectif
+                                  </div>
+                                  <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                                    {isExpanded ? token.purpose : truncateText(token.purpose)}
+                                    {token.purpose.length > 60 && (
+                                      <button
+                                        onClick={() => setExpandedDescriptions(prev => ({
+                                          ...prev,
+                                          [token.tokenId]: !prev[token.tokenId]
+                                        }))}
+                                        style={{
+                                          marginLeft: '8px',
+                                          background: 'none',
+                                          border: 'none',
+                                          color: 'var(--primary-color)',
+                                          cursor: 'pointer',
+                                          fontSize: '0.8rem',
+                                          fontWeight: '600'
+                                        }}
+                                      >
+                                        {isExpanded ? 'Moins' : 'Plus'}
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div style={{ 
+                                  marginBottom: '8px',
+                                  padding: '8px 12px',
+                                  backgroundColor: '#fef3c7',
+                                  borderRadius: '6px',
+                                  fontSize: '0.8rem',
+                                  color: '#92400e'
+                                }}>
+                                  ⚠️ Objectif manquant
+                                </div>
+                              )}
+                              
+                              {/* Contrepartie */}
+                              {token.counterpart ? (
+                                <div style={{ marginBottom: '12px' }}>
+                                  <div style={{ 
+                                    fontSize: '0.75rem', 
+                                    color: 'var(--text-tertiary)',
+                                    marginBottom: '4px',
+                                    fontWeight: '600',
+                                    textTransform: 'uppercase'
+                                  }}>
+                                    🎁 Contrepartie
+                                  </div>
+                                  <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                                    {truncateText(token.counterpart)}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div style={{ 
+                                  marginBottom: '12px',
+                                  padding: '8px 12px',
+                                  backgroundColor: '#fef3c7',
+                                  borderRadius: '6px',
+                                  fontSize: '0.8rem',
+                                  color: '#92400e'
+                                }}>
+                                  ⚠️ Contrepartie manquante
+                                </div>
+                              )}
+                              
+                              {/* Statistiques et Actions sur une ligne */}
+                              <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '12px',
+                                padding: '12px',
+                                backgroundColor: 'var(--bg-primary)',
+                                borderRadius: '12px',
+                                marginBottom: '12px',
+                                flexWrap: 'wrap'
+                              }}>
+                                {/* Détenteurs */}
+                                <div style={{ minWidth: '100px' }}>
+                                  <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginBottom: '2px' }}>
+                                    👥 Détenteurs
+                                  </div>
+                                  <div style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)' }}>
+                                    {token.holdersCount !== null && token.holdersCount !== undefined 
+                                      ? token.holdersCount 
+                                      : '...'}
+                                  </div>
+                                </div>
+                                
+                                <div style={{ width: '1px', height: '40px', backgroundColor: 'var(--border-primary)' }} />
+                                
+                                {/* Switch visibilité */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <Switch
+                                    checked={token.isVisible !== false && !isIncomplete}
+                                    onChange={(checked) => {
+                                      if (!isIncomplete && checked !== undefined) {
+                                        handleToggleVisibility(token.tokenId, token.isVisible !== false);
+                                      }
+                                    }}
+                                    disabled={togglingVisibility[token.tokenId] || isIncomplete}
+                                  />
+                                  <span style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                                    {isIncomplete ? '🔒 Masqué' : (token.isVisible !== false ? '👁️ Visible' : '🙈 Masqué')}
+                                  </span>
+                                </div>
+                                
+                                <div style={{ width: '1px', height: '40px', backgroundColor: 'var(--border-primary)' }} />
+                                
+                                {/* Bouton Modifier compact */}
+                                <Button
+                                  variant="outline"
+                                  onClick={() => navigate(`/token/${token.tokenId}`)}
+                                  style={{ height: '40px', fontSize: '0.85rem', padding: '0 16px', flexShrink: 0 }}
+                                >
+                                  ⚙️ Modifier
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      
+                      <div style={{
+                        marginTop: '20px',
+                        padding: '16px',
+                        backgroundColor: '#dbeafe',
+                        borderRadius: '12px',
+                        border: '1px solid #93c5fd'
+                      }}>
+                        <p style={{ 
+                          fontSize: '0.8rem', 
+                          color: '#1e40af',
+                          margin: 0,
+                          lineHeight: '1.5'
+                        }}>
+                          💡 <strong>Info :</strong> Le Ticker, le Nom et le nombre de Détenteurs sont récupérés automatiquement de la blockchain. 
+                          Les jetons sans objectif ou contrepartie sont automatiquement masqués de l'annuaire. 
+                          Pour modifier l'objectif, la contrepartie ou la visibilité, cliquez sur "⚙️ Modifier".
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* Zone de danger : Suppression du profil */}
           {existingFarm && existingFarm.status !== 'deleted' && (

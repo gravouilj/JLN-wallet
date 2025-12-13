@@ -138,7 +138,7 @@ export const Button = ({ children, className = '', variant = 'primary', icon, fu
         justifyContent: 'center',
         gap: '8px',
         padding: '0 24px',
-        minHeight: '56px',       /* HAUTEUR FIXE GARANTIE */
+        minHeight: '56_px',       /* HAUTEUR FIXE GARANTIE */
         borderRadius: '12px',
         fontSize: '1rem',
         fontWeight: '600',
