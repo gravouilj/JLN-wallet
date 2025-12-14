@@ -388,6 +388,37 @@
     "twitter": "Suivre sur Twitter",
     "version": "Version"
   },
+  "tokenLinked": {
+    "title": "Lié au profil public",
+    "description": "Le jeton lié s'affiche dans votre profil et peut être acheté par vos clients",
+    "linked": "Lié",
+    "unlinked": "Dissocié",
+    "errorUpdate": "Erreur lors de la mise à jour du statut de liaison"
+  },
+  "tokenVisibility": {
+    "title": "Visibilité publique",
+    "description": "Le jeton visible apparaît dans l'annuaire public",
+    "visible": "Visible",
+    "hidden": "Masqué",
+    "errorUpdate": "Erreur lors de la mise à jour de la visibilité"
+  },
+  "networkFees": {
+    "title": "eCash disponible",
+    "balance": "Solde actuel",
+    "fees": "Frais de réseau",
+    "estimated": "Valeur estimée",
+    "receive": "Recevoir des XEC"
+  },
+  "addressHistory": {
+    "title": "Historique de l'adresse",
+    "sent": "Envoyé",
+    "received": "Reçu",
+    "noTransactions": "Aucune transaction",
+    "viewMore": "Voir plus",
+    "viewLess": "Voir moins",
+    "loading": "Chargement de l'historique...",
+    "error": "Erreur lors du chargement de l'historique"
+  },
   "faq": {
     "title": "Questions Fréquentes",
     "subtitle": "Tout ce que vous devez savoir pour démarrer",

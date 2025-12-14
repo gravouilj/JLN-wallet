@@ -39,6 +39,8 @@ import './App.css';
 import './styles/themes.css';
 import './styles/layout.css';
 import './styles/components.css';
+import './styles/pages.css';
+import './styles/utilities.css';
 
 function App() {
   const [locale] = useAtom(localeAtom);

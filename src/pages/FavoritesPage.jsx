@@ -8,7 +8,6 @@ import { useNavigate } from 'react-router-dom';
 import TopBar from '../components/Layout/TopBar';
 import BottomNavigation from '../components/Layout/BottomNavigation';
 import { FarmProfileCard, FarmProfileModal } from '../components/FarmProfile';
-import '../styles/directory.css';
 
 const FavoritesPage = () => {
   const { t } = useTranslation();

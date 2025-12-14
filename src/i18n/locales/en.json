@@ -392,6 +392,37 @@
     "twitter": "Follow on Twitter",
     "version": "Version"
   },
+  "tokenLinked": {
+    "title": "Linked to profile",
+    "description": "Linked tokens appear in your profile and can be purchased by your customers",
+    "linked": "Linked",
+    "unlinked": "Unlinked",
+    "errorUpdate": "Error updating link status"
+  },
+  "tokenVisibility": {
+    "title": "Public visibility",
+    "description": "Visible tokens appear in the public directory",
+    "visible": "Visible",
+    "hidden": "Hidden",
+    "errorUpdate": "Error updating visibility"
+  },
+  "networkFees": {
+    "title": "eCash available",
+    "balance": "Current balance",
+    "fees": "Network fees",
+    "estimated": "Estimated value",
+    "receive": "Receive XEC"
+  },
+  "addressHistory": {
+    "title": "Address history",
+    "sent": "Sent",
+    "received": "Received",
+    "noTransactions": "No transactions",
+    "viewMore": "View more",
+    "viewLess": "View less",
+    "loading": "Loading history...",
+    "error": "Error loading history"
+  },
   "faq": {
     "title": "Frequently Asked Questions",
     "subtitle": "Everything you need to know to get started",

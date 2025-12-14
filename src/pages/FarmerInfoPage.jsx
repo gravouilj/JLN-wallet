@@ -4,7 +4,6 @@ import TopBar from '../components/Layout/TopBar';
 import BottomNavigation from '../components/Layout/BottomNavigation';
 import { useAtom } from 'jotai';
 import { walletConnectedAtom } from '../atoms';
-import '../styles/farmer-info.css';
 
 /**
  * Farmer Info Page - Information pédagogique pour les producteurs (PAGE PUBLIQUE)

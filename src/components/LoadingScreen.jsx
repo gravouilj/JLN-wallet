@@ -1,6 +1,5 @@
 import PropTypes from 'prop-types';
 import { useTranslation } from '../hooks/useTranslation';
-import '../styles/loading-screen.css';
 
 /**
  * LoadingScreen - Full screen loading component

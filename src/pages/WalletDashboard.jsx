@@ -18,7 +18,6 @@ import {
   notificationAtom,
   currencyAtom
 } from '../atoms';
-import '../styles/home.css';
 
 const WalletDashboard = () => {
   const { t } = useTranslation();

@@ -9,7 +9,6 @@ import { useAdmin } from '../hooks/useAdmin';
 import { walletConnectedAtom, walletAtom, notificationAtom, walletModalOpenAtom } from '../atoms';
 import { FarmService } from '../services/farmService';
 import { addEntry, ACTION_TYPES } from '../services/historyService';
-import '../styles/fund.css';
 
 const CreateTokenPage = () => {
   const { t } = useTranslation();

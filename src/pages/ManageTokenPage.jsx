@@ -12,6 +12,7 @@ import { notificationAtom, currencyAtom } from '../atoms';
 import { Card, CardContent, Button, PageLayout, Stack, PageHeader } from '../components/UI';
 import ImportTokenModal from '../components/ImportTokenModal';
 import { getGlobalHistory } from '../services/historyService';
+import { NetworkFeesAvail, AddressHistory, TokenCard } from '../components/TokenPage';
 
 const ManageTokenPage = () => {
   const navigate = useNavigate();
@@ -32,6 +33,7 @@ const ManageTokenPage = () => {
   const [globalHistory, setGlobalHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [showXecHistory, setShowXecHistory] = useState(false);
 
   // Debug: tracker les changements du modal
   useEffect(() => {
@@ -75,7 +77,7 @@ const ManageTokenPage = () => {
         if (isAdmin) {
           try {
             const { default: FarmService } = await import('../services/farmService');
-            const pendingFarms = await FarmService.FarmService.getPendingFarms();
+            const pendingFarms = await FarmService.getPendingFarms();
             setPendingCount(pendingFarms?.length || 0);
             console.log('🔔 Demandes en attente:', pendingFarms?.length || 0);
           } catch (err) {
@@ -422,9 +424,9 @@ const ManageTokenPage = () => {
       try {
         const historyData = await getGlobalHistory(address);
         setGlobalHistory(historyData);
-        console.log(`📜 Historique global chargé: ${historyData.length} entrées`);
+        console.log(`📜 Historique Créateur chargé: ${historyData.length} entrées`);
       } catch (err) {
-        console.error('❌ Erreur chargement historique global:', err);
+        console.error('❌ Erreur chargement historique créateur:', err);
       } finally {
         setLoadingHistory(false);
       }
@@ -525,13 +527,13 @@ const ManageTokenPage = () => {
         {myFarm && (
           <Card>
             <CardContent style={{ padding: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                <span style={{ fontSize: '32px' }}>🏡</span>
-                <div style={{ flex: 1 }}>
-                  <h2 style={{ fontSize: '1.25rem', fontWeight: '700', margin: 0, color: 'var(--text-primary)' }}>
+              <div className="section-header">
+                <span className="section-icon">🏡</span>
+                <div className="section-header-content">
+                  <h2 className="section-title">
                     {myFarm.name}
                   </h2>
-                  <p style={{ fontSize: '0.875rem', margin: '4px 0 0 0', color: 'var(--text-secondary)' }}>
+                  <p className="section-subtitle">
                     Créez, Importez & Gérez vos jetons à offre variable ou fixe.
                   </p>
                 </div>
@@ -652,27 +654,41 @@ const ManageTokenPage = () => {
           </Button>
         </div>
 
-        {/* Actions contextuelles - Profil & Admin */}
+        {/* Actions contextuelles - Profil & Admin (affichage horizontal) */}
         <Card>
           <CardContent style={{ padding: '12px' }}>
-            <Stack spacing="sm">
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: (() => {
+                // Calculer le nombre de boutons à afficher
+                const hasVerifyButton = myFarm && myFarm.verification_status === 'none';
+                const hasManageButton = true; // Toujours affiché
+                const hasAdminButton = isAdmin;
+                
+                const count = (hasVerifyButton ? 1 : 0) + (hasManageButton ? 1 : 0) + (hasAdminButton ? 1 : 0);
+                return `repeat(${count}, 1fr)`;
+              })(),
+              gap: '8px'
+            }}>
               {/* CTA Vérification si profil non vérifié */}
               {myFarm && myFarm.verification_status === 'none' && (
                 <Button
                   onClick={() => navigate('/manage-farm', { state: { activeTab: 'verification' } })}
                   variant="primary"
                   icon="✅"
-                  fullWidth
+                  style={{ minHeight: '48px', fontSize: '0.875rem' }}
                 >
                   Vérifier mon profil
                 </Button>
               )}
+              
               <Button
                 onClick={() => navigate('/manage-farm')}
                 variant="primary"
                 icon={myFarm ? "🏡" : "🌱"}
-                fullWidth
                 style={{
+                  minHeight: '48px',
+                  fontSize: '0.875rem',
                   backgroundColor: (() => {
                     // Orange si message admin non lu
                     if (myFarm?.verification_status === 'info_requested') {
@@ -698,6 +714,7 @@ const ManageTokenPage = () => {
               >
                 {myFarm ? 'Gérer mon profil' : 'Créer mon profil'}
               </Button>
+              
               {isAdmin && (
                 <Button
                   onClick={() => {
@@ -705,26 +722,29 @@ const ManageTokenPage = () => {
                     navigate('/admin/verification');
                   }}
                   variant={pendingCount > 0 ? 'primary' : 'secondary'}
-                  fullWidth
                   style={{ 
+                    minHeight: '48px',
+                    fontSize: '0.875rem',
                     backgroundColor: pendingCount > 0 ? '#ef4444' : '#6b7280', 
                     borderColor: pendingCount > 0 ? '#ef4444' : '#6b7280', 
                     color: '#fff',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '12px'
+                    gap: '8px'
                   }}
                 >
-                  <span style={{ fontSize: '1.2rem' }}>🛡️</span>
-                  <span style={{ fontWeight: '600' }}>Vérification des profils publics</span>
+                  <span style={{ fontSize: '1rem' }}>🛡️</span>
+                  <span style={{ fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    Vérifications
+                  </span>
                   {pendingCount > 0 && (
                     <span style={{
                       backgroundColor: '#fff',
                       color: '#ef4444',
-                      padding: '2px 8px',
+                      padding: '2px 6px',
                       borderRadius: '99px',
-                      fontSize: '0.8rem',
+                      fontSize: '0.75rem',
                       fontWeight: 'bold'
                     }}>
                       {pendingCount}
@@ -732,56 +752,19 @@ const ManageTokenPage = () => {
                   )}
                 </Button>
               )}
-            </Stack>
-          </CardContent>
-        </Card>
-
-        {/* Balance XEC */}
-        <Card>
-          <CardContent style={{ padding: '20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: '500' }}>
-                  💰 eCash disponible
-                </div>
-                <div style={{ fontSize: '2rem', fontWeight: '700', color: 'var(--text-primary)' }}>
-                  {xecBalance.toFixed(2)} XEC
-                </div>
-              </div>
-              
-              <div style={{ width: '1px', height: '60px', backgroundColor: 'var(--border-primary)', margin: '0 16px' }}></div>
-              
-              <button
-                onClick={() => navigate('/settings')}
-                style={{
-                  flex: 1,
-                  textAlign: 'right',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px',
-                  borderRadius: '8px',
-                  transition: 'background-color 0.2s'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-              >
-                <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: '500' }}>
-                  💱 Valeur estimée
-                </div>
-                <div style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-primary)' }}>
-                  {price && typeof price.convert === 'function' 
-                    ? (() => {
-                        const converted = price.convert(xecBalance, currency);
-                        return converted !== null ? `${converted.toFixed(2)} ${currency}` : '...';
-                      })()
-                    : '...'
-                  }
-                </div>
-              </button>
             </div>
           </CardContent>
         </Card>
+
+        {/* Balance XEC et Valeur estimée */}
+        <NetworkFeesAvail 
+          xecBalance={xecBalance}
+          fiatValue={price && typeof price.convert === 'function' 
+            ? price.convert(xecBalance, currency)?.toFixed(2) || '...'
+            : '...'
+          }
+          currency={currency}
+        />
 
         {/* État de chargement */}
         {loadingTokens ? (
@@ -963,210 +946,37 @@ const ManageTokenPage = () => {
                 return 0;
               })
               .map((token) => (
-              <Card key={token.tokenId}>
-                <CardContent style={{ padding: '16px' }}>
-                  {/* Header: Image + Info + Status */}
-                  <div style={{ display: 'flex', alignItems: 'start', gap: '12px', marginBottom: '12px' }}>
-                    {/* Image 48x48 */}
-                    <img 
-                      src={token.image} 
-                      alt={token.name}
-                      style={{
-                        width: '48px',
-                        height: '48px',
-                        borderRadius: '8px',
-                        objectFit: 'cover',
-                        border: '1px solid var(--border-primary)',
-                        flexShrink: 0
-                      }}
-                      loading="lazy"
-                      onError={(e) => {
-                        if (e.target.src !== 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="48" height="48"%3E%3Crect fill="%23ddd" width="48" height="48"/%3E%3Ctext fill="%23999" font-size="10" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3E?%3C/text%3E%3C/svg%3E') {
-                          e.target.onerror = null;
-                          e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="48" height="48"%3E%3Crect fill="%23ddd" width="48" height="48"/%3E%3Ctext fill="%23999" font-size="10" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3E?%3C/text%3E%3C/svg%3E';
-                        }
-                      }}
-                    />
-                    
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                        <h3 style={{ 
-                          fontSize: '1rem', 
-                          fontWeight: '700', 
-                          color: 'var(--text-primary)', 
-                          margin: 0,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap'
-                        }}>
-                          {token.name}
-                        </h3>
-                        {token.isFromFarmWallet && token.isReferenced && (
-                          <span style={{
-                            fontSize: '10px',
-                            fontWeight: '700',
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            backgroundColor: '#10b981',
-                            color: '#fff',
-                            whiteSpace: 'nowrap'
-                          }}>
-                            🏡
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ 
-                        fontSize: '0.75rem', 
-                        fontWeight: '700', 
-                        color: 'var(--text-secondary)', 
-                        textTransform: 'uppercase',
-                        marginBottom: '4px'
-                      }}>
-                        {token.ticker}
-                      </div>
-                      {/* Token ID cliquable */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleCopyTokenId(token.tokenId, e);
-                        }}
-                        style={{
-                          fontSize: '10px',
-                          fontFamily: 'monospace',
-                          color: 'var(--text-tertiary)',
-                          background: 'transparent',
-                          border: 'none',
-                          padding: 0,
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          maxWidth: '100%',
-                          display: 'block'
-                        }}
-                        title="Cliquez pour copier"
-                        onMouseEnter={(e) => e.target.style.color = '#3b82f6'}
-                        onMouseLeave={(e) => e.target.style.color = 'var(--text-tertiary)'}
-                      >
-                        {token.tokenId}
-                      </button>
-                    </div>
-                    
-                    {/* Badge statut */}
-                    <div style={{
-                      padding: '4px 8px',
-                      borderRadius: '6px',
-                      backgroundColor: token.isActive ? '#10b981' : '#6b7280',
-                      color: '#fff',
-                      fontSize: '10px',
-                      fontWeight: '700',
-                      whiteSpace: 'nowrap',
-                      flexShrink: 0
-                    }}>
-                      {token.isActive ? 'ACTIF' : 'INACTIF'}
-                    </div>
-                  </div>
-
-                  {/* Balance + Type */}
-                  <div style={{ 
-                    backgroundColor: 'var(--bg-secondary)', 
-                    borderRadius: '8px', 
-                    padding: '12px', 
-                    marginBottom: '12px' 
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ 
-                          fontSize: '10px', 
-                          color: 'var(--text-secondary)', 
-                          textTransform: 'uppercase',
-                          marginBottom: '4px'
-                        }}>
-                          💼 Solde
-                        </div>
-                        <div style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)' }}>
-                          {formatBalance(token.balance, token.decimals)}
-                        </div>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ 
-                          fontSize: '10px', 
-                          color: 'var(--text-secondary)', 
-                          textTransform: 'uppercase',
-                          marginBottom: '4px'
-                        }}>
-                          Type
-                        </div>
-                        <div style={{ 
-                          fontSize: '0.75rem', 
-                          fontWeight: '700',
-                          color: token.hasMintBaton ? '#10b981' : '#f59e0b'
-                        }}>
-                          {token.hasMintBaton ? '🔄 Variable' : '🔒 Fixe'}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Grille de boutons */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-                    <Button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/token/${token.tokenId}`);
-                      }}
-                      size="sm"
-                      variant="secondary"
-                      fullWidth
-                      style={{ fontSize: '0.75rem', padding: '8px' }}
-                    >
-                      📊 Détails
-                    </Button>
-                    <Button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/token/${token.tokenId}`, { state: { activeTab: 'send' } });
-                      }}
-                      size="sm"
-                      variant="secondary"
-                      fullWidth
-                      style={{ fontSize: '0.75rem', padding: '8px' }}
-                    >
-                      📤 Envoyer
-                    </Button>
-                    <Button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/token/${token.tokenId}`, { state: { activeTab: 'airdrop' } });
-                      }}
-                      size="sm"
-                      variant="secondary"
-                      fullWidth
-                      style={{ fontSize: '0.75rem', padding: '8px' }}
-                    >
-                      🎁 Distribuer
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+                <TokenCard
+                  key={token.tokenId}
+                  token={{
+                    ...token,
+                    balance: formatBalance(token.balance, token.decimals)
+                  }}
+                  farmId={myFarm?.id}
+                  showLinkedToggle={myFarm && token.isFromFarmWallet}
+                  showVisibleToggle={myFarm && token.isFromFarmWallet}
+                  onUpdate={(updatedToken) => {
+                    // Recharger les données après mise à jour
+                    console.log('🔄 Token mis à jour:', updatedToken);
+                  }}
+                />
             ));
             })()}
           </>
         )}
 
-        {/* Section Historique Global */}
+        {/* Section Historique Créateur */}
         {address && (
           <Card>
             <CardContent style={{ padding: '24px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-                <span style={{ fontSize: '2rem' }}>📜</span>
-                <div style={{ flex: 1 }}>
-                  <h2 style={{ fontSize: '1.25rem', fontWeight: '700', margin: 0, color: 'var(--text-primary)' }}>
-                    Historique Global
+              <div className="section-header">
+                <span className="section-icon">📜</span>
+                <div className="section-header-content">
+                  <h2 className="section-title">
+                    Historique Créateur
                   </h2>
-                  <p style={{ fontSize: '0.875rem', margin: '4px 0 0 0', color: 'var(--text-secondary)' }}>
-                    Toutes vos actions sur les tokens
+                  <p className="section-subtitle">
+                    Toutes vos actions sur les jetons gérés depuis ce portefeuille.
                   </p>
                 </div>
                 <button
@@ -1206,6 +1016,37 @@ const ManageTokenPage = () => {
                 </div>
               ) : (
                 <HistoryList history={globalHistory} compact={false} />
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Section Dernières transactions XEC */}
+        {address && (
+          <Card>
+            <CardContent style={{ padding: '20px' }}>
+              <div 
+                onClick={() => setShowXecHistory(!showXecHistory)}
+                className="collapsible-header"
+              >
+                <span className="section-icon">💸</span>
+                <div className="section-header-content">
+                  <h2 className="section-title" style={{ fontSize: '1.125rem' }}>
+                    Dernières transactions XEC
+                  </h2>
+                  <p className="section-subtitle" style={{ fontSize: '0.8rem' }}>
+                    Historique de vos transactions en temps réel depuis la blockchain.
+                  </p>
+                </div>
+                <span className={`collapsible-arrow ${showXecHistory ? 'open' : ''}`}>
+                  ▼
+                </span>
+              </div>
+              
+              {showXecHistory && (
+                <div style={{ marginTop: '16px' }}>
+                  <AddressHistory address={address} currency={currency} />
+                </div>
               )}
             </CardContent>
           </Card>

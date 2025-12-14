@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 import i18n from '../i18n';
-import '../styles/language-toggle.css';
 
 const LanguageToggle = () => {
   const { locale } = useTranslation();

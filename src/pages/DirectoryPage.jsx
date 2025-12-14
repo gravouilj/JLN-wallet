@@ -7,11 +7,11 @@ import { useTranslation } from '../hooks/useTranslation';
 import { useEcashWallet, useEcashToken } from '../hooks/useEcashWallet';
 import TopBar from '../components/Layout/TopBar';
 import BottomNavigation from '../components/Layout/BottomNavigation';
-import WalletConnect from '../components/WalletConnect';
+import OnboardingModal from '../components/OnboardingModal';
+import SearchFilters from '../components/SearchFilters';
 import { FarmProfileCard, FarmProfileModal } from '../components/FarmProfile';
 import { Button } from '../components/UI';
 import { CTACard, useCTAInjection } from '../components/CTA';
-import '../styles/directory.css';
 
 /**
  * Directory Page - Farm selection interface
@@ -302,14 +302,17 @@ const DirectoryPage = () => {
       </header>
 
       {/* Filters Section */}
-      <div className="directory-filters-wrapper">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-          {/* Bouton Favoris - visible seulement si connecté */}
-          {walletConnected && favoriteFarmIds.length > 0 && (
+      <SearchFilters
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder={t('directory.searchPlaceholder') || 'Rechercher une ferme...'}
+        leftActions={
+          walletConnected && favoriteFarmIds.length > 0 ? (
             <button
               onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+              className="cursor-pointer hover-lift"
               style={{
-                background: 'rgba(255,255,255,0.9)',
+                background: showFavoritesOnly ? 'var(--accent-primary)' : 'rgba(255,255,255,0.9)',
                 border: 'none',
                 borderRadius: '50%',
                 width: '44px',
@@ -318,136 +321,85 @@ const DirectoryPage = () => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                cursor: 'pointer',
                 fontSize: '1.3rem',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                transition: 'transform 0.2s'
+                transition: 'all 0.2s',
+                color: showFavoritesOnly ? 'white' : 'inherit'
               }}
-              onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
-              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
               title={showFavoritesOnly ? 'Afficher toutes les fermes' : 'Afficher uniquement mes favoris'}
             >
               {showFavoritesOnly ? '⭐' : '☆'}
             </button>
-          )}
-          
-          <div className="search-container" style={{ flex: 1, margin: 0 }}>
-            <span className="search-icon">🔍</span>
-            <input
-              type="text"
-              className="search-input"
-              placeholder={t('directory.searchPlaceholder') || 'Rechercher une ferme...'}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            {searchQuery && (
-              <button
-                className="clear-search-btn"
-                onClick={() => setSearchQuery('')}
-                aria-label="Clear search"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Filters Grid - toujours visible */}
-        <div className="filters-grid" style={{ display: 'grid' }}>
-          <div className="filter-group">
-            <select
-              className="filter-select modern"
-              value={selectedCountry}
-              onChange={(e) => {
-                setSelectedCountry(e.target.value);
-                setSelectedRegion('all');
-                setSelectedDepartment('all');
-              }}
-            >
-              <option value="all">🌍 {t('directory.allCountries')}</option>
-              {countries.map((country) => (
-                <option key={country} value={country}>{country}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="filter-group">
-            <select
-              className="filter-select modern"
-              value={selectedRegion}
-              onChange={(e) => {
-                setSelectedRegion(e.target.value);
-                setSelectedDepartment('all');
-              }}
-            >
-              <option value="all">📍 {t('directory.allRegions')}</option>
-              {regions.map((region) => (
-                <option key={region} value={region}>{region}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="filter-group">
-            <select
-              className="filter-select modern"
-              value={selectedDepartment}
-              onChange={(e) => setSelectedDepartment(e.target.value)}
-            >
-              <option value="all">🏘️ {t('directory.allDepartments')}</option>
-              {departments.map((department) => (
-                <option key={department} value={department}>{department}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="filter-group">
-            <select
-              className="filter-select modern"
-              value={selectedProduct}
-              onChange={(e) => setSelectedProduct(e.target.value)}
-            >
-              <option value="all">🥬 {t('directory.allProducts')}</option>
-              {products.map((product) => (
-                <option key={product} value={product}>{product}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="filter-group">
-            <select
-              className="filter-select modern"
-              value={selectedService}
-              onChange={(e) => setSelectedService(e.target.value)}
-            >
-              <option value="all">🛠️ {t('directory.allServices')}</option>
-              {services.map((service) => (
-                <option key={service} value={service}>{service}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-        
-        {/* Bouton Clear All Filters - visible si au moins un filtre est actif */}
-        {(searchQuery || selectedCountry !== 'all' || selectedRegion !== 'all' || selectedDepartment !== 'all' || selectedProduct !== 'all' || selectedService !== 'all' || showFavoritesOnly) && (
-          <div style={{ display: 'flex', justifyContent: 'center', marginTop: '14px' }}>
-            <Button
-              variant="ghost"
-              icon="✕"
-              onClick={() => {
-                setSearchQuery('');
-                setSelectedCountry('all');
-                setSelectedRegion('all');
-                setSelectedDepartment('all');
-                setSelectedProduct('all');
-                setSelectedService('all');
-                setShowFavoritesOnly(false);
-              }}
-            >
-              {t('directory.clearAllFilters')}
-            </Button>
-          </div>
-        )}
-      </div>
+          ) : null
+        }
+        filters={[
+          {
+            id: 'country',
+            label: t('directory.allCountries') || 'Tous les pays',
+            icon: '🌍',
+            value: selectedCountry,
+            options: countries.map(country => ({ value: country, label: country })),
+            onChange: (value) => {
+              setSelectedCountry(value);
+              setSelectedRegion('all');
+              setSelectedDepartment('all');
+            }
+          },
+          {
+            id: 'region',
+            label: t('directory.allRegions') || 'Toutes les régions',
+            icon: '📍',
+            value: selectedRegion,
+            options: regions.map(region => ({ value: region, label: region })),
+            onChange: (value) => {
+              setSelectedRegion(value);
+              setSelectedDepartment('all');
+            }
+          },
+          {
+            id: 'department',
+            label: t('directory.allDepartments') || 'Tous les départements',
+            icon: '🏘️',
+            value: selectedDepartment,
+            options: departments.map(dept => ({ value: dept, label: dept })),
+            onChange: setSelectedDepartment
+          },
+          {
+            id: 'product',
+            label: t('directory.allProducts') || 'Tous les produits',
+            icon: '🥬',
+            value: selectedProduct,
+            options: products.map(product => ({ value: product, label: product })),
+            onChange: setSelectedProduct
+          },
+          {
+            id: 'service',
+            label: t('directory.allServices') || 'Tous les services',
+            icon: '🛠️',
+            value: selectedService,
+            options: services.map(service => ({ value: service, label: service })),
+            onChange: setSelectedService
+          }
+        ]}
+        hasActiveFilters={
+          searchQuery || 
+          selectedCountry !== 'all' || 
+          selectedRegion !== 'all' || 
+          selectedDepartment !== 'all' || 
+          selectedProduct !== 'all' || 
+          selectedService !== 'all' || 
+          showFavoritesOnly
+        }
+        onClearAll={() => {
+          setSearchQuery('');
+          setSelectedCountry('all');
+          setSelectedRegion('all');
+          setSelectedDepartment('all');
+          setSelectedProduct('all');
+          setSelectedService('all');
+          setShowFavoritesOnly(false);
+        }}
+      />
 
       {/* Results count */}
       {!loading && !error && (
@@ -592,44 +544,12 @@ const DirectoryPage = () => {
       />
       
       {/* Wallet Connection Modal */}
-      {isWalletModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsWalletModalOpen(false)}>
-          <div className="modal-container wallet-modal" onClick={(e) => e.stopPropagation()}>
-            <button 
-              className="modal-close-btn"
-              onClick={() => setIsWalletModalOpen(false)}
-            >
-              ✕
-            </button>
-            
-            <div className="modal-content" style={{ padding: '32px 24px', textAlign: 'center' }}>
-              <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🔐</div>
-              
-              <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '8px', color: 'var(--text-primary)' }}>
-                Connexion Requise
-              </h2>
-              
-              <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', lineHeight: '1.5' }}>
-                Connectez votre portefeuille eCash pour gérer vos fermes, vos jetons et accéder à toutes les fonctionnalités.
-              </p>
-
-              {/* Le composant gère lui-même les boutons (Importer / Créer) */}
-              <div style={{ textAlign: 'left' }}>
-                <WalletConnect onConnected={() => setIsWalletModalOpen(false)} />
-              </div>
-
-              <div style={{ marginTop: '24px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
-                <button 
-                  onClick={() => { setIsWalletModalOpen(false); navigate('/faq'); }}
-                  style={{ background: 'none', border: 'none', color: 'var(--accent-primary)', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.9rem' }}
-                >
-                  Besoin d'aide ?
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* OnboardingModal - Modal pédagogique de connexion/création/import */}
+      <OnboardingModal
+        isOpen={isWalletModalOpen}
+        onClose={() => setIsWalletModalOpen(false)}
+        onConnected={() => setIsWalletModalOpen(false)}
+      />
       
       {/* Bottom Navigation - show if wallet is connected */}
       {walletConnected && (

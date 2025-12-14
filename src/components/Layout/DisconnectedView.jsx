@@ -1,10 +1,12 @@
-import React from 'react';
-import { Card, CardContent } from '../UI';
-import WalletConnect from '../WalletConnect';
+import React, { useState } from 'react';
+import { Card, CardContent, Button } from '../UI';
+import OnboardingModal from '../OnboardingModal';
 import BlockchainStatus from '../BlockchainStatus';
 import TopBar from './TopBar';
 
 const DisconnectedView = () => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
       <TopBar />
@@ -18,7 +20,13 @@ const DisconnectedView = () => {
               <p className="text-gray-500">Connectez votre portefeuille pour accéder à vos jetons.</p>
             </div>
             
-            <WalletConnect />
+            <Button 
+              onClick={() => setIsModalOpen(true)}
+              variant="primary"
+              className="w-full"
+            >
+              Se connecter
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -26,6 +34,12 @@ const DisconnectedView = () => {
       <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2">
         <BlockchainStatus />
       </div>
+
+      <OnboardingModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onConnected={() => setIsModalOpen(false)}
+      />
     </div>
   );
 };
