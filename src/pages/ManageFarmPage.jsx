@@ -2,11 +2,17 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useSetAtom } from 'jotai';
 import MobileLayout from '../components/Layout/MobileLayout';
-import { Card, CardContent, Button, PageLayout, Stack, Input, Textarea, Switch, Tabs, Modal } from '../components/UI';
+import { Card, CardContent, Button, PageLayout, Stack, Input, Textarea, Switch, Tabs, Modal, VisibilityToggle, InfoBox } from '../components/UI';
 import { useEcashWallet } from '../hooks/useEcashWallet';
 import { useFarms } from '../hooks/useFarms';
 import { notificationAtom } from '../atoms';
 import { FarmService } from '../services/farmService';
+import { CommunicationSection, ReportsSection } from '../components/Communication';
+import InfosTab from '../components/Farm/InfosTab';
+import LocationTab from '../components/Farm/LocationTab';
+import ContactTab from '../components/Farm/ContactTab';
+import VerificationTab from '../components/Farm/VerificationTab';
+import CertificationsTab from '../components/Farm/CertificationsTab';
 
 const ManageFarmPage = () => {
   const { tokenId } = useParams();
@@ -23,8 +29,11 @@ const ManageFarmPage = () => {
     farmName: '',
     description: '',
     country: 'France',
+    locationCountry: 'France',
     region: '',
+    locationRegion: '',
     department: '',
+    locationDepartment: '',
     city: '',
     postalCode: '',
     streetAddress: '',
@@ -49,6 +58,10 @@ const ManageFarmPage = () => {
     nationalcertificationweblink: '',
     internationalcertification: '',
     internationalcertificationweblink: '',
+    certification1: '',
+    certification1weblink: '',
+    certification2: '',
+    certification2weblink: '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [tokensWithStats, setTokensWithStats] = useState([]);
@@ -68,7 +81,7 @@ const ManageFarmPage = () => {
   const [privacy, setPrivacy] = useState({
     hideEmail: false,
     hidePhone: false,
-    hideSiret: false,
+    hideCompanyID: false,
     hideLegalRep: false
   });
   
@@ -87,10 +100,17 @@ const ManageFarmPage = () => {
   const [newMessage, setNewMessage] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
   
+  // Signalements reçus
+  const [farmReports, setFarmReports] = useState([]);
+  const [loadingReports, setLoadingReports] = useState(false);
+  
   // Suppression profil
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteStep, setDeleteStep] = useState(1); // 1 = première confirmation, 2 = confirmation finale
   const [deleting, setDeleting] = useState(false);
+  
+  // Toggle visibilité ferme (active/draft)
+  const [togglingFarmStatus, setTogglingFarmStatus] = useState(false);
   
   // Suggestions distinctes
   const productSuggestions = [
@@ -362,7 +382,7 @@ const ManageFarmPage = () => {
             setPrivacy({
               hideEmail: farm.certifications.hide_email || false,
               hidePhone: farm.certifications.hide_phone || false,
-              hideSiret: farm.certifications.hide_siret || false,
+              hideCompanyID: farm.certifications.hide_company_id || farm.certifications.hide_siret || false,
               hideLegalRep: farm.certifications.hide_legal_rep || false
             });
           }
@@ -408,8 +428,11 @@ const ManageFarmPage = () => {
             farmName: farm.name || '',
             description: farm.description || '',
             country: farm.location_country || 'France',
+            locationCountry: farm.location_country || 'France',
             region: farm.location_region || '',
+            locationRegion: farm.location_region || '',
             department: farm.location_department || '',
+            locationDepartment: farm.location_department || '',
             city: farm.city || '',
             postalCode: farm.postal_code || '',
             streetAddress: farm.street_address || '',
@@ -434,6 +457,10 @@ const ManageFarmPage = () => {
             nationalcertificationweblink: certs.national_link || '',
             internationalcertification: certs.international || '',
             internationalcertificationweblink: certs.international_link || '',
+            certification1: certs.certification_1 || '',
+            certification1weblink: certs.certification_1_link || '',
+            certification2: certs.certification_2 || '',
+            certification2weblink: certs.certification_2_link || '',
           };
           
           console.log('📄 FormData construit:', newFormData);
@@ -445,6 +472,9 @@ const ManageFarmPage = () => {
             streetAddress: newFormData.streetAddress,
             companyid: newFormData.companyid
           });
+          
+          // Charger les signalements si la ferme existe
+          await loadFarmReports(farm.id);
         } else {
           console.log('⚠️ Aucune farm trouvée pour cette adresse');
         }
@@ -461,6 +491,56 @@ const ManageFarmPage = () => {
 
     loadData();
   }, [tokenId, wallet, address, farms, setNotification]);
+  
+  // Fonction pour charger les signalements
+  const loadFarmReports = async (farmId) => {
+    if (!farmId) return;
+    
+    try {
+      setLoadingReports(true);
+      // En tant que fermier, ne charger que les signalements visibles
+      const reports = await FarmService.getMyFarmReports(farmId, 'farmer');
+      setFarmReports(reports || []);
+    } catch (err) {
+      console.error('❌ Erreur chargement signalements:', err);
+    } finally {
+      setLoadingReports(false);
+    }
+  };
+
+  // Handler pour toggle de visibilité ferme (active/draft)
+  const handleToggleFarmStatus = async (newStatus) => {
+    if (!existingFarm) return;
+    
+    setTogglingFarmStatus(true);
+    try {
+      const updatedFarm = await FarmService.saveFarm(
+        { 
+          ...existingFarm,
+          status: newStatus 
+        },
+        address
+      );
+      
+      setExistingFarm(updatedFarm);
+      await refreshFarms();
+      
+      setNotification({
+        type: 'success',
+        message: newStatus === 'active' 
+          ? '✅ Profil publié dans l\'annuaire' 
+          : '📝 Profil en mode brouillon'
+      });
+    } catch (err) {
+      console.error('❌ Erreur toggle visibilité:', err);
+      setNotification({
+        type: 'error',
+        message: 'Erreur lors du changement de visibilité'
+      });
+    } finally {
+      setTogglingFarmStatus(false);
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -553,11 +633,20 @@ const ManageFarmPage = () => {
   const performSave = async (e, requestVerification = false) => {
     e?.preventDefault();
     
-    // Champs toujours obligatoires
-    if (!formData.farmName || !formData.description || !formData.email || !formData.address) {
+    // Bloquer toute action si la ferme est bannie
+    if (existingFarm && existingFarm.status === 'banned') {
       setNotification({
         type: 'error',
-        message: 'Veuillez remplir tous les champs obligatoires (Nom, Description, Email, Adresse)'
+        message: '🚫 Ferme bannie : aucune modification possible. Contactez l\'administrateur.'
+      });
+      return false;
+    }
+    
+    // Pour le mode brouillon (enregistrement simple), seul le nom est obligatoire
+    if (!formData.farmName) {
+      setNotification({
+        type: 'error',
+        message: 'Le nom de la ferme est obligatoire pour enregistrer'
       });
       return false;
     }
@@ -565,6 +654,9 @@ const ManageFarmPage = () => {
     // Validation renforcée si demande de vérification explicite
     if (requestVerification) {
       const missingFields = [];
+      if (!formData.description) missingFields.push('Description');
+      if (!formData.email) missingFields.push('Email');
+      if (!formData.streetAddress) missingFields.push('Adresse de la rue');
       if (!formData.companyid) missingFields.push('SIRET/Company ID');
       if (!formData.governmentidverificationweblink) missingFields.push('Lien de vérification SIRET');
       if (!formData.phone) missingFields.push('Téléphone');
@@ -584,9 +676,9 @@ const ManageFarmPage = () => {
       const farmData = {
         name: formData.farmName,
         description: formData.description,
-        location_country: formData.country || 'France',
-        location_region: formData.region || '',
-        location_department: formData.department || '',
+        location_country: formData.locationCountry || formData.country || 'France',
+        location_region: formData.locationRegion || formData.region || '',
+        location_department: formData.locationDepartment || formData.department || '',
         city: formData.city || '',
         postal_code: formData.postalCode || '',
         street_address: formData.streetAddress || '',
@@ -616,10 +708,14 @@ const ManageFarmPage = () => {
           national_link: formData.nationalcertificationweblink || null,
           international: formData.internationalcertification || null,
           international_link: formData.internationalcertificationweblink || null,
+          certification_1: formData.certification1 || null,
+          certification_1_link: formData.certification1weblink || null,
+          certification_2: formData.certification2 || null,
+          certification_2_link: formData.certification2weblink || null,
           // Privacy settings intégré dans certifications
           hide_email: privacy.hideEmail || false,
           hide_phone: privacy.hidePhone || false,
-          hide_siret: privacy.hideSiret || false,
+          hide_company_id: privacy.hideCompanyID || false,
           hide_legal_rep: privacy.hideLegalRep || false
         },
         
@@ -655,7 +751,7 @@ const ManageFarmPage = () => {
       };
 
       // Déterminer le statut de vérification selon les modifications
-      let verificationStatus = existingFarm?.verification_status || 'unverified';
+      let verificationStatus = existingFarm?.verification_status || 'none';
       let isVerified = existingFarm?.verified || false;
       
       if (requestVerification) {
@@ -665,15 +761,18 @@ const ManageFarmPage = () => {
         verificationStatus = 'pending';
         isVerified = false;
         
-        // Ajouter une entrée système dans l'historique (si colonne existe)
-        // TODO: Créer la colonne communication_history (JSONB) dans Supabase
+        // Ajouter une entrée système dans l'historique pour notifier l'admin
         try {
           const currentHistory = existingFarm?.communication_history || [];
+          const isResubmission = existingFarm?.verification_status === 'rejected' || existingFarm?.verification_status === 'info_requested';
+          
           farmData.communication_history = [
             ...currentHistory,
             {
               author: 'system',
-              message: 'Demande de vérification soumise par le créateur',
+              message: isResubmission 
+                ? '🔄 Nouvelle demande de vérification soumise après correction'
+                : '📝 Demande de vérification soumise par le créateur',
               timestamp: new Date().toISOString()
             }
           ];
@@ -683,7 +782,7 @@ const ManageFarmPage = () => {
         }
       } else if (existingFarm?.verified && sensitiveFieldsChanged) {
         // Ferme vérifiée avec modification de champs sensibles
-        verificationStatus = 'unverified';
+        verificationStatus = 'none';
         isVerified = false;
       }
       
@@ -804,9 +903,12 @@ const ManageFarmPage = () => {
     }
   };
 
-  // Envoyer un message à l'admin
-  const handleSendMessage = async () => {
-    if (!newMessage.trim()) {
+  // Envoyer un message à l'admin (avec type de message)
+  const handleSendMessage = async (messageText, messageType = 'verification') => {
+    // Si pas de paramètre, utiliser newMessage (compatibilité)
+    const text = messageText || newMessage;
+    
+    if (!text.trim()) {
       setNotification({
         type: 'error',
         message: 'Le message ne peut pas être vide'
@@ -816,7 +918,7 @@ const ManageFarmPage = () => {
 
     setSendingMessage(true);
     try {
-      await FarmService.addMessage(address, 'creator', newMessage.trim());
+      await FarmService.addMessage(address, 'creator', text.trim(), messageType);
       
       // Recharger les données
       const updatedFarm = await FarmService.getMyFarm(address);
@@ -913,6 +1015,68 @@ const ManageFarmPage = () => {
             </CardContent>
           </Card>
 
+          {/* SWITCH PRINCIPAL DE VISIBILITÉ */}
+          {existingFarm && existingFarm.status !== 'banned' && existingFarm.status !== 'deleted' && (
+            <Card style={{ 
+              backgroundColor: existingFarm.status === 'active' ? '#d1fae5' : '#fee2e2',
+              border: `2px solid ${existingFarm.status === 'active' ? '#10b981' : '#f59e0b'}`
+            }}>
+              <CardContent style={{ padding: '1.25rem' }}>
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between',
+                  gap: '1rem'
+                }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '0.5rem',
+                      marginBottom: '0.5rem'
+                    }}>
+                      <span style={{ fontSize: '1.5rem' }}>
+                        {existingFarm.status === 'active' ? '🌍' : '📝'}
+                      </span>
+                      <h3 style={{ 
+                        fontSize: '1rem', 
+                        fontWeight: '600',
+                        color: existingFarm.status === 'active' ? '#065f46' : '#92400e',
+                        margin: 0
+                      }}>
+                        Publier mon profil dans l'annuaire
+                      </h3>
+                    </div>
+                    <p style={{ 
+                      fontSize: '0.875rem',
+                      color: existingFarm.status === 'active' ? '#065f46' : '#92400e',
+                      margin: 0
+                    }}>
+                      {existingFarm.status === 'active' 
+                        ? '✅ Votre profil est visible publiquement'
+                        : '📋 Votre profil est en mode brouillon (non visible)'}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={existingFarm.status === 'active'}
+                    onChange={(checked) => handleToggleFarmStatus(checked ? 'active' : 'draft')}
+                    disabled={togglingFarmStatus}
+                    size="lg"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ALERTE DEMANDE D'INFO ADMIN */}
+          {existingFarm && existingFarm.verification_status === 'info_requested' && (
+            <InfoBox type="warning" icon="💬" title="Informations supplémentaires demandées">
+              <strong>Message de l'administrateur :</strong> {existingFarm.admin_message || 'Consultez l\'historique des échanges ci-dessous'}
+              <br /><br />
+              Répondez dans l'historique des échanges ou corrigez les informations demandées.
+            </InfoBox>
+          )}
+
           {/* ALERTE DEMANDE DE VÉRIFICATION EN COURS */}
           {existingFarm && existingFarm.verification_status === 'pending' && (
             <Card style={{ 
@@ -950,92 +1114,32 @@ const ManageFarmPage = () => {
           )}
 
           {/* ALERTE DEMANDE REFUSÉE */}
-          {existingFarm && existingFarm.verification_status === 'rejected' && existingFarm.status !== 'banned' && (
-            <Card style={{ 
-              backgroundColor: '#fee2e2', 
-              border: '2px solid #ef4444' 
-            }}>
-              <CardContent style={{ padding: '1.25rem' }}>
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '0.75rem',
-                  marginBottom: '0.5rem'
-                }}>
-                  <span style={{ fontSize: '1.5rem' }}>🚫</span>
-                  <h3 style={{ 
-                    fontSize: '1rem', 
-                    fontWeight: '600', 
-                    color: '#991b1b',
-                    margin: 0
-                  }}>
-                    Demande de vérification refusée
-                  </h3>
-                </div>
-                <p style={{ 
-                  fontSize: '0.875rem', 
-                  color: '#991b1b',
-                  margin: '0.5rem 0',
-                  paddingLeft: '2.25rem'
-                }}>
-                  <strong>Motif :</strong> {existingFarm.admin_message || 'Aucun motif fourni'}
-                </p>
-                <p style={{ 
-                  fontSize: '0.875rem', 
-                  color: '#991b1b',
-                  margin: 0,
-                  paddingLeft: '2.25rem'
-                }}>
-                  Veuillez corriger les informations demandées et soumettre à nouveau votre demande.
-                </p>
-              </CardContent>
-            </Card>
+          {existingFarm && existingFarm.verification_status === 'rejected' && existingFarm.status !== 'banned' && existingFarm.status !== 'deleted' && (
+            <InfoBox type="error" icon="🚫" title="Demande de vérification refusée">
+              <strong>Motif :</strong> {existingFarm.admin_message || 'Aucun motif fourni'}
+              <br /><br />
+              Vous pouvez corriger les informations demandées et soumettre une nouvelle demande de vérification.
+            </InfoBox>
           )}
 
           {/* ALERTE FERME BANNIE */}
-          {existingFarm && (existingFarm.status === 'banned' || existingFarm.status === 'pending_deletion') && (
-            <Card style={{ 
-              backgroundColor: '#450a0a', 
-              border: '3px solid #ef4444' 
-            }}>
-              <CardContent style={{ padding: '1.25rem' }}>
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '0.75rem',
-                  marginBottom: '0.5rem'
-                }}>
-                  <span style={{ fontSize: '1.5rem' }}>🛑</span>
-                  <h3 style={{ 
-                    fontSize: '1rem', 
-                    fontWeight: '600', 
-                    color: '#fff',
-                    margin: 0
-                  }}>
-                    {existingFarm.status === 'banned' ? 'FERME BANNIE' : 'SUPPRESSION EN COURS'}
-                  </h3>
-                </div>
-                <p style={{ 
-                  fontSize: '0.875rem', 
-                  color: '#fecaca',
-                  margin: '0.5rem 0',
-                  paddingLeft: '2.25rem'
-                }}>
-                  <strong>Motif :</strong> {existingFarm.deletion_reason || existingFarm.admin_message || 'Non spécifié'}
-                </p>
-                <p style={{ 
-                  fontSize: '0.875rem', 
-                  color: '#fecaca',
-                  margin: 0,
-                  paddingLeft: '2.25rem'
-                }}>
-                  {existingFarm.status === 'banned' 
-                    ? 'Votre ferme a été bannie. Contactez l\'administrateur pour plus d\'informations.'
-                    : 'Votre ferme sera supprimée définitivement dans 1 an. Contactez l\'administrateur si c\'est une erreur.'
-                  }
-                </p>
-              </CardContent>
-            </Card>
+          {existingFarm && (existingFarm.status === 'banned' || existingFarm.status === 'deleted') && (
+            <InfoBox 
+              type="error" 
+              icon="🛑" 
+              title={existingFarm.status === 'banned' ? 'FERME BANNIE' : 'SUPPRESSION EN COURS'}
+              style={{ backgroundColor: '#450a0a', borderColor: '#ef4444' }}
+            >
+              <strong style={{ color: '#fecaca' }}>Motif :</strong> 
+              <span style={{ color: '#fecaca' }}> {existingFarm.deletion_reason || existingFarm.admin_message || 'Non spécifié'}</span>
+              <br /><br />
+              <span style={{ color: '#fecaca' }}>
+                {existingFarm.status === 'banned' 
+                  ? 'Votre ferme a été bannie. Contactez l\'administrateur pour plus d\'informations.'
+                  : 'Votre ferme sera supprimée définitivement dans 1 an. Contactez l\'administrateur si c\'est une erreur.'
+                }
+              </span>
+            </InfoBox>
           )}
 
           {/* ALERTE RE-VÉRIFICATION ANNUELLE */}
@@ -1091,40 +1195,6 @@ const ManageFarmPage = () => {
 
           <form onSubmit={handleSubmit}>
             <Stack spacing="md">
-              {/* Alerte : En attente de validation */}
-              {existingFarm?.verification_status === 'pending' && (
-                <Card>
-                  <CardContent style={{ 
-                    padding: '20px',
-                    backgroundColor: '#fef3c7',
-                    border: '2px solid #fbbf24'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'start', gap: '16px' }}>
-                      <span style={{ fontSize: '2.5rem' }}>⏳</span>
-                      <div style={{ flex: 1 }}>
-                        <h3 style={{ 
-                          fontSize: '1.125rem', 
-                          fontWeight: '700', 
-                          color: '#92400e',
-                          marginBottom: '8px' 
-                        }}>
-                          En attente de validation
-                        </h3>
-                        <p style={{ 
-                          fontSize: '0.95rem', 
-                          color: '#78350f',
-                          margin: 0,
-                          lineHeight: '1.5'
-                        }}>
-                          Votre demande de vérification est actuellement en cours d'examen par l'équipe Farm Wallet. 
-                          Vous serez notifié dès que votre ferme sera validée.
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
               {/* Onglets de navigation */}
               <Card>
                 <CardContent noPadding>
@@ -1146,889 +1216,74 @@ const ManageFarmPage = () => {
               
               {/* ONGLET: Informations */}
               {activeTab === 'infos' && (
-                <Card>
-                  <CardContent style={{ padding: '24px' }}>
-                    {/* Avertissement modification champs sensibles */}
-                    {existingFarm?.verified && sensitiveFieldsChanged && (
-                      <div style={{
-                        padding: '16px',
-                        backgroundColor: '#fef3c7',
-                        border: '2px solid #fbbf24',
-                        borderRadius: '12px',
-                        marginBottom: '20px'
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'start', gap: '12px' }}>
-                          <span style={{ fontSize: '1.5rem' }}>⚠️</span>
-                          <div style={{ flex: 1 }}>
-                            <p style={{ 
-                              fontSize: '0.9rem', 
-                              color: '#92400e',
-                              margin: 0,
-                              fontWeight: '600',
-                              lineHeight: '1.5'
-                            }}>
-                              <strong>Attention :</strong> Vous avez modifié un champ important (Nom, Adresse ou SIRET). 
-                              Ces modifications nécessiteront une nouvelle validation par l'administrateur. 
-                              Votre ferme restera visible dans l'annuaire pendant l'examen.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    
-                    <Stack spacing="md">
-                    <Input
-                      label="Nom de la ferme *"
-                      type="text"
-                      name="farmName"
-                      value={formData.farmName}
-                      onChange={handleChange}
-                      placeholder="Ex: Ferme Bio du Soleil"
-                      required
-                    />
-
-                    <Textarea
-                      label="Description *"
-                      name="description"
-                      value={formData.description}
-                      onChange={handleChange}
-                      rows={4}
-                      placeholder="Décrivez votre ferme, vos valeurs, vos pratiques..."
-                      required
-                    />
-
-                    {/* SECTION PRODUITS */}
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-                        🌾 Produits proposés
-                      </label>
-                      
-                      {/* Tags affichés */}
-                      {productTags.length > 0 && (
-                        <div style={{
-                          display: 'flex',
-                          flexWrap: 'wrap',
-                          gap: '8px',
-                          marginBottom: '12px',
-                          padding: '12px',
-                          backgroundColor: 'var(--bg-secondary)',
-                          borderRadius: '12px',
-                          border: '1px solid var(--border-primary)'
-                        }}>
-                          {productTags.map((tag, idx) => (
-                            <span
-                              key={idx}
-                              className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '6px'
-                              }}
-                            >
-                              <span>{tag}</span>
-                              <button
-                                type="button"
-                                onClick={() => removeProductTag(tag)}
-                                className="text-blue-800 dark:text-blue-200 hover:text-blue-600 dark:hover:text-blue-400"
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  fontSize: '1.2rem',
-                                  padding: 0,
-                                  lineHeight: 1,
-                                  fontWeight: 'bold'
-                                }}
-                              >
-                                ×
-                              </button>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      
-                      {/* Input pour ajouter */}
-                      <Input
-                        label="Ajouter un produit"
-                        type="text"
-                        value={productInput}
-                        onChange={(e) => setProductInput(e.target.value)}
-                        onKeyDown={handleProductKeyDown}
-                        placeholder="Tapez et appuyez sur Entrée"
-                        helperText="Appuyez sur Entrée pour ajouter"
-                      />
-                      
-                      {/* Suggestions cliquables */}
-                      <div style={{ marginTop: '12px' }}>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '8px', fontWeight: '600' }}>
-                          💡 Suggestions :
-                        </div>
-                        <div style={{
-                          display: 'flex',
-                          flexWrap: 'wrap',
-                          gap: '6px'
-                        }}>
-                          {productSuggestions.filter(s => !productTags.includes(s)).map((suggestion) => (
-                            <button
-                              key={suggestion}
-                              type="button"
-                              onClick={() => addProductTag(suggestion)}
-                              style={{
-                                padding: '4px 10px',
-                                borderRadius: '16px',
-                                border: '1px solid var(--border-primary)',
-                                backgroundColor: 'var(--bg-primary)',
-                                color: 'var(--text-secondary)',
-                                fontSize: '0.8rem',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s ease'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.backgroundColor = 'var(--primary-color)';
-                                e.currentTarget.style.color = '#fff';
-                                e.currentTarget.style.borderColor = 'var(--primary-color)';
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.backgroundColor = 'var(--bg-primary)';
-                                e.currentTarget.style.color = 'var(--text-secondary)';
-                                e.currentTarget.style.borderColor = 'var(--border-primary)';
-                              }}
-                            >
-                              + {suggestion}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* SECTION SERVICES */}
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-                        🛠️ Services proposés
-                      </label>
-                      
-                      {/* Tags affichés */}
-                      {serviceTags.length > 0 && (
-                        <div style={{
-                          display: 'flex',
-                          flexWrap: 'wrap',
-                          gap: '8px',
-                          marginBottom: '12px',
-                          padding: '12px',
-                          backgroundColor: 'var(--bg-secondary)',
-                          borderRadius: '12px',
-                          border: '1px solid var(--border-primary)'
-                        }}>
-                          {serviceTags.map((tag, idx) => (
-                            <span
-                              key={idx}
-                              className="px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '6px'
-                              }}
-                            >
-                              <span>{tag}</span>
-                              <button
-                                type="button"
-                                onClick={() => removeServiceTag(tag)}
-                                className="text-green-800 dark:text-green-200 hover:text-green-600 dark:hover:text-green-400"
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  fontSize: '1.2rem',
-                                  padding: 0,
-                                  lineHeight: 1,
-                                  fontWeight: 'bold'
-                                }}
-                              >
-                                ×
-                              </button>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      
-                      {/* Input pour ajouter */}
-                      <Input
-                        label="Ajouter un service"
-                        type="text"
-                        value={serviceInput}
-                        onChange={(e) => setServiceInput(e.target.value)}
-                        onKeyDown={handleServiceKeyDown}
-                        placeholder="Tapez et appuyez sur Entrée"
-                        helperText="Appuyez sur Entrée pour ajouter"
-                      />
-                      
-                      {/* Suggestions cliquables */}
-                      <div style={{ marginTop: '12px' }}>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '8px', fontWeight: '600' }}>
-                          💡 Suggestions :
-                        </div>
-                        <div style={{
-                          display: 'flex',
-                          flexWrap: 'wrap',
-                          gap: '6px'
-                        }}>
-                          {serviceSuggestions.filter(s => !serviceTags.includes(s)).map((suggestion) => (
-                            <button
-                              key={suggestion}
-                              type="button"
-                              onClick={() => addServiceTag(suggestion)}
-                              style={{
-                                padding: '4px 10px',
-                                borderRadius: '16px',
-                                border: '1px solid var(--border-primary)',
-                                backgroundColor: 'var(--bg-primary)',
-                                color: 'var(--text-secondary)',
-                                fontSize: '0.8rem',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s ease'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.backgroundColor = '#10b981';
-                                e.currentTarget.style.color = '#fff';
-                                e.currentTarget.style.borderColor = '#10b981';
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.backgroundColor = 'var(--bg-primary)';
-                                e.currentTarget.style.color = 'var(--text-secondary)';
-                                e.currentTarget.style.borderColor = 'var(--border-primary)';
-                              }}
-                            >
-                              + {suggestion}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </Stack>
-                </CardContent>
-              </Card>
+                <InfosTab
+                  formData={formData}
+                  handleChange={handleChange}
+                  existingFarm={existingFarm}
+                  sensitiveFieldsChanged={sensitiveFieldsChanged}
+                  productTags={productTags}
+                  productInput={productInput}
+                  setProductInput={setProductInput}
+                  handleProductKeyDown={handleProductKeyDown}
+                  removeProductTag={removeProductTag}
+                  addProductTag={addProductTag}
+                  productSuggestions={productSuggestions}
+                  serviceTags={serviceTags}
+                  serviceInput={serviceInput}
+                  setServiceInput={setServiceInput}
+                  handleServiceKeyDown={handleServiceKeyDown}
+                  removeServiceTag={removeServiceTag}
+                  addServiceTag={addServiceTag}
+                  serviceSuggestions={serviceSuggestions}
+                />
               )}
 
               {/* ONGLET: Localisation */}
               {activeTab === 'location' && (
-                <Card>
-                  <CardContent style={{ padding: '24px' }}>
-                    <Stack spacing="md">
-                      {/* Note informative en haut */}
-                      <div style={{
-                        padding: '12px 16px',
-                        backgroundColor: '#f0f9ff',
-                        borderLeft: '4px solid #3b82f6',
-                        borderRadius: '8px',
-                        fontSize: '0.875rem',
-                        color: '#1e40af'
-                      }}>
-                        🗺️ <strong>Localisation :</strong> Ces informations permettront aux visiteurs de trouver votre établissement et de filtrer les résultats par région.
-                      </div>
-
-                      {/* Grille responsive pour les champs */}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
-                        {/* Ligne 1: Pays + Région */}
-                        <Input
-                          label="Pays *"
-                          type="select"
-                          name="locationCountry"
-                          value={formData.locationCountry}
-                          onChange={handleChange}
-                          required
-                          helperText="Pays où se situe votre établissement"
-                        >
-                          <option value="">-- Sélectionner --</option>
-                          <option value="France">🇫🇷 France</option>
-                          <option value="Belgique">🇧🇪 Belgique</option>
-                          <option value="Suisse">🇨🇭 Suisse</option>
-                          <option value="Luxembourg">🇱🇺 Luxembourg</option>
-                          <option value="Canada">🇨🇦 Canada</option>
-                          <option value="Autre">🌍 Autre</option>
-                        </Input>
-
-                        <Input
-                          label="Région"
-                          type="text"
-                          name="locationRegion"
-                          value={formData.locationRegion}
-                          onChange={handleChange}
-                          placeholder="Ex: Occitanie, Québec..."
-                          helperText="Région administrative"
-                        />
-
-                        {/* Ligne 2: Département + Ville */}
-                        <Input
-                          label="Département"
-                          type="text"
-                          name="locationDepartment"
-                          value={formData.locationDepartment}
-                          onChange={handleChange}
-                          placeholder="Ex: Haute-Garonne, 31..."
-                          helperText="Département ou province"
-                        />
-
-                        <Input
-                          label="Ville"
-                          type="text"
-                          name="city"
-                          value={formData.city}
-                          onChange={handleChange}
-                          placeholder="Ex: Toulouse"
-                          helperText="Ville ou commune"
-                        />
-
-                        {/* Ligne 3: Code postal + Rue */}
-                        <Input
-                          label="Code postal"
-                          type="text"
-                          name="postalCode"
-                          value={formData.postalCode}
-                          onChange={handleChange}
-                          placeholder="Ex: 31000"
-                          helperText="Code postal"
-                        />
-
-                        <Input
-                          label="Adresse de la rue *"
-                          type="text"
-                          name="streetAddress"
-                          value={formData.streetAddress}
-                          onChange={handleChange}
-                          placeholder="Ex: 123 Chemin des Champs"
-                          required
-                          helperText="Numéro et nom de rue"
-                        />
-                      </div>
-
-                      {/* Complément d'adresse en pleine largeur */}
-                      <Input
-                        label="Complément d'adresse"
-                        type="text"
-                        name="addressComplement"
-                        value={formData.addressComplement}
-                        onChange={handleChange}
-                        placeholder="Ex: Bâtiment B, Porte 3, Lieu-dit..."
-                        helperText="Informations supplémentaires (optionnel)"
-                      />
-                    </Stack>
-                </CardContent>
-              </Card>
+                <LocationTab
+                  formData={formData}
+                  handleChange={handleChange}
+                />
               )}
 
               {/* ONGLET: Contact */}
               {activeTab === 'contact' && (
-                <Card>
-                  <CardContent style={{ padding: '24px' }}>
-                    <Stack spacing="md">
-                      <div style={{ position: 'relative' }}>
-                        <Input
-                          label="Site web principal"
-                          type="text"
-                          name="website"
-                          value={formData.website}
-                          onChange={handleChange}
-                          onBlur={() => handleUrlBlur('website')}
-                          placeholder="maferme.fr"
-                          helperText="https:// sera ajouté automatiquement"
-                          leftIcon={<span style={{ fontSize: '1.2rem' }}>{getSocialIcon('website')}</span>}
-                        />
-                        {formData.website && (
-                          <button
-                            type="button"
-                            onClick={() => openLink(formData.website)}
-                            style={{
-                              position: 'absolute',
-                              right: '12px',
-                              top: '38px',
-                              padding: '8px 12px',
-                              backgroundColor: '#0074e4',
-                              color: '#fff',
-                              border: 'none',
-                              borderRadius: '8px',
-                              cursor: 'pointer',
-                              fontSize: '0.875rem',
-                              fontWeight: '600',
-                              transition: 'all 0.2s ease',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px'
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0056b3'}
-                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0074e4'}
-                          >
-                            🔗 Tester
-                          </button>
-                        )}
-                      </div>
-
-                      <div style={{ position: 'relative' }}>
-                        <Input
-                          label="Autre site web"
-                          type="text"
-                          name="otherWebsite"
-                          value={formData.otherWebsite}
-                          onChange={handleChange}
-                          onBlur={() => handleUrlBlur('otherWebsite')}
-                          placeholder="boutique.maferme.fr"
-                          leftIcon={<span style={{ fontSize: '1.2rem' }}>{getSocialIcon('otherWebsite')}</span>}
-                        />
-                        {formData.otherWebsite && (
-                          <button
-                            type="button"
-                            onClick={() => openLink(formData.otherWebsite)}
-                            style={{
-                              position: 'absolute',
-                              right: '12px',
-                              top: '38px',
-                              padding: '8px 12px',
-                              backgroundColor: '#0074e4',
-                              color: '#fff',
-                              border: 'none',
-                              borderRadius: '8px',
-                              cursor: 'pointer',
-                              fontSize: '0.875rem',
-                              fontWeight: '600',
-                              transition: 'all 0.2s ease',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px'
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0056b3'}
-                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0074e4'}
-                          >
-                            🔗 Tester
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Titre section réseaux sociaux */}
-                      <div style={{ marginTop: '16px', marginBottom: '8px' }}>
-                        <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>
-                          🌐 Réseaux sociaux
-                        </h3>
-                        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>
-                          Connectez vos réseaux sociaux pour améliorer votre visibilité
-                        </p>
-                      </div>
-
-                      {/* Grille réseaux sociaux compacte 2x3 */}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
-                        {/* Colonne gauche */}
-                        <div style={{ position: 'relative' }}>
-                          <Input
-                            label="📘 Facebook"
-                            type="text"
-                            name="facebook"
-                            value={formData.facebook}
-                            onChange={handleChange}
-                            onBlur={() => handleUrlBlur('facebook')}
-                            placeholder="facebook.com/maferme"
-                          />
-                          {formData.facebook && (
-                            <button
-                              type="button"
-                              onClick={() => openLink(formData.facebook)}
-                              style={{
-                                position: 'absolute',
-                                right: '12px',
-                                top: '38px',
-                                padding: '6px 10px',
-                                backgroundColor: '#0074e4',
-                                color: '#fff',
-                                border: 'none',
-                                borderRadius: '6px',
-                                cursor: 'pointer',
-                                fontSize: '1rem',
-                                transition: 'all 0.2s ease'
-                              }}
-                              title="Ouvrir le lien"
-                              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0056b3'}
-                              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0074e4'}
-                            >
-                              🔗
-                            </button>
-                          )}
-                        </div>
-
-                        <div style={{ position: 'relative' }}>
-                          <Input
-                            label="📹 YouTube"
-                            type="text"
-                            name="youtube"
-                            value={formData.youtube}
-                            onChange={handleChange}
-                            onBlur={() => handleUrlBlur('youtube')}
-                            placeholder="youtube.com/@maferme"
-                          />
-                          {formData.youtube && (
-                            <button
-                              type="button"
-                              onClick={() => openLink(formData.youtube)}
-                              style={{
-                                position: 'absolute',
-                                right: '12px',
-                                top: '38px',
-                                padding: '6px 10px',
-                                backgroundColor: '#0074e4',
-                                color: '#fff',
-                                border: 'none',
-                                borderRadius: '6px',
-                                cursor: 'pointer',
-                                fontSize: '1rem',
-                                transition: 'all 0.2s ease'
-                              }}
-                              title="Ouvrir le lien"
-                              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0056b3'}
-                              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0074e4'}
-                            >
-                              🔗
-                            </button>
-                          )}
-                        </div>
-
-                        <Input
-                          label="📷 Instagram"
-                          type="text"
-                          name="instagram"
-                          value={formData.instagram}
-                          onChange={handleChange}
-                          placeholder="@maferme"
-                        />
-
-                        <Input
-                          label="🎵 TikTok"
-                          type="text"
-                          name="tiktok"
-                          value={formData.tiktok}
-                          onChange={handleChange}
-                          placeholder="@maferme"
-                        />
-
-                        <Input
-                          label="💬 WhatsApp"
-                          type="tel"
-                          name="whatsapp"
-                          value={formData.whatsapp}
-                          onChange={handleChange}
-                          placeholder="6 12 34 56 78"
-                        />
-
-                        <Input
-                          label="✈️ Telegram"
-                          type="text"
-                          name="telegram"
-                          value={formData.telegram}
-                          onChange={handleChange}
-                          placeholder="@maferme"
-                        />
-                      </div>
-                    </Stack>
-                </CardContent>
-              </Card>
+                <ContactTab
+                  formData={formData}
+                  handleChange={handleChange}
+                  handleUrlBlur={handleUrlBlur}
+                  openLink={openLink}
+                  getSocialIcon={getSocialIcon}
+                />
               )}
 
               {/* ONGLET: Vérification */}
               {activeTab === 'verification' && (
-                <Card style={{ backgroundColor: '#eff6ff', borderColor: '#3b82f6' }}>
-                  <CardContent style={{ padding: '24px' }}>
-                    {/* Avertissement modification champs sensibles (répété ici pour visibilité) */}
-                    {existingFarm?.verified && sensitiveFieldsChanged && (
-                      <div style={{
-                        padding: '16px',
-                        backgroundColor: '#fef3c7',
-                        border: '2px solid #fbbf24',
-                        borderRadius: '12px',
-                        marginBottom: '20px'
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'start', gap: '12px' }}>
-                          <span style={{ fontSize: '1.5rem' }}>⚠️</span>
-                          <div style={{ flex: 1 }}>
-                            <p style={{ 
-                              fontSize: '0.9rem', 
-                              color: '#92400e',
-                              margin: 0,
-                              fontWeight: '600',
-                              lineHeight: '1.5'
-                            }}>
-                              <strong>Modification détectée :</strong> Les changements sur le SIRET nécessiteront une nouvelle validation administrative.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    
-                    <Stack spacing="md">
-                      {/* Email avec switch confidentialité */}
-                      <div>
-                        <Input
-                          label="Email *"
-                          type="email"
-                          name="email"
-                          value={formData.email}
-                          onChange={handleChange}
-                          placeholder="contact@maferme.fr"
-                          required
-                          helperText="Requis pour la vérification et les notifications"
-                        />
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px', padding: '8px 12px', backgroundColor: '#fff', borderRadius: '8px' }}>
-                          <Switch
-                            checked={privacy.hideEmail}
-                            onChange={(checked) => handlePrivacyChange('hideEmail', checked)}
-                          />
-                          <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                            🙈 Masquer l'email sur le profil public
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Téléphone avec switch confidentialité */}
-                      <div>
-                        <Input
-                          label="Téléphone *"
-                          type="tel"
-                          name="phone"
-                          value={formData.phone}
-                          onChange={handleChange}
-                          placeholder="6 12 34 56 78"
-                          required
-                          helperText="Requis pour la vérification (Format : 6 12 34 56 78)"
-                          leftIcon={<span style={{ color: 'var(--text-tertiary)', fontWeight: '600' }}>🇫🇷 +33</span>}
-                        />
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px', padding: '8px 12px', backgroundColor: '#fff', borderRadius: '8px' }}>
-                          <Switch
-                            checked={privacy.hidePhone}
-                            onChange={(checked) => handlePrivacyChange('hidePhone', checked)}
-                          />
-                          <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                            🙈 Masquer le téléphone sur le profil public
-                          </span>
-                        </div>
-                      </div>
-                    
-                    {/* SIRET avec switch confidentialité */}
-                    <div>
-                      <Input
-                        label="SIRET / Company ID *"
-                        type="text"
-                        name="companyid"
-                        value={formData.companyid}
-                        onChange={handleChange}
-                        placeholder="12345678901234"
-                        helperText="Requis pour la vérification"
-                      />
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px', padding: '8px 12px', backgroundColor: '#fff', borderRadius: '8px' }}>
-                        <Switch
-                          checked={privacy.hideSiret}
-                          onChange={(checked) => handlePrivacyChange('hideSiret', checked)}
-                        />
-                        <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                          🙈 Masquer le SIRET sur le profil public
-                        </span>
-                      </div>
-                    </div>
-
-                    <div style={{ position: 'relative' }}>
-                      <Input
-                        label="Lien de vérification SIRET *"
-                        type="text"
-                        name="governmentidverificationweblink"
-                        value={formData.governmentidverificationweblink}
-                        onChange={handleChange}
-                        onBlur={() => handleUrlBlur('governmentidverificationweblink')}
-                        placeholder="annuaire-entreprises.data.gouv.fr/..."
-                        helperText="Lien vers l'annuaire officiel (requis pour validation)"
-                        leftIcon={<span style={{ fontSize: '1.2rem' }}>🏛️</span>}
-                      />
-                      {formData.governmentidverificationweblink && (
-                        <button
-                          type="button"
-                          onClick={() => openLink(formData.governmentidverificationweblink)}
-                          style={{
-                            position: 'absolute',
-                            right: '12px',
-                            top: '38px',
-                            padding: '8px 12px',
-                            backgroundColor: '#0074e4',
-                            color: '#fff',
-                            border: 'none',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                            fontSize: '0.875rem',
-                            fontWeight: '600',
-                            transition: 'all 0.2s ease',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0056b3'}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0074e4'}
-                        >
-                          🔗 Vérifier
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Représentant légal avec switch */}
-                    <div>
-                      <Input
-                        label="Représentant légal"
-                        type="text"
-                        name="legalRepresentative"
-                        value={formData.legalRepresentative}
-                        onChange={handleChange}
-                        placeholder="Ex: Jean Dupont"
-                        helperText="Recommandé pour la vérification"
-                      />
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px', padding: '8px 12px', backgroundColor: '#fff', borderRadius: '8px' }}>
-                        <Switch
-                          checked={privacy.hideLegalRep}
-                          onChange={(checked) => handlePrivacyChange('hideLegalRep', checked)}
-                        />
-                        <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                          🙈 Masquer le représentant légal sur le profil public
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Note de sécurité */}
-                    <div style={{
-                      marginTop: '20px',
-                      padding: '14px 16px',
-                      backgroundColor: '#fef3c7',
-                      borderLeft: '4px solid #f59e0b',
-                      borderRadius: '8px',
-                      fontSize: '0.8rem',
-                      color: '#92400e',
-                      lineHeight: '1.5'
-                    }}>
-                      <strong>🔐 Confidentialité :</strong> Les informations masquées restent accessibles aux administrateurs pour la vérification, mais ne seront pas affichées publiquement.
-                    </div>
-                  </Stack>
-                </CardContent>
-              </Card>
+                <VerificationTab
+                  formData={formData}
+                  handleChange={handleChange}
+                  existingFarm={existingFarm}
+                  sensitiveFieldsChanged={sensitiveFieldsChanged}
+                  privacy={privacy}
+                  handlePrivacyChange={handlePrivacyChange}
+                  handleUrlBlur={handleUrlBlur}
+                  openLink={openLink}
+                />
               )}
 
               {/* ONGLET: Certifications */}
               {activeTab === 'certifications' && (
-                <Card>
-                  <CardContent style={{ padding: '24px' }}>
-                    <div style={{ marginBottom: '20px' }}>
-                      <h3 style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span>🏆</span>
-                        <span>Certifications</span>
-                      </h3>
-                      <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', margin: 0 }}>
-                        Valorisez vos labels et certifications (optionnel)
-                      </p>
-                    </div>
-
-                    <Stack spacing="md">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Input
-                          label="Certification nationale (AB, etc.)"
-                          type="text"
-                          name="nationalcertification"
-                          value={formData.nationalcertification}
-                          onChange={handleChange}
-                          placeholder="Ex: Agriculture Biologique"
-                          leftIcon={<span style={{ fontSize: '1.2rem' }}>🇷🇺</span>}
-                        />
-
-                        <div style={{ position: 'relative' }}>
-                          <Input
-                            label="Lien certification nationale"
-                            type="text"
-                            name="nationalcertificationweblink"
-                            value={formData.nationalcertificationweblink}
-                            onChange={handleChange}
-                            onBlur={() => handleUrlBlur('nationalcertificationweblink')}
-                            placeholder="certificat-agence.fr/..."
-                            leftIcon={<span style={{ fontSize: '1.2rem' }}>🔗</span>}
-                          />
-                          {formData.nationalcertificationweblink && (
-                            <button
-                              type="button"
-                              onClick={() => openLink(formData.nationalcertificationweblink)}
-                              style={{
-                                position: 'absolute',
-                                right: '12px',
-                                top: '38px',
-                                padding: '6px 10px',
-                                backgroundColor: '#0074e4',
-                                color: '#fff',
-                                border: 'none',
-                                borderRadius: '6px',
-                                cursor: 'pointer',
-                                fontSize: '1rem',
-                                transition: 'all 0.2s ease'
-                              }}
-                              title="Ouvrir le lien"
-                              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0056b3'}
-                              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0074e4'}
-                            >
-                              🔗
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Input
-                          label="Certification internationale"
-                          type="text"
-                          name="internationalcertification"
-                          value={formData.internationalcertification}
-                          onChange={handleChange}
-                          placeholder="Ex: Ecocert, Demeter"
-                          leftIcon={<span style={{ fontSize: '1.2rem' }}>🌍</span>}
-                        />
-
-                        <div style={{ position: 'relative' }}>
-                          <Input
-                            label="Lien certification internationale"
-                            type="text"
-                            name="internationalcertificationweblink"
-                            value={formData.internationalcertificationweblink}
-                            onChange={handleChange}
-                            onBlur={() => handleUrlBlur('internationalcertificationweblink')}
-                            placeholder="ecocert.com/..."
-                            leftIcon={<span style={{ fontSize: '1.2rem' }}>🔗</span>}
-                          />
-                          {formData.internationalcertificationweblink && (
-                            <button
-                              type="button"
-                              onClick={() => openLink(formData.internationalcertificationweblink)}
-                              style={{
-                                position: 'absolute',
-                                right: '12px',
-                                top: '38px',
-                                padding: '6px 10px',
-                                backgroundColor: '#0074e4',
-                                color: '#fff',
-                                border: 'none',
-                                borderRadius: '6px',
-                                cursor: 'pointer',
-                                fontSize: '1rem',
-                                transition: 'all 0.2s ease'
-                              }}
-                              title="Ouvrir le lien"
-                              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0056b3'}
-                              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0074e4'}
-                            >
-                              🔗
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </Stack>
-                </CardContent>
-              </Card>
+                <CertificationsTab
+                  formData={formData}
+                  handleChange={handleChange}
+                  handleUrlBlur={handleUrlBlur}
+                  openLink={openLink}
+                />
               )}
 
               {/* Alertes système */}
               {/* Alerte suppression en cours */}
-                {existingFarm && existingFarm.status === 'pending_deletion' && (
+                {existingFarm && existingFarm.status === 'deleted' && (
                   <Card>
                     <CardContent className="p-4 bg-red-50 dark:bg-red-950/30 border-2 border-red-500">
                       <div className="flex items-start gap-3">
@@ -2095,64 +1350,68 @@ const ManageFarmPage = () => {
                       
                       <Button
                         type="submit"
-                        disabled={submitting}
+                        disabled={submitting || !formData.farmName}
                         variant="secondary"
                       >
-                        {submitting ? 'Enregistrement...' : 'Enregistrer'}
+                        {submitting ? 'Enregistrement...' : 'Enregistrer en brouillon'}
                       </Button>
                     </div>
 
-                    {/* Bouton Demander Vérification : visible uniquement sur l'onglet 'verification', si non vérifié et pas pending */}
+                    {/* InfoBox dynamique : champs manquants pour vérification */}
+                    {activeTab === 'verification' && existingFarm && !existingFarm.verified && existingFarm.verification_status !== 'pending' && !canRequestVerification() && (
+                      <div style={{
+                        padding: '12px 14px',
+                        backgroundColor: '#dbeafe',
+                        border: '1px solid #3b82f6',
+                        borderRadius: '8px',
+                        fontSize: '0.85rem',
+                        color: '#1e40af',
+                        lineHeight: '1.5'
+                      }}>
+                        <strong>ℹ️ Pour demander la vérification, veuillez compléter :</strong>
+                        <ul style={{ margin: '6px 0 0 20px', paddingLeft: 0 }}>
+                          {getMissingFieldsForVerification().map((field, idx) => (
+                            <li key={idx} style={{ marginBottom: '2px' }}>• {field}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Bouton Demander Vérification : toujours visible sur l'onglet 'verification' */}
                     {activeTab === 'verification' && existingFarm && !existingFarm.verified && existingFarm.verification_status !== 'pending' && (
-                      <>
-                        <Button
-                          type="button"
-                          onClick={async (e) => {
-                            if (!canRequestVerification()) {
-                              setNotification({
-                                type: 'error',
-                                message: `Champs manquants : ${getMissingFieldsForVerification().join(', ')}`
-                              });
-                              return;
-                            }
-                            
-                            // Sauvegarder avec demande de vérification
-                            await handleSubmit(e, true);
-                            
-                            // Afficher popup de confirmation (disparaît en 3 secondes)
+                      <Button
+                        type="button"
+                        onClick={async (e) => {
+                          if (!canRequestVerification()) {
                             setNotification({
-                              type: 'success',
-                              message: '✅ Votre demande a été envoyée'
+                              type: 'error',
+                              message: `Champs manquants : ${getMissingFieldsForVerification().join(', ')}`
                             });
-                          }}
-                          disabled={!canRequestVerification() || submitting}
-                          variant="primary"
-                          fullWidth
-                          style={{ 
-                            backgroundColor: canRequestVerification() ? '#10b981' : '#cbd5e1', 
-                            borderColor: canRequestVerification() ? '#10b981' : '#cbd5e1',
-                            color: '#ffffff'
-                          }}
-                        >
-                          {canRequestVerification() 
-                            ? 'Enregistrer et Vérifier' 
-                            : 'Complétez les champs requis'}
-                        </Button>
-                        
-                        {/* Message d'aide si champs manquants */}
-                        {!canRequestVerification() && (
-                          <div style={{
-                            padding: '10px 12px',
-                            backgroundColor: '#fef3c7',
-                            border: '1px solid #fbbf24',
-                            borderRadius: '8px',
-                            fontSize: '0.8rem',
-                            color: '#92400e'
-                          }}>
-                            <strong>Manquants :</strong> {getMissingFieldsForVerification().join(', ')}
-                          </div>
-                        )}
-                      </>
+                            return;
+                          }
+                          
+                          // Sauvegarder avec demande de vérification
+                          await handleSubmit(e, true);
+                          
+                          // Afficher popup de confirmation
+                          setNotification({
+                            type: 'success',
+                            message: '✅ Votre demande de vérification a été envoyée'
+                          });
+                        }}
+                        disabled={!canRequestVerification() || submitting}
+                        variant="primary"
+                        fullWidth
+                        style={{ 
+                          backgroundColor: canRequestVerification() ? '#10b981' : '#cbd5e1', 
+                          borderColor: canRequestVerification() ? '#10b981' : '#cbd5e1',
+                          color: '#ffffff'
+                        }}
+                      >
+                        {canRequestVerification() 
+                          ? '✅ Enregistrer et Demander Vérification' 
+                          : '🔒 Complétez les champs requis pour vérifier'}
+                      </Button>
                     )}
 
                     {/* Info validation en cours */}
@@ -2175,248 +1434,22 @@ const ManageFarmPage = () => {
             </Stack>
           </form>
 
-          {/* HISTORIQUE: Échanges avec l'administrateur */}
+          {/* HISTORIQUE: Communication & Signalements - Composants unifiés */}
           {existingFarm && (
-            (existingFarm.communication_history && existingFarm.communication_history.length > 0) ||
-            existingFarm.verification_status === 'pending' ||
-            existingFarm.verification_status === 'info_requested'
-          ) && (
-            <details style={{ marginTop: '1.5rem' }}>
-              <summary style={{
-                cursor: 'pointer',
-                padding: '1.25rem',
-                backgroundColor: '#f0f9ff',
-                border: '2px solid #3b82f6',
-                borderRadius: '12px',
-                fontSize: '1.125rem',
-                fontWeight: '700',
-                color: '#1e40af',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.75rem',
-                listStyle: 'none',
-                userSelect: 'none'
-              }}>
-                <span style={{ fontSize: '1.5rem' }}>💬</span>
-                <span>Historique des échanges</span>
-                
-                {/* Badge compteur total */}
-                <span style={{ 
-                  marginLeft: 'auto',
-                  fontSize: '0.75rem',
-                  backgroundColor: '#3b82f6',
-                  color: '#fff',
-                  padding: '4px 10px',
-                  borderRadius: '12px',
-                  fontWeight: '600'
-                }}>
-                  {existingFarm.communication_history?.length || 0} message(s)
-                </span>
-                
-                {/* Badge messages admin non lus */}
-                {unreadAdminCount > 0 && (
-                  <span style={{ 
-                    fontSize: '0.75rem',
-                    backgroundColor: '#ef4444',
-                    color: '#fff',
-                    padding: '4px 10px',
-                    borderRadius: '12px',
-                    fontWeight: '600',
-                    animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
-                  }}>
-                    {unreadAdminCount} nouveau(x)
-                  </span>
-                )}
-              </summary>
+            <>
+              <CommunicationSection
+                farm={existingFarm}
+                onSendMessage={handleSendMessage}
+                loading={sendingMessage}
+                showReplyBox={existingFarm.verification_status !== 'banned'}
+                unreadCount={unreadAdminCount}
+              />
               
-              <Card style={{ marginTop: '0.5rem', backgroundColor: '#f0f9ff', borderColor: '#3b82f6' }}>
-                <CardContent style={{ padding: '24px' }}>
-                  <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '20px' }}>
-                    Historique des communications concernant la vérification de votre établissement
-                  </p>
-
-                  {/* Historique des messages */}
-                  {existingFarm.communication_history && existingFarm.communication_history.length > 0 && (
-                    <div style={{ 
-                      marginBottom: '20px',
-                      maxHeight: '400px',
-                      overflowY: 'auto',
-                      padding: '12px',
-                      backgroundColor: '#fff',
-                      borderRadius: '12px',
-                      border: '1px solid #e5e7eb'
-                    }}>
-                      <Stack spacing="md">
-                        {existingFarm.communication_history.map((msg, idx) => {
-                          const isSystem = msg.author === 'system';
-                          const isAdmin = msg.author === 'admin';
-                          const isUser = msg.author === 'creator' || msg.author === 'user';
-                          
-                          // Détecter si c'est un message de refus
-                          const isRejectionMessage = isSystem && msg.message.includes('🚫 REFUS');
-                          
-                          if (isSystem) {
-                            return (
-                              <div
-                                key={idx}
-                                style={{
-                                  textAlign: 'center',
-                                  padding: '12px 16px',
-                                  backgroundColor: isRejectionMessage ? '#fee2e2' : '#f3f4f6',
-                                  borderRadius: '8px',
-                                  border: isRejectionMessage ? '2px solid #ef4444' : 'none',
-                                  fontSize: '0.875rem',
-                                  color: isRejectionMessage ? '#b91c1c' : '#6b7280',
-                                  fontWeight: isRejectionMessage ? '600' : '400',
-                                  fontStyle: 'italic'
-                                }}
-                              >
-                                {msg.message}
-                                <div style={{ 
-                                  fontSize: '0.75rem', 
-                                  marginTop: '4px',
-                                  color: isRejectionMessage ? '#991b1b' : '#9ca3af'
-                                }}>
-                                  {new Date(msg.timestamp).toLocaleDateString('fr-FR', {
-                                    day: 'numeric',
-                                    month: 'short',
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                  })}
-                                </div>
-                              </div>
-                            );
-                          }
-                          
-                          return (
-                            <div
-                              key={idx}
-                              style={{
-                                display: 'flex',
-                                justifyContent: isAdmin ? 'flex-start' : 'flex-end',
-                                marginBottom: '12px'
-                              }}
-                            >
-                              <div
-                                style={{
-                                  maxWidth: '75%',
-                                  padding: '12px 16px',
-                                  borderRadius: '12px',
-                                  backgroundColor: isAdmin ? '#eff6ff' : '#dcfce7',
-                                  border: isAdmin ? '1px solid #3b82f6' : '1px solid #22c55e',
-                                  wordBreak: 'break-word'
-                                }}
-                              >
-                                <div style={{ 
-                                  fontSize: '0.75rem', 
-                                  fontWeight: '600',
-                                  color: isAdmin ? '#1e40af' : '#15803d',
-                                  marginBottom: '6px',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '6px'
-                                }}>
-                                  <span>{isAdmin ? '👨‍💼 Administrateur' : '👤 Vous'}</span>
-                                  <span style={{ color: '#9ca3af' }}>•</span>
-                                  <span style={{ color: '#9ca3af', fontWeight: '400' }}>
-                                    {new Date(msg.timestamp).toLocaleDateString('fr-FR', {
-                                      day: 'numeric',
-                                      month: 'short',
-                                      year: 'numeric',
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    })}
-                                  </span>
-                                </div>
-                                <p style={{ 
-                                  fontSize: '0.9rem', 
-                                  color: 'var(--text-primary)',
-                                  margin: 0,
-                                  lineHeight: '1.5'
-                                }}>
-                                  {msg.message}
-                                </p>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </Stack>
-                    </div>
-                  )}
-
-                  {/* Zone de saisie nouveau message - Toujours disponible pour permettre contestation */}
-                  {existingFarm.verification_status !== 'banned' && (
-                    <div style={{ 
-                      padding: '16px', 
-                      backgroundColor: '#fff', 
-                      borderRadius: '12px',
-                      border: '1px solid #e5e7eb'
-                    }}>
-                      {/* Info contextuelle selon le statut */}
-                      {existingFarm.verification_status === 'rejected' && (
-                        <div style={{
-                          padding: '12px',
-                          backgroundColor: '#fef3c7',
-                          border: '1px solid #fbbf24',
-                          borderRadius: '8px',
-                          marginBottom: '12px',
-                          fontSize: '0.875rem',
-                          color: '#92400e'
-                        }}>
-                          💬 <strong>Votre demande a été refusée.</strong> Vous pouvez contester cette décision en envoyant un message.
-                        </div>
-                      )}
-                      {existingFarm.verification_status === 'verified' && (
-                        <div style={{
-                          padding: '12px',
-                          backgroundColor: '#d1fae5',
-                          border: '1px solid #10b981',
-                          borderRadius: '8px',
-                          marginBottom: '12px',
-                          fontSize: '0.875rem',
-                          color: '#065f46'
-                        }}>
-                          ✅ <strong>Votre établissement est vérifié.</strong> Vous pouvez signaler un problème ou poser une question.
-                        </div>
-                      )}
-                      
-                      <Textarea
-                        label="Votre message"
-                        value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
-                        placeholder="Écrivez votre message à l'administrateur..."
-                        rows={3}
-                        style={{ marginBottom: '12px' }}
-                      />
-                      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                        <Button
-                          variant="primary"
-                          onClick={handleSendMessage}
-                          disabled={sendingMessage || !newMessage.trim()}
-                        >
-                          {sendingMessage ? 'Envoi...' : '📤 Envoyer'}
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Message si pas de conversation active */}
-                  {(!existingFarm.communication_history || existingFarm.communication_history.length === 0) &&
-                   existingFarm.verification_status !== 'pending' &&
-                   existingFarm.verification_status !== 'info_requested' && (
-                    <div style={{
-                      textAlign: 'center',
-                      padding: '32px',
-                      color: '#6b7280'
-                    }}>
-                      <p style={{ fontSize: '0.9rem', margin: 0 }}>
-                        Aucun message pour le moment. L'administrateur vous contactera si nécessaire.
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </details>
+              <ReportsSection
+                reports={farmReports}
+                loading={loadingReports}
+              />
+            </>
           )}
 
                     {/* LISTE DES JETONS ASSOCIÉS */}
@@ -2648,21 +1681,18 @@ const ManageFarmPage = () => {
                                 
                                 <div style={{ width: '1px', height: '40px', backgroundColor: 'var(--border-primary)' }} />
                                 
-                                {/* Switch visibilité */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                  <Switch
-                                    checked={token.isVisible !== false && !isIncomplete}
-                                    onChange={(checked) => {
-                                      if (!isIncomplete && checked !== undefined) {
-                                        handleToggleVisibility(token.tokenId, token.isVisible !== false);
-                                      }
-                                    }}
-                                    disabled={togglingVisibility[token.tokenId] || isIncomplete}
-                                  />
-                                  <span style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)' }}>
-                                    {isIncomplete ? '🔒 Masqué' : (token.isVisible !== false ? '👁️ Visible' : '🙈 Masqué')}
-                                  </span>
-                                </div>
+                                {/* Visibilité */}
+                                <VisibilityToggle
+                                  isVisible={token.isVisible !== false && !isIncomplete}
+                                  onChange={(val) => {
+                                    if (!isIncomplete) {
+                                      handleToggleVisibility(token.tokenId, token.isVisible !== false);
+                                    }
+                                  }}
+                                  disabled={togglingVisibility[token.tokenId] || isIncomplete}
+                                  labelVisible="Visible"
+                                  labelHidden={isIncomplete ? "Incomplet" : "Masqué"}
+                                />
                                 
                                 <div style={{ width: '1px', height: '40px', backgroundColor: 'var(--border-primary)' }} />
                                 

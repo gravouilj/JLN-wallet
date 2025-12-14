@@ -282,7 +282,7 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
           name: tokenPreview.name || 'Ma Ferme',
           description: '', // Description vide, le purpose/counterpart sont dans le token
           tokens: [newTokenData],
-          verification_status: 'unverified',
+          verification_status: 'none',
           verified: false,
           products: []
         };

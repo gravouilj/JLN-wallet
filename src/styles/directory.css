@@ -2,6 +2,27 @@
    DIRECTORY PAGE - Farm Listing & Favorites
    ======================================== */
 
+/* Animations */
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+}
+
 .directory-container {
   display: flex;
   flex-direction: column;
@@ -104,20 +125,40 @@
 
 .filters-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(5, 1fr);
   gap: 12px;
+}
+
+@media (max-width: 1024px) {
+  .filters-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .filters-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .filter-select {
   width: 100%;
-  padding: 10px 12px;
-  font-size: 0.9rem;
+  padding: 14px 12px;
+  font-size: 0.95rem;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   background-color: var(--input-bg);
   color: var(--text-primary);
   cursor: pointer;
   outline: none;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.6;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
 }
 
 /* --- RESULTS & GRID --- */
@@ -334,29 +375,101 @@
   border: 1px solid var(--border-color);
 }
 
-/* --- REGISTER SECTION --- */
+/* --- REGISTER CTA SECTION --- */
 
-.register-farm-section-footer {
-  padding: 24px;
+.register-farm-cta {
+  margin: 40px 20px;
+  padding: 0;
+}
+
+.register-farm-cta-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 16px;
+  padding: 48px 32px;
   text-align: center;
-  background-color: var(--bg-secondary);
-  border-top: 1px solid var(--border-color);
-}
-
-.register-farm-btn {
-  padding: 12px 24px;
-  background-color: var(--bg-primary);
-  border: 2px solid var(--primary-color);
-  color: var(--primary-color);
-  border-radius: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.register-farm-btn:hover {
-  background-color: var(--primary-color);
   color: white;
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.25);
+  position: relative;
+  overflow: hidden;
+}
+
+.register-farm-cta-card::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+  animation: pulse 3s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 0.5; }
+  50% { transform: scale(1.1); opacity: 0.8; }
+}
+
+.register-farm-cta-content {
+  position: relative;
+  z-index: 1;
+}
+
+.register-farm-cta-icon {
+  font-size: 3.5rem;
+  margin-bottom: 16px;
+  display: inline-block;
+  animation: bounce 2s ease-in-out infinite;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.register-farm-cta-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin: 0 0 12px 0;
+  color: white;
+}
+
+.register-farm-cta-subtitle {
+  font-size: 1rem;
+  margin: 0 0 24px 0;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.6;
+}
+
+.register-farm-cta-features {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+}
+
+.register-farm-cta-feature {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 500;
+}
+
+@media (max-width: 768px) {
+  .register-farm-cta-card {
+    padding: 32px 24px;
+  }
+  
+  .register-farm-cta-title {
+    font-size: 1.4rem;
+  }
+  
+  .register-farm-cta-features {
+    flex-direction: column;
+    gap: 12px;
+  }
 }
 
 /* --- MODAL --- */

@@ -159,7 +159,7 @@ const CompleteTokenImportPage = () => {
           name: creatorInfo.farmName || tokenData.name || 'Ma Ferme',
           description: creatorInfo.description || '',
           tokens: [newTokenData],
-          verification_status: 'unverified',
+          verification_status: 'none',
           verified: false,
           products: creatorInfo.products ? creatorInfo.products.split(',').map(p => p.trim()).filter(Boolean) : [],
           services: creatorInfo.services ? creatorInfo.services.split(',').map(s => s.trim()).filter(Boolean) : [],

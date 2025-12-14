@@ -352,6 +352,38 @@ export const Switch = ({ checked, onChange, disabled = false, className = '' }) 
   </label>
 );
 
+export const VisibilityToggle = ({ isVisible, onChange, labelVisible = "Visible", labelHidden = "Masqué", disabled = false }) => (
+  <div 
+    onClick={() => !disabled && onChange(!isVisible)}
+    style={{ 
+      display: 'flex', 
+      alignItems: 'center', 
+      gap: '8px', 
+      cursor: disabled ? 'not-allowed' : 'pointer',
+      opacity: disabled ? 0.6 : 1,
+      padding: '4px 8px',
+      borderRadius: '8px',
+      backgroundColor: isVisible ? '#dcfce7' : '#f3f4f6', // Vert clair / Gris
+      border: `1px solid ${isVisible ? '#86efac' : '#e5e7eb'}`,
+      transition: 'all 0.2s'
+    }}
+  >
+    <div style={{
+      width: '36px', height: '20px', backgroundColor: isVisible ? '#16a34a' : '#cbd5e1',
+      borderRadius: '20px', position: 'relative', transition: 'background-color 0.2s'
+    }}>
+      <div style={{
+        width: '16px', height: '16px', backgroundColor: 'white', borderRadius: '50%',
+        position: 'absolute', top: '2px', left: isVisible ? '18px' : '2px', transition: 'left 0.2s',
+        boxShadow: '0 1px 2px rgba(0,0,0,0.2)'
+      }} />
+    </div>
+    <span style={{ fontSize: '0.85rem', fontWeight: '600', color: isVisible ? '#15803d' : '#64748b' }}>
+      {isVisible ? `👁️ ${labelVisible}` : `🙈 ${labelHidden}`}
+    </span>
+  </div>
+);
+
 export const Modal = ({ children, isOpen = false, onClose, className = '' }) => {
   if (!isOpen) return null;
   return (
@@ -423,3 +455,305 @@ export const BalanceCard = ({ leftContent, rightContent, onRightClick }) => (
     </div>
   </div>
 );
+
+// --- COMPOSANTS PHASE 1.1 : ALERTS & MESSAGES ---
+
+/**
+ * InfoBox - Alerts/Notifications contextuelles
+ * @param {string} type - Type: 'info', 'success', 'warning', 'error'
+ * @param {string} title - Titre optionnel
+ * @param {node} children - Contenu
+ * @param {string} icon - Icône custom optionnelle
+ * @param {function} onDismiss - Callback pour fermer
+ */
+export const InfoBox = ({ type = 'info', title, children, icon, onDismiss, className = '' }) => {
+  const styles = {
+    info: { bg: '#dbeafe', border: '#3b82f6', text: '#1e40af', icon: 'ℹ️' },
+    success: { bg: '#dcfce7', border: '#16a34a', text: '#166534', icon: '✅' },
+    warning: { bg: '#fef3c7', border: '#f59e0b', text: '#92400e', icon: '⚠️' },
+    error: { bg: '#fee2e2', border: '#ef4444', text: '#991b1b', icon: '❌' }
+  };
+  const style = styles[type] || styles.info;
+  
+  return (
+    <div 
+      className={className}
+      style={{
+        padding: '1rem',
+        backgroundColor: style.bg,
+        border: `1px solid ${style.border}`,
+        borderLeft: `4px solid ${style.border}`,
+        borderRadius: '8px',
+        color: style.text,
+        marginBottom: '1rem'
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'start', gap: '0.75rem' }}>
+        <span style={{ fontSize: '1.25rem', flexShrink: 0 }}>{icon || style.icon}</span>
+        <div style={{ flex: 1 }}>
+          {title && <p style={{ fontWeight: '600', marginBottom: '0.5rem', margin: 0 }}>{title}</p>}
+          <div style={{ fontSize: '0.9rem', lineHeight: '1.5' }}>{children}</div>
+        </div>
+        {onDismiss && (
+          <button 
+            onClick={onDismiss} 
+            style={{ 
+              border: 'none', 
+              background: 'none', 
+              cursor: 'pointer', 
+              fontSize: '1.5rem', 
+              color: style.text,
+              opacity: 0.7,
+              padding: '0 0.25rem',
+              lineHeight: 1,
+              flexShrink: 0
+            }}
+            aria-label="Fermer"
+          >
+            ×
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/**
+ * StatusBadge - Badges de statut standardisés avec couleurs sémantiques
+ * @param {string} status - Statut à afficher
+ * @param {string} type - Type de statut: 'verification', 'farm', 'report'
+ */
+export const StatusBadge = ({ status, type = 'verification', className = '' }) => {
+  const verificationStyles = {
+    none: { bg: '#f3f4f6', text: '#6b7280', label: '📋 Aucun badge' },
+    pending: { bg: '#fef3c7', text: '#92400e', label: '⏳ En attente' },
+    info_requested: { bg: '#dbeafe', text: '#1e40af', label: '💬 Info demandée' },
+    verified: { bg: '#dcfce7', text: '#166534', label: '✅ Vérifié' },
+    rejected: { bg: '#fee2e2', text: '#991b1b', label: '🚫 Refusé' }
+  };
+  
+  const farmStatusStyles = {
+    draft: { bg: '#f3f4f6', text: '#6b7280', label: '📝 Brouillon' },
+    active: { bg: '#dcfce7', text: '#166534', label: '✅ Public' },
+    suspended: { bg: '#fef3c7', text: '#92400e', label: '⏸️ Suspendu' },
+    banned: { bg: '#fee2e2', text: '#991b1b', label: '🛑 Banni' },
+    deleted: { bg: '#fee2e2', text: '#991b1b', label: '🗑️ Supprimé' }
+  };
+  
+  const reportStatusStyles = {
+    pending: { bg: '#fef3c7', text: '#92400e', label: '⏳ En attente' },
+    investigating: { bg: '#dbeafe', text: '#1e40af', label: '🔍 En examen' },
+    resolved: { bg: '#dcfce7', text: '#166534', label: '✅ Résolu' },
+    ignored: { bg: '#f3f4f6', text: '#6b7280', label: '⏭️ Ignoré' }
+  };
+  
+  const styles = type === 'verification' ? verificationStyles : 
+                 type === 'farm' ? farmStatusStyles : reportStatusStyles;
+  
+  const style = styles[status] || { bg: '#f3f4f6', text: '#6b7280', label: status };
+  
+  return (
+    <Badge 
+      className={className}
+      style={{ 
+        backgroundColor: style.bg, 
+        color: style.text 
+      }}
+    >
+      {style.label}
+    </Badge>
+  );
+};
+
+/**
+ * MessageThread - Affichage d'un historique de messages
+ * @param {array} messages - Tableau de messages avec { author, message, timestamp }
+ * @param {boolean} loading - État de chargement
+ * @param {string} emptyMessage - Message si aucun message
+ */
+export const MessageThread = ({ messages = [], loading = false, emptyMessage = 'Aucun message', className = '' }) => {
+  if (loading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '2rem', color: '#6b7280' }}>
+        <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⏳</div>
+        <p>Chargement des messages...</p>
+      </div>
+    );
+  }
+  
+  if (!messages || messages.length === 0) {
+    return (
+      <InfoBox type="info">
+        {emptyMessage}
+      </InfoBox>
+    );
+  }
+  
+  return (
+    <div 
+      className={className}
+      style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        gap: '1rem', 
+        maxHeight: '400px', 
+        overflowY: 'auto',
+        padding: '0.5rem'
+      }}
+    >
+      {messages.map((msg, idx) => (
+        <div 
+          key={idx} 
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: msg.author === 'admin' ? 'flex-end' : 
+                       msg.author === 'system' ? 'center' : 'flex-start'
+          }}
+        >
+          <div style={{
+            padding: '0.75rem 1rem',
+            borderRadius: '12px',
+            maxWidth: '85%',
+            backgroundColor: msg.author === 'admin' ? '#3b82f6' : 
+                             msg.author === 'system' ? '#f3f4f6' : '#fff',
+            color: msg.author === 'admin' ? '#fff' : '#1f2937',
+            border: msg.author === 'admin' ? 'none' : '1px solid #e5e7eb',
+            fontStyle: msg.author === 'system' ? 'italic' : 'normal',
+            fontSize: '0.95rem',
+            lineHeight: '1.5',
+            wordBreak: 'break-word'
+          }}>
+            {msg.message}
+          </div>
+          <span style={{ 
+            fontSize: '0.7rem', 
+            color: '#9ca3af', 
+            marginTop: '0.25rem',
+            fontStyle: 'italic'
+          }}>
+            {new Date(msg.timestamp).toLocaleString('fr-FR', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+/**
+ * ActionBar - Barre d'actions contextuelles avec boutons
+ * @param {string} title - Titre de la section
+ * @param {node} children - Boutons d'action
+ * @param {string} variant - Style: 'default', 'primary', 'danger'
+ */
+export const ActionBar = ({ title, children, variant = 'default', className = '' }) => {
+  const styles = {
+    default: { bg: '#f9fafb', border: '#e5e7eb' },
+    primary: { bg: '#eff6ff', border: '#3b82f6' },
+    danger: { bg: '#fef2f2', border: '#ef4444' },
+    success: { bg: '#f0fdf4', border: '#16a34a' }
+  };
+  const style = styles[variant] || styles.default;
+  
+  return (
+    <div 
+      className={className}
+      style={{
+        padding: '1rem',
+        backgroundColor: style.bg,
+        border: `1px solid ${style.border}`,
+        borderRadius: '12px',
+        marginTop: '1rem'
+      }}
+    >
+      {title && (
+        <p style={{ 
+          fontSize: '0.75rem', 
+          fontWeight: '700', 
+          color: '#6b7280', 
+          textTransform: 'uppercase', 
+          letterSpacing: '0.05em',
+          marginBottom: '0.75rem',
+          margin: '0 0 0.75rem 0'
+        }}>
+          {title}
+        </p>
+      )}
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        {children}
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Accordion - Section pliable/dépliable (remplace <details>)
+ * @param {string} title - Titre de la section
+ * @param {node} badge - Badge optionnel (compteur, etc.)
+ * @param {node} children - Contenu
+ * @param {boolean} defaultOpen - Ouvert par défaut
+ * @param {string} variant - Style: 'default', 'success', 'warning', 'danger'
+ */
+export const Accordion = ({ title, badge, children, defaultOpen = false, variant = 'default', className = '' }) => {
+  const [isOpen, setIsOpen] = React.useState(defaultOpen);
+  
+  const variants = {
+    default: { bg: '#f0f9ff', border: '#3b82f6', text: '#1e40af', icon: '📋' },
+    success: { bg: '#f0fdf4', border: '#16a34a', text: '#166534', icon: '✅' },
+    warning: { bg: '#fffbeb', border: '#f59e0b', text: '#92400e', icon: '⚠️' },
+    danger: { bg: '#fef2f2', border: '#ef4444', text: '#991b1b', icon: '🚨' }
+  };
+  const style = variants[variant] || variants.default;
+  
+  return (
+    <div className={className} style={{ marginBottom: '1.5rem' }}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          width: '100%',
+          padding: '1.25rem',
+          backgroundColor: style.bg,
+          border: `2px solid ${style.border}`,
+          borderRadius: '12px',
+          fontSize: '1.125rem',
+          fontWeight: '700',
+          color: style.text,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+          cursor: 'pointer',
+          textAlign: 'left',
+          transition: 'all 0.2s ease',
+          outline: 'none'
+        }}
+        onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
+        onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+      >
+        <span style={{ fontSize: '1rem', transition: 'transform 0.2s', display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+          ▶
+        </span>
+        <span style={{ flex: 1 }}>{title}</span>
+        {badge && <div style={{ marginLeft: 'auto' }}>{badge}</div>}
+      </button>
+      
+      {isOpen && (
+        <Card style={{ 
+          marginTop: '0.5rem', 
+          backgroundColor: style.bg, 
+          borderColor: style.border,
+          animation: 'fadeIn 0.2s ease-in'
+        }}>
+          <CardContent>
+            {children}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+};

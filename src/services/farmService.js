@@ -31,12 +31,12 @@ export const FarmService = {
     const current = await this.getMyFarm(ownerAddress);
     console.log('📊 Ferme actuelle:', current);
     
-    // Si la ferme est déjà vérifiée, toute modification la repasse en "unverified" 
+    // Si la ferme est déjà vérifiée, toute modification la repasse en "none" 
     // sauf si c'est juste une mise à jour mineure (logique à affiner)
     // Pour l'instant : Modification = Reset validation (sécurité)
-    let newStatus = current?.verification_status || 'unverified';
+    let newStatus = current?.verification_status || 'none';
     if (current?.verified) {
-        newStatus = 'unverified'; 
+        newStatus = 'none'; 
     }
 
     const payload = {
@@ -281,11 +281,11 @@ export const FarmService = {
     console.log('🔍 Vérification disponibilité token:', { tokenId, currentUserAddress });
     
     try {
-      // Récupérer TOUTES les fermes actives
+      // Récupérer TOUTES les fermes actives (exclure seulement deleted et banned)
       const { data: allFarms, error } = await supabase
         .from('farms')
         .select('*')
-        .in('status', ['active', 'hidden', 'pending_deletion']); // Exclure seulement les supprimées
+        .not('status', 'in', '("deleted","banned")'); // Inclure draft, active, suspended
       
       if (error) {
         console.error('❌ Erreur query farms:', error);
@@ -345,14 +345,14 @@ export const FarmService = {
     }
   },
 
-  // 3. ADMIN: Récupérer les demandes (Pending + Unverified + Info_requested)
+  // 3. ADMIN: Récupérer les demandes de vérification (Pending + Info_requested)
   async getPendingFarms() {
     console.log('🔍 getPendingFarms: Tentative de récupération des fermes en attente...');
     
     const { data, error } = await supabase
       .from('farms')
       .select('*')
-      .in('verification_status', ['pending', 'info_requested', 'unverified'])
+      .in('verification_status', ['pending', 'info_requested'])
       .order('updated_at', { ascending: false });
 
     if (error) {
@@ -415,13 +415,12 @@ export const FarmService = {
     return data;
   },
 
-  // 5. PUBLIC: Annuaire (Seulement les vérifiées ET actives)
+  // 5. PUBLIC: Annuaire (Toutes les fermes actives, vérifiées ou non)
   async getVerifiedFarms() {
     const { data, error } = await supabase
       .from('farms')
       .select('*')
-      .eq('verified', true)
-      .eq('status', 'active'); // Exclure hidden et pending_deletion
+      .eq('status', 'active'); // Afficher toutes les fermes publiques/actives
       
     if (error) throw error;
     return data || [];
@@ -453,14 +452,14 @@ export const FarmService = {
     return allTokens;
   },
 
-  // 7. ADMIN: Masquer une ferme du directory (sans suppression)
-  async hideFarm(farmId, reason) {
+  // 7. ADMIN: Suspendre une ferme (masquée mais récupérable)
+  async suspendFarm(farmId, reason) {
     const { data, error } = await supabase
       .from('farms')
       .update({
-        status: 'hidden',
-        hidden_at: new Date().toISOString(),
-        deletion_reason: reason
+        status: 'suspended',
+        suspended_at: new Date().toISOString(),
+        suspension_reason: reason
       })
       .eq('id', farmId)
       .select()
@@ -470,13 +469,13 @@ export const FarmService = {
     return data;
   },
 
-  // 8. ADMIN: Marquer une ferme pour suppression (soft delete - 1 an)
-  async markForDeletion(farmId, reason) {
+  // 8. ADMIN: Marquer une ferme comme supprimée (soft delete)
+  async deleteFarm(farmId, reason) {
     const { data, error } = await supabase
       .from('farms')
       .update({
-        status: 'pending_deletion',
-        deletion_requested_at: new Date().toISOString(),
+        status: 'deleted',
+        deleted_at: new Date().toISOString(),
         deletion_reason: reason
       })
       .eq('id', farmId)
@@ -498,14 +497,15 @@ export const FarmService = {
     return data;
   },
 
-  // 9. ADMIN: Réactiver une ferme (annuler suppression/masquage)
+  // 9. ADMIN: Réactiver une ferme (annuler suspension/suppression)
   async reactivateFarm(farmId) {
     const { data, error } = await supabase
       .from('farms')
       .update({
         status: 'active',
-        hidden_at: null,
-        deletion_requested_at: null,
+        suspended_at: null,
+        deleted_at: null,
+        suspension_reason: null,
         deletion_reason: null
       })
       .eq('id', farmId)
@@ -632,22 +632,29 @@ export const FarmService = {
     });
     
     // Grouper par ferme et compter les signalements
+    // IMPORTANT: Exclure uniquement les fermes avec status 'banned' ou 'deleted'
+    // Les fermes draft, suspended et actives doivent apparaître
     const farmReports = {};
     data.forEach(report => {
       const farmId = report.farm_id;
-      if (!farmReports[farmId]) {
-        farmReports[farmId] = {
-          farm: report.farms,
-          reports: [],
-          count: 0
-        };
+      const farm = report.farms;
+      
+      // Exclure uniquement les fermes bannies ou supprimées
+      if (farm && farm.status !== 'banned' && farm.status !== 'deleted') {
+        if (!farmReports[farmId]) {
+          farmReports[farmId] = {
+            farm: farm,
+            reports: [],
+            count: 0
+          };
+        }
+        farmReports[farmId].reports.push(report);
+        farmReports[farmId].count++;
       }
-      farmReports[farmId].reports.push(report);
-      farmReports[farmId].count++;
     });
     
     const result = Object.values(farmReports).sort((a, b) => b.count - a.count);
-    console.log('📊 Fermes signalées groupées:', result.length);
+    console.log('📊 Fermes signalées groupées (hors banned):', result.length);
     
     return result;
   },
@@ -669,6 +676,45 @@ export const FarmService = {
     return data;
   },
 
+  // 16b. Récupérer les signalements d'une ferme spécifique
+  async getMyFarmReports(farmId, role = 'farmer') {
+    let query = supabase
+      .from('farm_reports')
+      .select('*')
+      .eq('farm_id', farmId);
+
+    // Si c'est un fermier, ne montrer que les signalements visibles
+    if (role === 'farmer') {
+      query = query.eq('visible_to_farmer', true);
+    }
+    // Si c'est un admin, montrer tous les signalements
+
+    const { data, error } = await query.order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('❌ getMyFarmReports ERROR:', error);
+      return [];
+    }
+    
+    return data || [];
+  },
+
+  // 16c. ADMIN: Basculer la visibilité d'un signalement pour le fermier
+  async toggleReportVisibility(reportId, isVisible) {
+    const { data, error } = await supabase
+      .from('farm_reports')
+      .update({ visible_to_farmer: isVisible })
+      .eq('id', reportId)
+      .select();
+
+    if (error) {
+      console.error('❌ toggleReportVisibility ERROR:', error);
+      throw error;
+    }
+    
+    return data?.[0];
+  },
+
   // 16. ADMIN: Marquer les signalements comme "en investigation"
   async markReportsInvestigating(farmId) {
     const { data, error } = await supabase
@@ -686,8 +732,8 @@ export const FarmService = {
   },
 
   // 17. Ajouter un message à l'historique de communication
-  async addMessage(ownerAddress, author, message) {
-    console.log('💬 addMessage appelé:', { ownerAddress, author, message });
+  async addMessage(ownerAddress, author, message, messageType = 'verification') {
+    console.log('💬 addMessage appelé:', { ownerAddress, author, message, messageType });
     
     try {
       // Récupérer la ferme actuelle
@@ -699,10 +745,11 @@ export const FarmService = {
       // Récupérer l'historique existant ou créer un nouveau tableau
       const history = farm.communication_history || [];
       
-      // Ajouter le nouveau message
+      // Ajouter le nouveau message avec son type
       const newMessage = {
         author: author, // 'admin' ou 'creator'
         message: message,
+        type: messageType, // 'verification' ou 'general'
         timestamp: new Date().toISOString()
       };
       
@@ -713,10 +760,17 @@ export const FarmService = {
         communication_history: updatedHistory
       };
       
-      // Si c'est un message du créateur, repasser en 'pending' pour réapparaître dans AdminVerificationPage
-      if (author === 'creator' || author === 'user') {
-        updateData.verification_status = 'pending';
-        console.log('🔄 Statut repassé en "pending" après message creator');
+      // Si c'est un message du créateur, repasser en 'pending' SAUF si déjà 'verified' ou 'banned'
+      // ET seulement pour les messages de type 'verification'
+      if ((author === 'creator' || author === 'user') && messageType === 'verification') {
+        const currentStatus = farm.verification_status;
+        // Ne changer le statut que s'il n'est PAS déjà 'verified' ou 'banned'
+        if (currentStatus !== 'verified' && currentStatus !== 'banned') {
+          updateData.verification_status = 'pending';
+          console.log('🔄 Statut repassé en "pending" après message creator');
+        } else {
+          console.log('✅ Statut maintenu à "' + currentStatus + '" (déjà vérifié ou banni)');
+        }
       }
       
       // Mettre à jour la ferme

@@ -5,7 +5,7 @@ import MobileLayout from '../components/Layout/MobileLayout';
 import BlockchainStatus from '../components/BlockchainStatus';
 import QrCodeScanner from '../components/QrCodeScanner';
 import HistoryList from '../components/HistoryList';
-import { Card, CardContent, Button, PageLayout, Badge, Tabs, BalanceCard, Stack, Input, Modal, Switch } from '../components/UI';
+import { Card, CardContent, Button, PageLayout, Badge, Tabs, BalanceCard, Stack, Input, Modal, Switch, VisibilityToggle } from '../components/UI';
 import { useEcashWallet } from '../hooks/useEcashWallet';
 import { useFarms } from '../hooks/useFarms';
 import { useXecPrice } from '../hooks/useXecPrice';
@@ -1367,10 +1367,12 @@ const TokenDetailsPage = () => {
                     : 'Ce jeton est masqué de votre profil public'}
                 </p>
               </div>
-              <Switch
-                checked={isTokenVisible}
+              <VisibilityToggle
+                isVisible={isTokenVisible}
                 onChange={handleToggleVisibility}
                 disabled={togglingVisibility}
+                labelVisible="Visible"
+                labelHidden="Masqué"
               />
             </div>
           )}

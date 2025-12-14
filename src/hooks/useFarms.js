@@ -16,16 +16,24 @@ export const useFarms = () => {
     setError(null);
 
     try {
-      // Charger TOUTES les fermes depuis Supabase (y compris non vérifiées)
+      // Charger uniquement les fermes ACTIVES et VISIBLES dans l'annuaire
+      // Une ferme est visible si: status='active' ET au moins 1 token avec isVisible=true
       const { data, error } = await supabase
         .from('farms')
         .select('*')
+        .eq('status', 'active') // Uniquement les fermes actives/publiques
         .order('created_at', { ascending: false });
       
       if (error) throw error;
       
-      console.log(`✅ ${data.length} fermes chargées depuis Supabase (tous statuts)`);
-      setFarms(data || []);
+      // Filtrer les fermes qui ont au moins 1 token visible
+      const visibleFarms = (data || []).filter(farm => {
+        if (!farm.tokens || !Array.isArray(farm.tokens)) return false;
+        return farm.tokens.some(token => token.isVisible === true);
+      });
+      
+      console.log(`✅ ${visibleFarms.length} fermes visibles chargées depuis Supabase (${data?.length || 0} actives au total)`);
+      setFarms(visibleFarms);
     } catch (err) {
       console.error('Failed to load farms from Supabase:', err);
       setError(err.message || 'Failed to load farms data');

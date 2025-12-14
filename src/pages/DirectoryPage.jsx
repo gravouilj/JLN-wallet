@@ -8,6 +8,9 @@ import { useEcashWallet, useEcashToken } from '../hooks/useEcashWallet';
 import TopBar from '../components/Layout/TopBar';
 import BottomNavigation from '../components/Layout/BottomNavigation';
 import WalletConnect from '../components/WalletConnect';
+import { FarmProfileCard, FarmProfileModal } from '../components/FarmProfile';
+import { Button } from '../components/UI';
+import { CTACard, useCTAInjection } from '../components/CTA';
 import '../styles/directory.css';
 
 /**
@@ -34,17 +37,14 @@ const DirectoryPage = () => {
   const [selectedRegion, setSelectedRegion] = useState('all');
   const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [selectedProduct, setSelectedProduct] = useState('all');
+  const [selectedService, setSelectedService] = useState('all');
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [displayCount, setDisplayCount] = useState(4); // Pagination: show 4 farms by default
   
   // Modal state
   const [modalFarm, setModalFarm] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  
-  // Report modal state
-  const [reportModalFarm, setReportModalFarm] = useState(null);
-  const [reportReason, setReportReason] = useState('');
-  const [isReporting, setIsReporting] = useState(false);
 
   // The wallet modal is controlled by isWalletModalOpen atom
   // TopBar can set it to true to open the modal from anywhere
@@ -52,7 +52,7 @@ const DirectoryPage = () => {
 
   // Get unique countries from farms
   const countries = useMemo(() => {
-    const uniqueCountries = [...new Set(farms.map(farm => farm.country).filter(Boolean))];
+    const uniqueCountries = [...new Set(farms.map(farm => farm.location_country).filter(Boolean))];
     return uniqueCountries.sort();
   }, [farms]);
 
@@ -60,9 +60,9 @@ const DirectoryPage = () => {
   const regions = useMemo(() => {
     let filteredFarms = farms;
     if (selectedCountry !== 'all') {
-      filteredFarms = farms.filter(farm => farm.country === selectedCountry);
+      filteredFarms = farms.filter(farm => farm.location_country === selectedCountry);
     }
-    const uniqueRegions = [...new Set(filteredFarms.map(farm => farm.region))];
+    const uniqueRegions = [...new Set(filteredFarms.map(farm => farm.location_region).filter(Boolean))];
     return uniqueRegions.sort();
   }, [farms, selectedCountry]);
   
@@ -70,12 +70,12 @@ const DirectoryPage = () => {
   const departments = useMemo(() => {
     let filteredFarms = farms;
     if (selectedCountry !== 'all') {
-      filteredFarms = filteredFarms.filter(farm => farm.country === selectedCountry);
+      filteredFarms = filteredFarms.filter(farm => farm.location_country === selectedCountry);
     }
     if (selectedRegion !== 'all') {
-      filteredFarms = filteredFarms.filter(farm => farm.region === selectedRegion);
+      filteredFarms = filteredFarms.filter(farm => farm.location_region === selectedRegion);
     }
-    const uniqueDepartments = [...new Set(filteredFarms.map(farm => farm.department).filter(Boolean))];
+    const uniqueDepartments = [...new Set(filteredFarms.map(farm => farm.location_department).filter(Boolean))];
     return uniqueDepartments.sort();
   }, [farms, selectedCountry, selectedRegion]);
   
@@ -83,17 +83,34 @@ const DirectoryPage = () => {
   const products = useMemo(() => {
     let filteredFarms = farms;
     if (selectedCountry !== 'all') {
-      filteredFarms = filteredFarms.filter(farm => farm.country === selectedCountry);
+      filteredFarms = filteredFarms.filter(farm => farm.location_country === selectedCountry);
     }
     if (selectedRegion !== 'all') {
-      filteredFarms = filteredFarms.filter(farm => farm.region === selectedRegion);
+      filteredFarms = filteredFarms.filter(farm => farm.location_region === selectedRegion);
     }
     if (selectedDepartment !== 'all') {
-      filteredFarms = filteredFarms.filter(farm => farm.department === selectedDepartment);
+      filteredFarms = filteredFarms.filter(farm => farm.location_department === selectedDepartment);
     }
     const allProducts = filteredFarms.flatMap(farm => farm.products || []);
     const uniqueProducts = [...new Set(allProducts)];
     return uniqueProducts.sort();
+  }, [farms, selectedCountry, selectedRegion, selectedDepartment]);
+  
+  // Get unique services - filtered by current geographic selection (cascading)
+  const services = useMemo(() => {
+    let filteredFarms = farms;
+    if (selectedCountry !== 'all') {
+      filteredFarms = filteredFarms.filter(farm => farm.location_country === selectedCountry);
+    }
+    if (selectedRegion !== 'all') {
+      filteredFarms = filteredFarms.filter(farm => farm.location_region === selectedRegion);
+    }
+    if (selectedDepartment !== 'all') {
+      filteredFarms = filteredFarms.filter(farm => farm.location_department === selectedDepartment);
+    }
+    const allServices = filteredFarms.flatMap(farm => farm.services || []);
+    const uniqueServices = [...new Set(allServices)];
+    return uniqueServices.sort();
   }, [farms, selectedCountry, selectedRegion, selectedDepartment]);
   
   // Charger les tickers depuis la blockchain
@@ -103,13 +120,18 @@ const DirectoryPage = () => {
       
       const tickers = {};
       for (const farm of farms) {
-        if (farm.tokenId) {
-          try {
-            const info = await wallet.getTokenInfo(farm.tokenId);
-            tickers[farm.tokenId] = info.genesisInfo?.tokenTicker || 'UNK';
-          } catch (e) {
-            console.warn(`⚠️ Impossible de charger ticker pour ${farm.tokenId}`);
-            tickers[farm.tokenId] = '???';
+        // Gérer le nouveau format: tokens array JSONB
+        if (farm.tokens && Array.isArray(farm.tokens)) {
+          for (const token of farm.tokens) {
+            if (token.tokenId && token.isVisible) {
+              try {
+                const info = await wallet.getTokenInfo(token.tokenId);
+                tickers[token.tokenId] = info.genesisInfo?.tokenTicker || token.ticker || 'UNK';
+              } catch (e) {
+                console.warn(`⚠️ Impossible de charger ticker pour ${token.tokenId}`);
+                tickers[token.tokenId] = token.ticker || '???';
+              }
+            }
           }
         }
       }
@@ -119,17 +141,34 @@ const DirectoryPage = () => {
     loadTickers();
   }, [wallet, farms]);
 
-  // Filter farms based on search, country, region, department, and products (cascading logic)
+  // Vérifier si l'utilisateur est créateur de ferme
+  const userFarms = useMemo(() => {
+    if (!walletConnected || !wallet?.address) return [];
+    return farms.filter(farm => farm.wallet_address === wallet.address);
+  }, [farms, walletConnected, wallet]);
+
+  const isCreator = userFarms.length > 0;
+
+  // Filter farms based on search, country, region, department, products, services, and favorites
   const filteredFarms = useMemo(() => {
-    // Montrer TOUTES les fermes (unverified, pending, verified) dans l'annuaire
+    // Montrer TOUTES les fermes actives (avec ou sans badge) dans l'annuaire
     let filtered = farms.filter(farm => {
-      const matchesSearch = farm.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           farm.description.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCountry = selectedCountry === 'all' || farm.country === selectedCountry;
-      const matchesRegion = selectedRegion === 'all' || farm.region === selectedRegion;
-      const matchesDepartment = selectedDepartment === 'all' || farm.department === selectedDepartment;
+      const searchLower = searchQuery.toLowerCase();
+      const matchesSearch = farm.name.toLowerCase().includes(searchLower) ||
+                           farm.description.toLowerCase().includes(searchLower) ||
+                           (farm.location_country && farm.location_country.toLowerCase().includes(searchLower)) ||
+                           (farm.location_region && farm.location_region.toLowerCase().includes(searchLower)) ||
+                           (farm.location_department && farm.location_department.toLowerCase().includes(searchLower)) ||
+                           (farm.products && farm.products.some(p => p.toLowerCase().includes(searchLower))) ||
+                           (farm.services && farm.services.some(s => s.toLowerCase().includes(searchLower)));
+      const matchesCountry = selectedCountry === 'all' || farm.location_country === selectedCountry;
+      const matchesRegion = selectedRegion === 'all' || farm.location_region === selectedRegion;
+      const matchesDepartment = selectedDepartment === 'all' || farm.location_department === selectedDepartment;
       const matchesProduct = selectedProduct === 'all' || (farm.products && farm.products.includes(selectedProduct));
-      return matchesSearch && matchesCountry && matchesRegion && matchesDepartment && matchesProduct;
+      const matchesService = selectedService === 'all' || (farm.services && farm.services.includes(selectedService));
+      const matchesFavorite = !showFavoritesOnly || favoriteFarmIds.includes(farm.id);
+      
+      return matchesSearch && matchesCountry && matchesRegion && matchesDepartment && matchesProduct && matchesService && matchesFavorite;
     });
     
     // Sort favorites first if wallet is connected
@@ -144,7 +183,34 @@ const DirectoryPage = () => {
     }
     
     return filtered;
-  }, [farms, searchQuery, selectedCountry, selectedRegion, selectedDepartment, selectedProduct, walletConnected, favoriteFarmIds]);
+  }, [farms, searchQuery, selectedCountry, selectedRegion, selectedDepartment, selectedProduct, selectedService, showFavoritesOnly, walletConnected, favoriteFarmIds]);
+
+  // Contexte utilisateur pour les CTA
+  const userContext = useMemo(() => ({
+    isCreator: userFarms.length > 0,
+  }), [userFarms]);
+  
+  // Contexte des filtres pour les CTA
+  const filterContext = useMemo(() => ({
+    searchQuery,
+    selectedCountry,
+    selectedRegion,
+    selectedDepartment,
+    selectedProduct,
+    selectedService,
+  }), [searchQuery, selectedCountry, selectedRegion, selectedDepartment, selectedProduct, selectedService]);
+  
+  // Utiliser le hook pour injecter les CTA dans la liste
+  const farmsWithCTAs = useCTAInjection(filteredFarms, userContext, filterContext);
+  
+  // Debug: Log pour voir ce qui est retourné
+  useEffect(() => {
+    console.log('🔍 Debug CTA:');
+    console.log('- filteredFarms:', filteredFarms.length);
+    console.log('- farmsWithCTAs:', farmsWithCTAs.length);
+    console.log('- userContext:', userContext);
+    console.log('- CTA items:', farmsWithCTAs.filter(f => f.isCTA));
+  }, [filteredFarms, farmsWithCTAs, userContext]);
 
   const handleSelectFarm = (farm) => {
     console.log('Selected farm:', farm);
@@ -168,6 +234,7 @@ const DirectoryPage = () => {
   };
   
   const handleCardClick = (farm) => {
+    // Les CTA sont gérés directement par le composant CTACard
     setModalFarm(farm);
     setIsModalOpen(true);
   };
@@ -191,46 +258,13 @@ const DirectoryPage = () => {
     }
   };
   
-  const handleReport = (e, farm) => {
-    e.stopPropagation();
-    if (!walletConnected) {
-      alert('Vous devez être connecté pour signaler une ferme');
-      return;
-    }
-    setReportModalFarm(farm);
-    setReportReason('');
-  };
-  
-  const handleSubmitReport = async () => {
-    if (!reportReason.trim()) {
-      alert('Veuillez indiquer la raison du signalement');
-      return;
-    }
-    
-    setIsReporting(true);
-    try {
-      const { FarmService } = await import('../services/farmService');
-      const address = wallet?.address || '';
-      await FarmService.reportFarm(reportModalFarm.id, address, reportReason);
-      
-      alert('🚨 Signalement enregistré. L\'équipe va examiner votre demande.');
-      
-      setReportModalFarm(null);
-      setReportReason('');
-    } catch (err) {
-      console.error('Erreur signalement:', err);
-      if (err.code === '23505') {
-        alert('Vous avez déjà signalé cette ferme');
-      } else {
-        alert('Erreur lors du signalement');
-      }
-    } finally {
-      setIsReporting(false);
-    }
-  };
-  
   const getGoogleMapsLink = (farm) => {
-    const query = encodeURIComponent(`${farm.name}, ${farm.region}, France`);
+    const location = [
+      farm.address,
+      farm.location_region || farm.region,
+      farm.location_country || 'France'
+    ].filter(Boolean).join(', ');
+    const query = encodeURIComponent(location);
     return `https://www.google.com/maps/search/?api=1&query=${query}`;
   };
 
@@ -269,39 +303,57 @@ const DirectoryPage = () => {
 
       {/* Filters Section */}
       <div className="directory-filters-wrapper">
-        <div className="search-container">
-          <span className="search-icon">🔍</span>
-          <input
-            type="text"
-            className="search-input"
-            placeholder={t('directory.searchPlaceholder') || 'Search farms by name...'}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+          {/* Bouton Favoris - visible seulement si connecté */}
+          {walletConnected && favoriteFarmIds.length > 0 && (
             <button
-              className="clear-search-btn"
-              onClick={() => setSearchQuery('')}
-              aria-label="Clear search"
+              onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+              style={{
+                background: 'rgba(255,255,255,0.9)',
+                border: 'none',
+                borderRadius: '50%',
+                width: '44px',
+                height: '44px',
+                flexShrink: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '1.3rem',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                transition: 'transform 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+              title={showFavoritesOnly ? 'Afficher toutes les fermes' : 'Afficher uniquement mes favoris'}
             >
-              ✕
+              {showFavoritesOnly ? '⭐' : '☆'}
             </button>
           )}
+          
+          <div className="search-container" style={{ flex: 1, margin: 0 }}>
+            <span className="search-icon">🔍</span>
+            <input
+              type="text"
+              className="search-input"
+              placeholder={t('directory.searchPlaceholder') || 'Rechercher une ferme...'}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button
+                className="clear-search-btn"
+                onClick={() => setSearchQuery('')}
+                aria-label="Clear search"
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Desktop: Filters on single line | Mobile: Filters button */}
-        <div className="filters-controls">
-          <button 
-            className="filters-toggle-btn"
-            onClick={() => setShowFilters(!showFilters)}
-            aria-label="Toggle filters"
-          >
-            ⚙️ {t('directory.filters') || 'Filtres'}
-          </button>
-        </div>
-
-        {/* Filters Grid - visible on desktop or when toggled on mobile */}
-        <div className={`filters-grid ${showFilters ? 'show' : ''}`}>
+        {/* Filters Grid - toujours visible */}
+        <div className="filters-grid" style={{ display: 'grid' }}>
           <div className="filter-group">
             <select
               className="filter-select modern"
@@ -312,7 +364,7 @@ const DirectoryPage = () => {
                 setSelectedDepartment('all');
               }}
             >
-              <option value="all">🌍 {t('directory.allCountries') || 'Tous les pays'}</option>
+              <option value="all">🌍 {t('directory.allCountries')}</option>
               {countries.map((country) => (
                 <option key={country} value={country}>{country}</option>
               ))}
@@ -328,7 +380,7 @@ const DirectoryPage = () => {
                 setSelectedDepartment('all');
               }}
             >
-              <option value="all">📍 {t('directory.allRegions') || 'All Regions'}</option>
+              <option value="all">📍 {t('directory.allRegions')}</option>
               {regions.map((region) => (
                 <option key={region} value={region}>{region}</option>
               ))}
@@ -341,7 +393,7 @@ const DirectoryPage = () => {
               value={selectedDepartment}
               onChange={(e) => setSelectedDepartment(e.target.value)}
             >
-              <option value="all">🏘️ {t('directory.allDepartments') || 'Tous les départements'}</option>
+              <option value="all">🏘️ {t('directory.allDepartments')}</option>
               {departments.map((department) => (
                 <option key={department} value={department}>{department}</option>
               ))}
@@ -354,13 +406,47 @@ const DirectoryPage = () => {
               value={selectedProduct}
               onChange={(e) => setSelectedProduct(e.target.value)}
             >
-              <option value="all">🥬 {t('directory.allProducts') || 'Tous les produits'}</option>
+              <option value="all">🥬 {t('directory.allProducts')}</option>
               {products.map((product) => (
                 <option key={product} value={product}>{product}</option>
               ))}
             </select>
           </div>
+
+          <div className="filter-group">
+            <select
+              className="filter-select modern"
+              value={selectedService}
+              onChange={(e) => setSelectedService(e.target.value)}
+            >
+              <option value="all">🛠️ {t('directory.allServices')}</option>
+              {services.map((service) => (
+                <option key={service} value={service}>{service}</option>
+              ))}
+            </select>
+          </div>
         </div>
+        
+        {/* Bouton Clear All Filters - visible si au moins un filtre est actif */}
+        {(searchQuery || selectedCountry !== 'all' || selectedRegion !== 'all' || selectedDepartment !== 'all' || selectedProduct !== 'all' || selectedService !== 'all' || showFavoritesOnly) && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: '14px' }}>
+            <Button
+              variant="ghost"
+              icon="✕"
+              onClick={() => {
+                setSearchQuery('');
+                setSelectedCountry('all');
+                setSelectedRegion('all');
+                setSelectedDepartment('all');
+                setSelectedProduct('all');
+                setSelectedService('all');
+                setShowFavoritesOnly(false);
+              }}
+            >
+              {t('directory.clearAllFilters')}
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Results count */}
@@ -380,7 +466,7 @@ const DirectoryPage = () => {
 
       {/* Farms Grid */}
       <div className="farms-grid">
-        {filteredFarms.length === 0 ? (
+        {farmsWithCTAs.length === 0 ? (
           <div className="no-farms">
             <p>
               {searchQuery || selectedRegion !== 'all' 
@@ -388,7 +474,7 @@ const DirectoryPage = () => {
                 : (t('directory.noFarms') || 'No farms available yet')
               }
             </p>
-            {(searchQuery || selectedCountry !== 'all' || selectedRegion !== 'all' || selectedDepartment !== 'all' || selectedProduct !== 'all') && (
+            {(searchQuery || selectedCountry !== 'all' || selectedRegion !== 'all' || selectedDepartment !== 'all' || selectedProduct !== 'all' || selectedService !== 'all' || showFavoritesOnly) && (
               <button
                 className="reset-filters-btn"
                 onClick={() => {
@@ -397,34 +483,38 @@ const DirectoryPage = () => {
                   setSelectedRegion('all');
                   setSelectedDepartment('all');
                   setSelectedProduct('all');
+                  setSelectedService('all');
+                  setShowFavoritesOnly(false);
                 }}
               >
-                {t('directory.resetFilters') || 'Reset filters'}
+                {t('directory.resetFilters') || 'Réinitialiser les filtres'}
               </button>
             )}
           </div>
         ) : (
           <>
-            {filteredFarms.slice(0, displayCount).map((farm) => {
-              const isFavorite = favoriteFarmIds.includes(farm.id);
-              return (
-                <FarmCard
-                  key={farm.id}
-                  farm={farm}
-                  isFavorite={isFavorite}
-                  onCardClick={handleCardClick}
-                  onSelectClick={handleLogin}
-                  onReport={handleReport}
-                  farmTickers={farmTickers}
+            {farmsWithCTAs.slice(0, displayCount).map((item) => (
+              item.isCTA ? (
+                <CTACard 
+                  key={item.id}
+                  cta={item}
+                  ctaConfig={item.ctaConfig}
                 />
-              );
-            })}
+              ) : (
+                <FarmProfileCard
+                  key={item.id}
+                  farm={item}
+                  farmTickers={farmTickers}
+                  onCardClick={handleCardClick}
+                />
+              )
+            ))}
           </>
         )}
       </div>
 
       {/* Pagination Controls */}
-      {filteredFarms.length > displayCount && (
+      {farmsWithCTAs.length > displayCount && (
         <div className="pagination-controls">
           <button 
             className="pagination-btn"
@@ -435,7 +525,7 @@ const DirectoryPage = () => {
         </div>
       )}
 
-      {displayCount > 4 && filteredFarms.length > 4 && (
+      {displayCount > 4 && farmsWithCTAs.length > 4 && (
         <div className="pagination-controls">
           <button 
             className="pagination-btn secondary"
@@ -446,172 +536,60 @@ const DirectoryPage = () => {
         </div>
       )}
 
-      {/* Register Farm Button - Moved to bottom */}
-      <div className="register-farm-section-footer">
-        <button
-          className="register-farm-btn"
-          onClick={handleRegisterFarm}
-        >
-          👨‍🌾 {t('directory.registerFarmButton') || 'Are you a farmer? List your token'}
-        </button>
+      {/* Register Farm CTA - Attractive Call To Action */}
+      <div className="register-farm-cta">
+        <div className="register-farm-cta-card">
+          <div className="register-farm-cta-content">
+            <div className="register-farm-cta-icon">🌾</div>
+            <h2 className="register-farm-cta-title">
+              {t('directory.registerCTATitle') || 'Vous êtes producteur ?'}
+            </h2>
+            <p className="register-farm-cta-subtitle">
+              {t('directory.registerCTASubtitle') || 'Rejoignez la première plateforme de financement participatif décentralisé pour l’agriculture locale'}
+            </p>
+            
+            <div className="register-farm-cta-features">
+              <div className="register-farm-cta-feature">
+                <span>✔️</span>
+                <span>{t('directory.registerFeature1') || 'Gratuit et sans commission'}</span>
+              </div>
+              <div className="register-farm-cta-feature">
+                <span>✔️</span>
+                <span>{t('directory.registerFeature2') || 'Visibilité instantanée'}</span>
+              </div>
+              <div className="register-farm-cta-feature">
+                <span>✔️</span>
+                <span>{t('directory.registerFeature3') || 'Paiements sécurisés'}</span>
+              </div>
+            </div>
+            
+            <Button
+              variant="primary"
+              icon="🚀"
+              onClick={handleRegisterFarm}
+              style={{ 
+                backgroundColor: 'white', 
+                color: '#667eea',
+                fontWeight: '700',
+                fontSize: '1.1rem',
+                padding: '0 32px',
+                minHeight: '56px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+              }}
+            >
+              {t('directory.registerFarmButton') || 'Être référencé gratuitement'}
+            </Button>
+          </div>
+        </div>
       </div>
       
       {/* Farm Details Modal */}
-      {isModalOpen && modalFarm && (
-        <div className="modal-overlay" onClick={handleCloseModal}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close" onClick={handleCloseModal}>
-              ✕
-            </button>
-            
-            <div className="modal-header">
-              <h2>{modalFarm.name}</h2>
-              {modalFarm.verified && (
-                <span className="verified-badge verified modal-verified">
-                  ✓ {t('directory.verified') || 'Verified'}
-                </span>
-              )}
-            </div>
-            
-            <div className="modal-body">
-              <div className="modal-info-row">
-                <span className="modal-label">📍 {t('directory.region') || 'Région'}:</span>
-                <span className="modal-value">{modalFarm.region}</span>
-              </div>
-              
-              {modalFarm.department && (
-                <div className="modal-info-row">
-                  <span className="modal-label">🏛️ Département:</span>
-                  <span className="modal-value">{modalFarm.department}</span>
-                </div>
-              )}
-              
-              <div className="modal-section">
-                <h3>{t('directory.description') || 'Description'}</h3>
-                <p>{modalFarm.description}</p>
-              </div>
-              
-              {modalFarm.products && modalFarm.products.length > 0 && (
-                <div className="modal-section">
-                  <h3>👨‍🌾 Produits</h3>
-                  <div className="product-badges">
-                    {modalFarm.products.map((product, idx) => (
-                      <span key={idx} className="product-badge">
-                        {product}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {modalFarm.contactEmail && (
-                <div className="modal-info-row">
-                  <span className="modal-label">📧 {t('directory.contact') || 'Contact'}:</span>
-                  <a href={`mailto:${modalFarm.contactEmail}`} className="modal-link">
-                    {modalFarm.contactEmail}
-                  </a>
-                </div>
-              )}
-              
-              {modalFarm.website && (
-                <div className="modal-info-row">
-                  <span className="modal-label">🌐 {t('directory.website') || 'Website'}:</span>
-                  <a href={modalFarm.website} target="_blank" rel="noopener noreferrer" className="modal-link">
-                    {modalFarm.website}
-                  </a>
-                </div>
-              )}
-              
-              <div className="modal-actions">
-                <a
-                  href={getGoogleMapsLink(modalFarm)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="modal-map-btn"
-                >
-                  🗺️ {t('directory.directions') || 'Itinéraire'}
-                </a>
-                <button onClick={handleSelectFromModal} className="modal-select-btn">
-                  {t('directory.selectThisFarm') || 'Sélectionner cette ferme'} →
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Report Modal */}
-      {reportModalFarm && (
-        <div className="modal-overlay" onClick={() => setReportModalFarm(null)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
-            <button 
-              className="modal-close"
-              onClick={() => setReportModalFarm(null)}
-              aria-label="Close"
-            >
-              ✕
-            </button>
-            <div style={{ padding: '20px' }}>
-              <h2 style={{ marginBottom: '16px', fontSize: '20px', fontWeight: 'bold' }}>
-                🚨 Signaler "{reportModalFarm.name}"
-              </h2>
-              <p style={{ marginBottom: '16px', fontSize: '14px', color: 'var(--text-secondary)' }}>
-                Votre signalement sera examiné par l'équipe de modération. Merci de préciser la raison.
-              </p>
-              <textarea
-                value={reportReason}
-                onChange={(e) => setReportReason(e.target.value)}
-                placeholder="Ex: Informations trompeuses, arnaque suspectée, contenu inapproprié..."
-                rows={4}
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '8px',
-                  marginBottom: '16px',
-                  fontFamily: 'inherit',
-                  fontSize: '14px'
-                }}
-                disabled={isReporting}
-              />
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  onClick={handleSubmitReport}
-                  disabled={isReporting || !reportReason.trim()}
-                  style={{
-                    flex: 1,
-                    padding: '10px 16px',
-                    background: '#ef4444',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: isReporting || !reportReason.trim() ? 'not-allowed' : 'pointer',
-                    opacity: isReporting || !reportReason.trim() ? 0.5 : 1,
-                    fontWeight: '500'
-                  }}
-                >
-                  {isReporting ? '⏳ Envoi...' : '🚨 Signaler'}
-                </button>
-                <button
-                  onClick={() => setReportModalFarm(null)}
-                  disabled={isReporting}
-                  style={{
-                    flex: 1,
-                    padding: '10px 16px',
-                    background: 'transparent',
-                    color: 'var(--text-primary)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '8px',
-                    cursor: isReporting ? 'not-allowed' : 'pointer'
-                  }}
-                >
-                  Annuler
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <FarmProfileModal
+        farm={modalFarm}
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        farmTickers={farmTickers}
+      />
       
       {/* Wallet Connection Modal */}
       {isWalletModalOpen && (
@@ -674,8 +652,12 @@ const FarmCard = ({ farm, isFavorite, onCardClick, onSelectClick, onReport, farm
   const [, setCurrentTokenId] = useAtom(currentTokenIdAtom);
   const [, toggleFavorite] = useAtom(toggleFarmFavoriteAtom);
   
-  // Check token balance for this farm
-  const { tokenBalance, loading: balanceLoading } = useEcashToken(farm.tokenId);
+  // Get visible tokens from farm
+  const visibleTokens = farm.tokens?.filter(token => token.isVisible) || [];
+  const primaryToken = visibleTokens[0]; // Premier token comme token principal
+  
+  // Check token balance for primary token
+  const { tokenBalance, loading: balanceLoading } = useEcashToken(primaryToken?.tokenId);
   
   const hasTokens = walletConnected && Number(tokenBalance) > 0;
 
@@ -685,9 +667,9 @@ const FarmCard = ({ farm, isFavorite, onCardClick, onSelectClick, onReport, farm
       // Si non connecté, ouvrir le modal wallet
       onSelectClick();
     } else {
-      // Si connecté, sélectionner la ferme
+      // Si connecté, sélectionner la ferme avec le premier token
       setSelectedFarm(farm);
-      setCurrentTokenId(farm.tokenId);
+      setCurrentTokenId(primaryToken?.tokenId);
       navigate('/wallet');
     }
   };
@@ -695,7 +677,7 @@ const FarmCard = ({ farm, isFavorite, onCardClick, onSelectClick, onReport, farm
   const handlePayFarm = (e) => {
     e.stopPropagation();
     setSelectedFarm(farm);
-    setCurrentTokenId(farm.tokenId);
+    setCurrentTokenId(primaryToken?.tokenId);
     navigate('/send');
   };
 
@@ -722,12 +704,41 @@ const FarmCard = ({ farm, isFavorite, onCardClick, onSelectClick, onReport, farm
         
         <h3 className="farm-name">
           {farm.name}
-          {farm.tokenId && farmTickers[farm.tokenId] && (
-            <span className="farm-ticker"> ({farmTickers[farm.tokenId]})</span>
-          )}
         </h3>
-        <p className="farm-region">📍 {farm.region}</p>
+        <p className="farm-region">📍 {farm.location_region || farm.region || 'Non renseigné'}</p>
         <p className="farm-description">{farm.description}</p>
+        
+        {/* Tokens visibles - Section modernisée */}
+        {visibleTokens.length > 0 && (
+          <div style={{ 
+            marginTop: '12px', 
+            padding: '12px', 
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            borderRadius: '10px',
+            color: 'white'
+          }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: '600', marginBottom: '6px', opacity: 0.9 }}>
+              💎 {visibleTokens.length === 1 ? 'Token disponible' : `${visibleTokens.length} Tokens disponibles`}
+            </div>
+            {visibleTokens.map((token, idx) => (
+              <div key={token.tokenId} style={{ 
+                marginTop: idx > 0 ? '8px' : '0',
+                paddingTop: idx > 0 ? '8px' : '0',
+                borderTop: idx > 0 ? '1px solid rgba(255,255,255,0.2)' : 'none',
+                fontSize: '0.85rem'
+              }}>
+                <div style={{ fontWeight: '700', fontSize: '0.9rem' }}>
+                  {farmTickers[token.tokenId] || token.ticker || 'Token'}
+                </div>
+                {token.purpose && (
+                  <div style={{ fontSize: '0.75rem', opacity: 0.9, marginTop: '2px' }}>
+                    {token.purpose}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
         
         {/* Rewards banner - show if defined */}
         {farm.rewards && (
@@ -737,9 +748,9 @@ const FarmCard = ({ farm, isFavorite, onCardClick, onSelectClick, onReport, farm
         )}
         
         {/* Token balance - show if user has tokens */}
-        {hasTokens && !balanceLoading && (
+        {hasTokens && !balanceLoading && primaryToken && (
           <div className="farm-balance-display">
-            💰 {t('directory.yourBalance') || 'Your balance'}: <strong>{Number(tokenBalance).toLocaleString()} {farmTickers[farm.tokenId] || 'tokens'}</strong>
+            💰 {t('directory.yourBalance') || 'Votre solde'}: <strong>{Number(tokenBalance).toLocaleString()} {farmTickers[primaryToken.tokenId] || primaryToken.ticker || 'tokens'}</strong>
           </div>
         )}
         
@@ -756,18 +767,14 @@ const FarmCard = ({ farm, isFavorite, onCardClick, onSelectClick, onReport, farm
         
         <div className="farm-footer">
           <div className="farm-badges">
-            {farm.verified ? (
-              <span className="verified-badge verified">
-                ✅ {t('directory.verified') || 'Vérifiée'}
-              </span>
+            {farm.verification_status === 'verified' ? (
+              <StatusBadge status="verified" type="verification" />
             ) : farm.verification_status === 'pending' ? (
-              <span className="verified-badge pending">
-                ⏳ {t('directory.pendingVerification') || 'En cours de validation'}
-              </span>
+              <StatusBadge status="pending" type="verification" />
+            ) : farm.verification_status === 'info_requested' ? (
+              <StatusBadge status="info_requested" type="verification" />
             ) : (
-              <span className="verified-badge unverified">
-                ⚠️ {t('directory.notVerified') || 'Non vérifiée'}
-              </span>
+              <StatusBadge status="none" type="verification" />
             )}
           </div>
           

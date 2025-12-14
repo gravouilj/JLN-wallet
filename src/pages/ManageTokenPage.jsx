@@ -49,13 +49,26 @@ const ManageTokenPage = () => {
       try {
         setLoadingTokens(true);
         
-        // Charger MA ferme (créateur ou admin)
-        if (address && farms.length > 0) {
-          const myFarmData = farms.find(f => f.owner_address === address);
-          setMyFarm(myFarmData || null);
-          console.log('🏠 Ma ferme:', myFarmData);
-          console.log('📍 Mon address:', address);
-          console.log('📋 Farms disponibles:', farms.map(f => ({ name: f.name, owner: f.owner_address })));
+        // Charger MA ferme directement depuis Supabase (sans filtre de visibilité)
+        // IMPORTANT: En tant que créateur, je dois voir mon profil même si tous mes tokens sont masqués
+        if (address) {
+          try {
+            const { supabase } = await import('../services/supabaseClient');
+            const { data: myFarmData, error } = await supabase
+              .from('farms')
+              .select('*')
+              .eq('owner_address', address)
+              .maybeSingle(); // maybeSingle() ne lance pas d'erreur si aucun résultat
+            
+            if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+              console.error('❌ Erreur chargement ma ferme:', error);
+            } else {
+              setMyFarm(myFarmData || null);
+              console.log('🏠 Ma ferme (chargement direct):', myFarmData);
+            }
+          } catch (err) {
+            console.error('❌ Erreur chargement ma ferme:', err);
+          }
         }
         
         // Si admin: charger le nombre de demandes en attente
@@ -78,27 +91,42 @@ const ManageTokenPage = () => {
         if (import.meta.env.DEV) console.log('🔑 Mint Batons chargés:', batons);
         
         // Construire le Set des tokenIds Farm-Wallet AVANT tout (admin ET creator)
+        // IMPORTANT: Inclure MA ferme (myFarm) même si non visible + les farms publiques
         const farmWalletTokenIds = new Set();
         const allTokensFromFarms = [];
         
-        if (import.meta.env.DEV) {
-          console.log('🔍 Analyse farms pour extraire tokens:', farms.length, 'farms');
+        // Créer une liste complète : MA ferme + farms publiques (sans doublons)
+        const allFarmsToProcess = [];
+        if (myFarm) {
+          allFarmsToProcess.push(myFarm); // MA ferme en premier (même si tokens masqués)
         }
+        // Ajouter les autres farms (venant du hook useFarms filtré pour l'annuaire)
         farms.forEach(farm => {
+          if (!myFarm || farm.id !== myFarm.id) { // Éviter les doublons
+            allFarmsToProcess.push(farm);
+          }
+        });
+        
+        if (import.meta.env.DEV) {
+          console.log('🔍 Analyse farms pour extraire tokens:', allFarmsToProcess.length, 'farms (ma ferme + publiques)');
+        }
+        
+        allFarmsToProcess.forEach(farm => {
           if (import.meta.env.DEV) {
             console.log('🔍 Farm:', farm.name, '| tokens:', farm.tokens, '| isArray:', Array.isArray(farm.tokens));
           }
           if (Array.isArray(farm.tokens)) {
             farm.tokens.forEach(tokenEntry => {
               if (import.meta.env.DEV) {
-                console.log('  ➕ Ajout token:', tokenEntry.tokenId);
+                console.log('  ➕ Ajout token:', tokenEntry.tokenId, '| visible:', tokenEntry.isVisible);
               }
               farmWalletTokenIds.add(tokenEntry.tokenId);
               allTokensFromFarms.push({
                 ...tokenEntry,
                 farmName: farm.name,
                 farmVerified: farm.verified,
-                farmStatus: farm.verification_status
+                farmStatus: farm.verification_status,
+                isMyToken: myFarm && farm.id === myFarm.id // Marquer mes tokens
               });
             });
           }
@@ -106,6 +134,9 @@ const ManageTokenPage = () => {
         
         console.log('📋 TokenIds Farm-Wallet dans Supabase:', Array.from(farmWalletTokenIds));
         console.log('📊 Tokens extraits des farms:', allTokensFromFarms.length);
+        if (myFarm) {
+          console.log('✅ MA ferme incluse:', myFarm.name, '| Mes tokens:', allTokensFromFarms.filter(t => t.isMyToken).length);
+        }
         
         // Si admin: charger TOUS les tokens Farm-Wallet (même sans mintBaton)
         let allFarmTokensData = [];
@@ -157,7 +188,7 @@ const ManageTokenPage = () => {
               isFromFarmWallet: isFromFarmWallet,
               isActive: isActive,
               verified: tokenEntry.farmVerified || false,
-              verificationStatus: tokenEntry.farmStatus || 'unverified',
+              verificationStatus: tokenEntry.farmStatus || 'none',
               hasMintBaton: hasBaton,
               isFixed: !hasBaton
             };
@@ -339,7 +370,7 @@ const ManageTokenPage = () => {
               isActive: isActive,
               isDeleted: false,
               verified: farmInfo?.verified || false,
-              verificationStatus: farmInfo?.verificationStatus || (farmInfo?.verified ? 'verified' : 'unverified'),
+              verificationStatus: farmInfo?.verificationStatus || (farmInfo?.verified ? 'verified' : 'none'),
               hasMintBaton: false, // Pas de baton
               isCreator: true // Mais je suis créateur
             });
@@ -380,7 +411,7 @@ const ManageTokenPage = () => {
     };
 
     loadData();
-  }, [wallet, farms, isAdmin, address]); // Dependencies: recharger si wallet/farms/admin/address change
+  }, [wallet, farms, isAdmin, address, setNotification]); // Dependencies: recharger si wallet/farms/admin/address change
 
   // Charger l'historique global
   useEffect(() => {
@@ -515,12 +546,12 @@ const ManageTokenPage = () => {
                   ⏳ Validation en cours
                 </div>
               )}
-              {myFarm.verification_status === 'unverified' && (
+              {myFarm.verification_status === 'none' && (
                 <div style={{ padding: '8px 12px', backgroundColor: '#6b7280', color: '#fff', borderRadius: '8px', fontSize: '0.875rem', fontWeight: '600', textAlign: 'center' }}>
                   ⚠️ Profil non vérifié
                 </div>
               )}
-              {myFarm.verification_status === 'rejected' && (
+              {myFarm.verification_status === 'rejected' && myFarm.status !== 'banned' && myFarm.status !== 'deleted' && (
                 <button
                   onClick={() => navigate('/manage-farm')}
                   style={{ 
@@ -542,7 +573,7 @@ const ManageTokenPage = () => {
                   🚫 Refusé : {myFarm.admin_message?.substring(0, 40) || 'Voir détails'}{myFarm.admin_message?.length > 40 ? '...' : ''} - Profil masqué (Cliquez)
                 </button>
               )}
-              {(myFarm.status === 'banned' || myFarm.status === 'pending_deletion') && (
+              {(myFarm.status === 'banned' || myFarm.status === 'deleted') && (
                 <div style={{ padding: '8px 12px', backgroundColor: '#450a0a', color: '#fff', borderRadius: '8px', fontSize: '0.875rem', fontWeight: '600', textAlign: 'center', border: '2px solid #ef4444' }}>
                   🛑 {myFarm.status === 'banned' ? 'FERME BANNIE' : 'SUPPRESSION EN COURS'} - {myFarm.deletion_reason || myFarm.admin_message || 'Contactez l\'administrateur'}
                 </div>
@@ -626,7 +657,7 @@ const ManageTokenPage = () => {
           <CardContent style={{ padding: '12px' }}>
             <Stack spacing="sm">
               {/* CTA Vérification si profil non vérifié */}
-              {myFarm && myFarm.verification_status === 'unverified' && (
+              {myFarm && myFarm.verification_status === 'none' && (
                 <Button
                   onClick={() => navigate('/manage-farm', { state: { activeTab: 'verification' } })}
                   variant="primary"
