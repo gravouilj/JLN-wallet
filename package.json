@@ -1,5 +1,5 @@
 {
-  "name": "farm-wallet",
+  "name": "jln-wallet",
   "description": "Simple single-token eCash wallet with internationalization",
   "private": true,
   "version": "1.0.0",
@@ -15,7 +15,7 @@
     "test:headed": "playwright test --headed",
     "test:debug": "playwright test --debug",
     "test:report": "playwright show-report",
-    "sync-farms": "node scripts/sync-farms-data.js"
+    "sync-profiles": "node scripts/sync-profiles-data.js"
   },
   "dependencies": {
     "@scure/bip32": "^1.5.0",

@@ -26,7 +26,7 @@ const CompleteTokenImportPage = () => {
   
   // Section créateur (optionnel mais recommandé)
   const [creatorInfo, setCreatorInfo] = useState({
-    farmName: '',
+    profileName: '',
     description: '',
     country: 'France',
     region: '',
@@ -92,27 +92,27 @@ const CompleteTokenImportPage = () => {
     setIsSubmitting(true);
 
     try {
-      const { FarmService } = await import('../services/farmService');
+      const { profilService } = await import('../services/profilService');
       
       // 🔒 NOUVEAU: Vérifier la disponibilité du token avant import
       console.log('🔍 Vérification disponibilité token...');
-      const availability = await FarmService.checkTokenAvailability(tokenData.tokenId, address);
+      const availability = await profilService.checkTokenAvailability(tokenData.tokenId, address);
       
       if (!availability.isAvailable) {
         setNotification({
           type: 'error',
-          message: `⛔ Ce jeton est déjà géré par la ferme "${availability.existingFarmName}". Vous ne pouvez pas l'importer.`
+          message: `⛔ Ce jeton est déjà géré par la profile "${availability.existingProfileName}". Vous ne pouvez pas l'importer.`
         });
         setIsSubmitting(false);
         return;
       }
       
       if (availability.isReimport) {
-        console.log('ℹ️ Ré-import détecté (token déjà dans votre ferme)');
+        console.log('ℹ️ Ré-import détecté (token déjà dans votre profile)');
       }
       
-      // Vérifier si l'utilisateur a déjà une ferme
-      const existingFarm = await FarmService.getMyFarm(address);
+      // Vérifier si l'utilisateur a déjà une profile 
+      const existingProfile = await profilService.getMyProfile(address);
       
       const newTokenData = {
         tokenId: tokenData.tokenId,
@@ -126,37 +126,37 @@ const CompleteTokenImportPage = () => {
         counterpartUpdatedAt: new Date().toISOString()
       };
 
-      if (existingFarm) {
-        // Ajouter le token à la ferme existante
-        const existingTokens = Array.isArray(existingFarm.tokens) ? existingFarm.tokens : [];
+      if (existingProfile) {
+        // Ajouter le token à la profile existante
+        const existingTokens = Array.isArray(existingProfile.tokens) ? existingProfile.tokens : [];
         
         // Vérifier si le token n'est pas déjà présent
         const tokenExists = existingTokens.some(t => t.tokenId === tokenData.tokenId);
         if (tokenExists) {
           setNotification({
             type: 'warning',
-            message: '⚠️ Ce token est déjà importé dans votre ferme'
+            message: '⚠️ Ce token est déjà importé dans votre profile'
           });
           navigate('/manage-token');
           return;
         }
 
-        // Mettre à jour la ferme avec le nouveau token
-        const updatedFarm = {
-          ...existingFarm,
+        // Mettre à jour la profile avec le nouveau token
+        const updatedProfile = {
+          ...existingProfile,
           tokens: [...existingTokens, newTokenData]
         };
 
-        await FarmService.saveFarm(updatedFarm, address);
+        await profilService.saveProfile(updatedProfile, address);
 
         setNotification({
           type: 'success',
-          message: `✅ Token "${tokenData.name}" ajouté à votre ferme !`
+          message: `✅ Token "${tokenData.name}" ajouté à votre profile !`
         });
       } else {
-        // Créer une nouvelle ferme minimale
-        const farmData = {
-          name: creatorInfo.farmName || tokenData.name || 'Ma Ferme',
+        // Créer une nouvelle profile minimale
+        const profileData = {
+          name: creatorInfo.profileName || tokenData.name || 'Ma Profile',
           description: creatorInfo.description || '',
           tokens: [newTokenData],
           verification_status: 'none',
@@ -194,11 +194,11 @@ const CompleteTokenImportPage = () => {
           }
         };
 
-        await FarmService.saveFarm(farmData, address);
+        await profilService.saveProfile(profileData, address);
 
         setNotification({
           type: 'success',
-          message: `✅ Ferme créée avec le token "${tokenData.name}" !`
+          message: `✅ Profile créée avec le token "${tokenData.name}" !`
         });
       }
 
@@ -519,8 +519,8 @@ const CompleteTokenImportPage = () => {
                   </label>
                   <input
                     type="text"
-                    value={creatorInfo.farmName}
-                    onChange={(e) => setCreatorInfo({...creatorInfo, farmName: e.target.value})}
+                    value={creatorInfo.profileName}
+                    onChange={(e) => setCreatorInfo({...creatorInfo, profileName: e.target.value})}
                     placeholder="Ex: Ferme du Soleil Levant"
                     style={{
                       width: '100%',

@@ -1,35 +1,35 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAtom } from 'jotai';
-import { selectedFarmAtom, favoriteFarmsAtom, toggleFarmFavoriteAtom, walletConnectedAtom, currentTokenIdAtom, walletModalOpenAtom } from '../atoms';
-import { useFarms } from '../hooks';
+import { selectedProfileAtom, favoriteProfilesAtom, toggleProfileFavoriteAtom, walletConnectedAtom, currentTokenIdAtom, walletModalOpenAtom } from '../atoms';
+import { useProfiles } from '../hooks';
 import { useTranslation } from '../hooks/useTranslation';
 import { useEcashWallet, useEcashToken } from '../hooks/useEcashWallet';
 import TopBar from '../components/Layout/TopBar';
 import BottomNavigation from '../components/Layout/BottomNavigation';
 import OnboardingModal from '../components/OnboardingModal';
 import SearchFilters from '../components/SearchFilters';
-import { FarmProfileCard, FarmProfileModal } from '../components/FarmProfile';
+import { CreatorProfileCard, CreatorProfileModal } from '../components/CreatorProfile';
 import { Button } from '../components/UI';
 import { CTACard, useCTAInjection } from '../components/CTA';
 
 /**
- * Directory Page - Farm selection interface
- * This is the entry point of the Farm Wallet Platform
+ * Directory Page - Creator selection interface
+ * This is the entry point of the Creator Wallet Platform
  */
 const DirectoryPage = () => {
   const { t } = useTranslation();
-  const { farms, loading, error } = useFarms();
+  const { profiles, loading, error } = useProfiles();
   const { wallet } = useEcashWallet();
-  const [, setSelectedFarm] = useAtom(selectedFarmAtom);
-  const [favoriteFarmIds] = useAtom(favoriteFarmsAtom);
-  const [, toggleFavorite] = useAtom(toggleFarmFavoriteAtom);
+  const [, setSelectedProfile] = useAtom(selectedProfileAtom);
+  const [favoriteProfileIds] = useAtom(favoriteProfilesAtom);
+  const [, toggleFavorite] = useAtom(toggleProfileFavoriteAtom);
   const [walletConnected] = useAtom(walletConnectedAtom);
   const [isWalletModalOpen, setIsWalletModalOpen] = useAtom(walletModalOpenAtom);
   const navigate = useNavigate();
   
   // State pour les tickers blockchain
-  const [farmTickers, setFarmTickers] = useState({});
+  const [profileTickers, setProfileTickers] = useState({});
 
   // Filters state
   const [searchQuery, setSearchQuery] = useState('');
@@ -40,89 +40,89 @@ const DirectoryPage = () => {
   const [selectedService, setSelectedService] = useState('all');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  const [displayCount, setDisplayCount] = useState(4); // Pagination: show 4 farms by default
+  const [displayCount, setDisplayCount] = useState(4); // Pagination: show 4 profiles by default
   
   // Modal state
-  const [modalFarm, setModalFarm] = useState(null);
+  const [modalProfile, setModalProfile] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // The wallet modal is controlled by isWalletModalOpen atom
   // TopBar can set it to true to open the modal from anywhere
   // The modal closes itself when connection succeeds or user clicks X
 
-  // Get unique countries from farms
+  // Get unique countries from profiles
   const countries = useMemo(() => {
-    const uniqueCountries = [...new Set(farms.map(farm => farm.location_country).filter(Boolean))];
+    const uniqueCountries = [...new Set(profiles.map(profile => profile.location_country).filter(Boolean))];
     return uniqueCountries.sort();
-  }, [farms]);
+  }, [profiles]);
 
   // Get unique regions - filtered by selected country (cascading)
   const regions = useMemo(() => {
-    let filteredFarms = farms;
+    let filteredProfiles = profiles;
     if (selectedCountry !== 'all') {
-      filteredFarms = farms.filter(farm => farm.location_country === selectedCountry);
+      filteredProfiles = profiles.filter(profile => profile.location_country === selectedCountry);
     }
-    const uniqueRegions = [...new Set(filteredFarms.map(farm => farm.location_region).filter(Boolean))];
+    const uniqueRegions = [...new Set(filteredProfiles.map(profile => profile.location_region).filter(Boolean))];
     return uniqueRegions.sort();
-  }, [farms, selectedCountry]);
+  }, [profiles, selectedCountry]);
   
   // Get unique departments - filtered by selected country and region (cascading)
   const departments = useMemo(() => {
-    let filteredFarms = farms;
+    let filteredProfiles = profiles;
     if (selectedCountry !== 'all') {
-      filteredFarms = filteredFarms.filter(farm => farm.location_country === selectedCountry);
+      filteredProfiles = filteredProfiles.filter(profile => profile.location_country === selectedCountry);
     }
     if (selectedRegion !== 'all') {
-      filteredFarms = filteredFarms.filter(farm => farm.location_region === selectedRegion);
+      filteredProfiles = filteredProfiles.filter(profile => profile.location_region === selectedRegion);
     }
-    const uniqueDepartments = [...new Set(filteredFarms.map(farm => farm.location_department).filter(Boolean))];
+    const uniqueDepartments = [...new Set(filteredProfiles.map(profile => profile.location_department).filter(Boolean))];
     return uniqueDepartments.sort();
-  }, [farms, selectedCountry, selectedRegion]);
+  }, [profiles, selectedCountry, selectedRegion]);
   
   // Get unique products - filtered by current geographic selection (cascading)
   const products = useMemo(() => {
-    let filteredFarms = farms;
+    let filteredProfiles = profiles;
     if (selectedCountry !== 'all') {
-      filteredFarms = filteredFarms.filter(farm => farm.location_country === selectedCountry);
+      filteredProfiles = filteredProfiles.filter(profile => profile.location_country === selectedCountry);
     }
     if (selectedRegion !== 'all') {
-      filteredFarms = filteredFarms.filter(farm => farm.location_region === selectedRegion);
+      filteredProfiles = filteredProfiles.filter(profile => profile.location_region === selectedRegion);
     }
     if (selectedDepartment !== 'all') {
-      filteredFarms = filteredFarms.filter(farm => farm.location_department === selectedDepartment);
+      filteredProfiles = filteredProfiles.filter(profile => profile.location_department === selectedDepartment);
     }
-    const allProducts = filteredFarms.flatMap(farm => farm.products || []);
+    const allProducts = filteredProfiles.flatMap(profile => profile.products || []);
     const uniqueProducts = [...new Set(allProducts)];
     return uniqueProducts.sort();
-  }, [farms, selectedCountry, selectedRegion, selectedDepartment]);
+  }, [profiles, selectedCountry, selectedRegion, selectedDepartment]);
   
   // Get unique services - filtered by current geographic selection (cascading)
   const services = useMemo(() => {
-    let filteredFarms = farms;
+    let filteredProfiles = profiles;
     if (selectedCountry !== 'all') {
-      filteredFarms = filteredFarms.filter(farm => farm.location_country === selectedCountry);
+      filteredProfiles = filteredProfiles.filter(profile => profile.location_country === selectedCountry);
     }
     if (selectedRegion !== 'all') {
-      filteredFarms = filteredFarms.filter(farm => farm.location_region === selectedRegion);
+      filteredProfiles = filteredProfiles.filter(profile => profile.location_region === selectedRegion);
     }
     if (selectedDepartment !== 'all') {
-      filteredFarms = filteredFarms.filter(farm => farm.location_department === selectedDepartment);
+      filteredProfiles = filteredProfiles.filter(profile => profile.location_department === selectedDepartment);
     }
-    const allServices = filteredFarms.flatMap(farm => farm.services || []);
+    const allServices = filteredProfiles.flatMap(profile => profile.services || []);
     const uniqueServices = [...new Set(allServices)];
     return uniqueServices.sort();
-  }, [farms, selectedCountry, selectedRegion, selectedDepartment]);
+  }, [profiles, selectedCountry, selectedRegion, selectedDepartment]);
   
   // Charger les tickers depuis la blockchain
   useEffect(() => {
     const loadTickers = async () => {
-      if (!wallet || !farms || farms.length === 0) return;
+      if (!wallet || !profiles || profiles.length === 0) return;
       
       const tickers = {};
-      for (const farm of farms) {
+      for (const profile of profiles) {
         // Gérer le nouveau format: tokens array JSONB
-        if (farm.tokens && Array.isArray(farm.tokens)) {
-          for (const token of farm.tokens) {
+        if (profile.tokens && Array.isArray(profile.tokens)) {
+          for (const token of profile.tokens) {
             if (token.tokenId && token.isVisible) {
               try {
                 const info = await wallet.getTokenInfo(token.tokenId);
@@ -135,47 +135,47 @@ const DirectoryPage = () => {
           }
         }
       }
-      setFarmTickers(tickers);
+      setProfileTickers(tickers);
     };
     
     loadTickers();
-  }, [wallet, farms]);
+  }, [wallet, profiles]);
 
-  // Vérifier si l'utilisateur est créateur de ferme
-  const userFarms = useMemo(() => {
+  // Vérifier si l'utilisateur est créateur de profil
+  const userProfiles = useMemo(() => {
     if (!walletConnected || !wallet?.address) return [];
-    return farms.filter(farm => farm.wallet_address === wallet.address);
-  }, [farms, walletConnected, wallet]);
+    return profiles.filter(profile => profile.wallet_address === wallet.address);
+  }, [profiles, walletConnected, wallet]);
 
-  const isCreator = userFarms.length > 0;
+  const isCreator = userProfiles.length > 0;
 
-  // Filter farms based on search, country, region, department, products, services, and favorites
-  const filteredFarms = useMemo(() => {
-    // Montrer TOUTES les fermes actives (avec ou sans badge) dans l'annuaire
-    let filtered = farms.filter(farm => {
+  // Filter profiles based on search, country, region, department, products, services, and favorites
+  const filteredProfiles = useMemo(() => {
+    // Montrer TOUTES les profils actifs (avec ou sans badge) dans l'annuaire
+    let filtered = profiles.filter(profile => {
       const searchLower = searchQuery.toLowerCase();
-      const matchesSearch = farm.name.toLowerCase().includes(searchLower) ||
-                           farm.description.toLowerCase().includes(searchLower) ||
-                           (farm.location_country && farm.location_country.toLowerCase().includes(searchLower)) ||
-                           (farm.location_region && farm.location_region.toLowerCase().includes(searchLower)) ||
-                           (farm.location_department && farm.location_department.toLowerCase().includes(searchLower)) ||
-                           (farm.products && farm.products.some(p => p.toLowerCase().includes(searchLower))) ||
-                           (farm.services && farm.services.some(s => s.toLowerCase().includes(searchLower)));
-      const matchesCountry = selectedCountry === 'all' || farm.location_country === selectedCountry;
-      const matchesRegion = selectedRegion === 'all' || farm.location_region === selectedRegion;
-      const matchesDepartment = selectedDepartment === 'all' || farm.location_department === selectedDepartment;
-      const matchesProduct = selectedProduct === 'all' || (farm.products && farm.products.includes(selectedProduct));
-      const matchesService = selectedService === 'all' || (farm.services && farm.services.includes(selectedService));
-      const matchesFavorite = !showFavoritesOnly || favoriteFarmIds.includes(farm.id);
+      const matchesSearch = profile.name.toLowerCase().includes(searchLower) ||
+                           profile.description.toLowerCase().includes(searchLower) ||
+                           (profile.location_country && profile.location_country.toLowerCase().includes(searchLower)) ||
+                           (profile.location_region && profile  .location_region.toLowerCase().includes(searchLower)) ||
+                           (profile.location_department && profile.location_department.toLowerCase().includes(searchLower)) ||
+                           (profile.products && profile.products.some(p => p.toLowerCase().includes(searchLower))) ||
+                           (profile.services && profile.services.some(s => s.toLowerCase().includes(searchLower)));
+      const matchesCountry = selectedCountry === 'all' || profile.location_country === selectedCountry;
+      const matchesRegion = selectedRegion === 'all' || profile.location_region === selectedRegion;
+      const matchesDepartment = selectedDepartment === 'all' || profile.location_department === selectedDepartment;
+      const matchesProduct = selectedProduct === 'all' || (profile.products && profile.products.includes(selectedProduct));
+      const matchesService = selectedService === 'all' || (profile.services && profile.services.includes(selectedService));
+      const matchesFavorite = !showFavoritesOnly || favoriteProfileIds.includes(profile.id);
       
       return matchesSearch && matchesCountry && matchesRegion && matchesDepartment && matchesProduct && matchesService && matchesFavorite;
     });
     
     // Sort favorites first if wallet is connected
-    if (walletConnected && favoriteFarmIds.length > 0) {
+    if (walletConnected && favoriteProfileIds.length > 0) {
       filtered = filtered.sort((a, b) => {
-        const aIsFavorite = favoriteFarmIds.includes(a.id);
-        const bIsFavorite = favoriteFarmIds.includes(b.id);
+        const aIsFavorite = favoriteProfileIds.includes(a.id);
+        const bIsFavorite = favoriteProfileIds.includes(b.id);
         if (aIsFavorite && !bIsFavorite) return -1;
         if (!aIsFavorite && bIsFavorite) return 1;
         return 0;
@@ -183,12 +183,12 @@ const DirectoryPage = () => {
     }
     
     return filtered;
-  }, [farms, searchQuery, selectedCountry, selectedRegion, selectedDepartment, selectedProduct, selectedService, showFavoritesOnly, walletConnected, favoriteFarmIds]);
+  }, [profiles, searchQuery, selectedCountry, selectedRegion, selectedDepartment, selectedProduct, selectedService, showFavoritesOnly, walletConnected, favoriteProfileIds]);
 
   // Contexte utilisateur pour les CTA
   const userContext = useMemo(() => ({
-    isCreator: userFarms.length > 0,
-  }), [userFarms]);
+    isCreator: userProfiles.length > 0,
+  }), [userProfiles]);
   
   // Contexte des filtres pour les CTA
   const filterContext = useMemo(() => ({
@@ -201,20 +201,20 @@ const DirectoryPage = () => {
   }), [searchQuery, selectedCountry, selectedRegion, selectedDepartment, selectedProduct, selectedService]);
   
   // Utiliser le hook pour injecter les CTA dans la liste
-  const farmsWithCTAs = useCTAInjection(filteredFarms, userContext, filterContext);
+  const profilesWithCTAs = useCTAInjection(filteredProfiles, userContext, filterContext);
   
   // Debug: Log pour voir ce qui est retourné
   useEffect(() => {
     console.log('🔍 Debug CTA:');
-    console.log('- filteredFarms:', filteredFarms.length);
-    console.log('- farmsWithCTAs:', farmsWithCTAs.length);
+    console.log('- filteredProfiles:', filteredProfiles.length);
+    console.log('- profilesWithCTAs:', profilesWithCTAs.length);
     console.log('- userContext:', userContext);
-    console.log('- CTA items:', farmsWithCTAs.filter(f => f.isCTA));
-  }, [filteredFarms, farmsWithCTAs, userContext]);
+    console.log('- CTA items:', profilesWithCTAs.filter(f => f.isCTA));
+  }, [filteredProfiles, profilesWithCTAs, userContext]);
 
-  const handleSelectFarm = (farm) => {
-    console.log('Selected farm:', farm);
-    setSelectedFarm(farm);
+  const handleSelectProfile = (profile) => {
+    console.log('Selected profile:', profile);
+    setSelectedProfile(profile);
     navigate('/wallet');
   };
 
@@ -229,40 +229,40 @@ const DirectoryPage = () => {
     setIsWalletModalOpen(true);
   };
 
-  const handleRegisterFarm = () => {
-    navigate('/farmer-info');
+  const handleRegisterProfile = () => {
+    navigate('/landingpage');
   };
   
-  const handleCardClick = (farm) => {
+  const handleCardClick = (profile) => {
     // Les CTA sont gérés directement par le composant CTACard
-    setModalFarm(farm);
+    setModalProfile(profile);
     setIsModalOpen(true);
   };
   
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setModalFarm(null);
+    setModalProfile(null);
   };
   
   const handleSelectFromModal = () => {
-    if (modalFarm) {
+    if (modalProfile) {
       if (!walletConnected) {
         // Si non connecté, ouvrir le modal wallet
         handleCloseModal();
         setIsWalletModalOpen(true);
       } else {
         // Si connecté, sélectionner la ferme
-        handleSelectFarm(modalFarm);
+        handleSelectProfile(modalProfile);
         handleCloseModal();
       }
     }
   };
   
-  const getGoogleMapsLink = (farm) => {
+  const getGoogleMapsLink = (profile) => {
     const location = [
-      farm.address,
-      farm.location_region || farm.region,
-      farm.location_country || 'France'
+      profile.address,
+      profile.location_region || profile.region,
+      profile.location_country || 'France'
     ].filter(Boolean).join(', ');
     const query = encodeURIComponent(location);
     return `https://www.google.com/maps/search/?api=1&query=${query}`;
@@ -273,7 +273,7 @@ const DirectoryPage = () => {
       <div className="directory-container">
         <div className="directory-loading">
           <div className="loading-spinner"></div>
-          <p>{t('directory.loading') || 'Loading farms...'}</p>
+          <p>{t('directory.loading') || 'Loading profiles...'}</p>
         </div>
       </div>
     );
@@ -307,7 +307,7 @@ const DirectoryPage = () => {
         onSearchChange={setSearchQuery}
         searchPlaceholder={t('directory.searchPlaceholder') || 'Rechercher une ferme...'}
         leftActions={
-          walletConnected && favoriteFarmIds.length > 0 ? (
+          walletConnected && favoriteProfileIds.length > 0 ? (
             <button
               onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
               className="cursor-pointer hover-lift"
@@ -404,26 +404,26 @@ const DirectoryPage = () => {
       {/* Results count */}
       {!loading && !error && (
         <div className="results-count">
-          {filteredFarms.length === farms.length ? (
+          {filteredProfiles.length === profiles.length ? (
             <p>
-              {farms.length} {t('directory.farmsAvailable') || 'farms available'}
+              {profiles.length} {t('directory.profilesAvailable') || 'profiles available'}
             </p>
           ) : (
             <p>
-              {filteredFarms.length} {t('directory.resultsFound') || 'results found'} {t('directory.outOf') || 'out of'} {farms.length}
+              {filteredProfiles.length} {t('directory.resultsFound') || 'results found'} {t('directory.outOf') || 'out of'} {profiles.length}
             </p>
           )}
         </div>
       )}
 
-      {/* Farms Grid */}
-      <div className="farms-grid">
-        {farmsWithCTAs.length === 0 ? (
-          <div className="no-farms">
+      {/* Profiles Grid */}
+      <div className="profiles-grid">
+        {profilesWithCTAs.length === 0 ? (
+          <div className="no-profiles">
             <p>
               {searchQuery || selectedRegion !== 'all' 
-                ? (t('directory.noResults') || 'No farms match your filters')
-                : (t('directory.noFarms') || 'No farms available yet')
+                ? (t('directory.noResults') || 'No profiles match your filters')
+                : (t('directory.noProfiles') || 'No profiles available yet')
               }
             </p>
             {(searchQuery || selectedCountry !== 'all' || selectedRegion !== 'all' || selectedDepartment !== 'all' || selectedProduct !== 'all' || selectedService !== 'all' || showFavoritesOnly) && (
@@ -445,7 +445,7 @@ const DirectoryPage = () => {
           </div>
         ) : (
           <>
-            {farmsWithCTAs.slice(0, displayCount).map((item) => (
+            {profilesWithCTAs.slice(0, displayCount).map((item) => (
               item.isCTA ? (
                 <CTACard 
                   key={item.id}
@@ -453,10 +453,10 @@ const DirectoryPage = () => {
                   ctaConfig={item.ctaConfig}
                 />
               ) : (
-                <FarmProfileCard
+                <CreatorProfileCard
                   key={item.id}
-                  farm={item}
-                  farmTickers={farmTickers}
+                  profile={item}
+                  profileTickers={profileTickers}
                   onCardClick={handleCardClick}
                 />
               )
@@ -466,7 +466,7 @@ const DirectoryPage = () => {
       </div>
 
       {/* Pagination Controls */}
-      {farmsWithCTAs.length > displayCount && (
+      {profilesWithCTAs.length > displayCount && (
         <div className="pagination-controls">
           <button 
             className="pagination-btn"
@@ -477,7 +477,7 @@ const DirectoryPage = () => {
         </div>
       )}
 
-      {displayCount > 4 && farmsWithCTAs.length > 4 && (
+      {displayCount > 4 && profilesWithCTAs.length > 4 && (
         <div className="pagination-controls">
           <button 
             className="pagination-btn secondary"
@@ -488,28 +488,28 @@ const DirectoryPage = () => {
         </div>
       )}
 
-      {/* Register Farm CTA - Attractive Call To Action */}
-      <div className="register-farm-cta">
-        <div className="register-farm-cta-card">
-          <div className="register-farm-cta-content">
-            <div className="register-farm-cta-icon">🌾</div>
-            <h2 className="register-farm-cta-title">
+      {/* Register Profile CTA - Attractive Call To Action */}
+      <div className="register-profile-cta">
+        <div className="register-profile-cta-card">
+          <div className="register-profile-cta-content">
+            <div className="register-profile-cta-icon">🌾</div>
+            <h2 className="register-profile-cta-title">
               {t('directory.registerCTATitle') || 'Vous êtes producteur ?'}
             </h2>
-            <p className="register-farm-cta-subtitle">
+            <p className="register-profile-cta-subtitle">
               {t('directory.registerCTASubtitle') || 'Rejoignez la première plateforme de financement participatif décentralisé pour l’agriculture locale'}
             </p>
             
-            <div className="register-farm-cta-features">
-              <div className="register-farm-cta-feature">
+            <div className="register-profile-cta-features">
+              <div className="register-profile-cta-feature">
                 <span>✔️</span>
                 <span>{t('directory.registerFeature1') || 'Gratuit et sans commission'}</span>
               </div>
-              <div className="register-farm-cta-feature">
+              <div className="register-profile-cta-feature">
                 <span>✔️</span>
                 <span>{t('directory.registerFeature2') || 'Visibilité instantanée'}</span>
               </div>
-              <div className="register-farm-cta-feature">
+              <div className="register-profile-cta-feature">
                 <span>✔️</span>
                 <span>{t('directory.registerFeature3') || 'Paiements sécurisés'}</span>
               </div>
@@ -518,7 +518,7 @@ const DirectoryPage = () => {
             <Button
               variant="primary"
               icon="🚀"
-              onClick={handleRegisterFarm}
+              onClick={handleRegisterProfile}
               style={{ 
                 backgroundColor: 'white', 
                 color: '#667eea',
@@ -529,18 +529,18 @@ const DirectoryPage = () => {
                 boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
               }}
             >
-              {t('directory.registerFarmButton') || 'Être référencé gratuitement'}
+              {t('directory.registerProfileButton') || 'Être référencé gratuitement'}
             </Button>
           </div>
         </div>
       </div>
       
-      {/* Farm Details Modal */}
-      <FarmProfileModal
-        farm={modalFarm}
+      {/* Profile Details Modal */}
+      <CreatorProfileModal
+        profile={modalProfile}
         isOpen={isModalOpen}
         onClose={handleCloseModal}
-        farmTickers={farmTickers}
+        profileTickers={profileTickers}
       />
       
       {/* Wallet Connection Modal */}
@@ -557,196 +557,6 @@ const DirectoryPage = () => {
           <BottomNavigation />
         </div>
       )}
-    </div>
-  );
-};
-
-/**
- * Smart FarmCard Component - Shows Pay button if user holds tokens, Select otherwise
- */
-const FarmCard = ({ farm, isFavorite, onCardClick, onSelectClick, onReport, farmTickers }) => {
-  const { t } = useTranslation();
-  const navigate = useNavigate();
-  const [walletConnected] = useAtom(walletConnectedAtom);
-  const [, setSelectedFarm] = useAtom(selectedFarmAtom);
-  const [, setCurrentTokenId] = useAtom(currentTokenIdAtom);
-  const [, toggleFavorite] = useAtom(toggleFarmFavoriteAtom);
-  
-  // Get visible tokens from farm
-  const visibleTokens = farm.tokens?.filter(token => token.isVisible) || [];
-  const primaryToken = visibleTokens[0]; // Premier token comme token principal
-  
-  // Check token balance for primary token
-  const { tokenBalance, loading: balanceLoading } = useEcashToken(primaryToken?.tokenId);
-  
-  const hasTokens = walletConnected && Number(tokenBalance) > 0;
-
-  const handleSelectFarm = (e) => {
-    e.stopPropagation();
-    if (!walletConnected) {
-      // Si non connecté, ouvrir le modal wallet
-      onSelectClick();
-    } else {
-      // Si connecté, sélectionner la ferme avec le premier token
-      setSelectedFarm(farm);
-      setCurrentTokenId(primaryToken?.tokenId);
-      navigate('/wallet');
-    }
-  };
-
-  const handlePayFarm = (e) => {
-    e.stopPropagation();
-    setSelectedFarm(farm);
-    setCurrentTokenId(primaryToken?.tokenId);
-    navigate('/send');
-  };
-
-  const handleCardClick = () => {
-    onCardClick(farm);
-  };
-
-  return (
-    <div className="farm-card" onClick={handleCardClick}>
-      <div className="farm-card-content">
-        {/* Favorite star - only show if connected */}
-        {walletConnected && (
-          <button
-            className={`favorite-star-btn ${isFavorite ? 'active' : ''}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleFavorite(farm.id);
-            }}
-            aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-          >
-            {isFavorite ? '⭐' : '☆'}
-          </button>
-        )}
-        
-        <h3 className="farm-name">
-          {farm.name}
-        </h3>
-        <p className="farm-region">📍 {farm.location_region || farm.region || 'Non renseigné'}</p>
-        <p className="farm-description">{farm.description}</p>
-        
-        {/* Tokens visibles - Section modernisée */}
-        {visibleTokens.length > 0 && (
-          <div style={{ 
-            marginTop: '12px', 
-            padding: '12px', 
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            borderRadius: '10px',
-            color: 'white'
-          }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: '600', marginBottom: '6px', opacity: 0.9 }}>
-              💎 {visibleTokens.length === 1 ? 'Token disponible' : `${visibleTokens.length} Tokens disponibles`}
-            </div>
-            {visibleTokens.map((token, idx) => (
-              <div key={token.tokenId} style={{ 
-                marginTop: idx > 0 ? '8px' : '0',
-                paddingTop: idx > 0 ? '8px' : '0',
-                borderTop: idx > 0 ? '1px solid rgba(255,255,255,0.2)' : 'none',
-                fontSize: '0.85rem'
-              }}>
-                <div style={{ fontWeight: '700', fontSize: '0.9rem' }}>
-                  {farmTickers[token.tokenId] || token.ticker || 'Token'}
-                </div>
-                {token.purpose && (
-                  <div style={{ fontSize: '0.75rem', opacity: 0.9, marginTop: '2px' }}>
-                    {token.purpose}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-        
-        {/* Rewards banner - show if defined */}
-        {farm.rewards && (
-          <div className="farm-rewards-banner">
-            🎁 {farm.rewards}
-          </div>
-        )}
-        
-        {/* Token balance - show if user has tokens */}
-        {hasTokens && !balanceLoading && primaryToken && (
-          <div className="farm-balance-display">
-            💰 {t('directory.yourBalance') || 'Votre solde'}: <strong>{Number(tokenBalance).toLocaleString()} {farmTickers[primaryToken.tokenId] || primaryToken.ticker || 'tokens'}</strong>
-          </div>
-        )}
-        
-        {/* Product badges */}
-        {farm.products && farm.products.length > 0 && (
-          <div className="product-badges">
-            {farm.products.map((product, idx) => (
-              <span key={idx} className="product-badge">
-                {product}
-              </span>
-            ))}
-          </div>
-        )}
-        
-        <div className="farm-footer">
-          <div className="farm-badges">
-            {farm.verification_status === 'verified' ? (
-              <StatusBadge status="verified" type="verification" />
-            ) : farm.verification_status === 'pending' ? (
-              <StatusBadge status="pending" type="verification" />
-            ) : farm.verification_status === 'info_requested' ? (
-              <StatusBadge status="info_requested" type="verification" />
-            ) : (
-              <StatusBadge status="none" type="verification" />
-            )}
-          </div>
-          
-          <div className="flex gap-2 items-center">
-            {/* Report button - only show if connected */}
-            {walletConnected && (
-              <button 
-                className="report-farm-btn"
-                onClick={(e) => onReport(e, farm)}
-                title="Signaler cette ferme"
-                style={{
-                  padding: '8px 12px',
-                  fontSize: '14px',
-                  border: '1px solid #ef4444',
-                  color: '#ef4444',
-                  background: 'transparent',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#ef4444';
-                  e.currentTarget.style.color = 'white';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.color = '#ef4444';
-                }}
-              >
-                🚨
-              </button>
-            )}
-            
-            {/* Smart button - Pay if has tokens, Select otherwise */}
-            {hasTokens ? (
-              <button 
-                className="pay-farm-btn"
-                onClick={handlePayFarm}
-              >
-                {t('directory.pay') || 'Pay'} 💳
-              </button>
-            ) : (
-              <button 
-                className="select-farm-btn"
-                onClick={handleSelectFarm}
-              >
-                {t('directory.select') || 'Select'} →
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

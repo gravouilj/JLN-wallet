@@ -19,7 +19,7 @@ Ce module gère l'affichage et la logique des Call-To-Action dans l'application,
 import { CTACard, useCTAInjection } from '../components/CTA';
 
 // Contexte utilisateur
-const userContext = { isCreator: userFarms.length > 0 };
+const userContext = { isCreator: userProfiles.length > 0 };
 
 // Contexte des filtres
 const filterContext = {
@@ -30,14 +30,14 @@ const filterContext = {
 };
 
 // Injecter les CTA dans la liste de fermes
-const farmsWithCTAs = useCTAInjection(filteredFarms, userContext, filterContext);
+const profilesWithCTAs = useCTAInjection(filteredProfiles, userContext, filterContext);
 
 // Affichage
-{farmsWithCTAs.map((item) => (
+{profilesWithCTAs.map((item) => (
   item.isCTA ? (
     <CTACard key={item.id} cta={item} ctaConfig={item.ctaConfig} />
   ) : (
-    <FarmProfileCard key={item.id} farm={item} />
+    <CreatorProfileCard key={item.id} creator={item} />
   )
 ))}
 ```
@@ -69,7 +69,7 @@ const farmsWithCTAs = useCTAInjection(filteredFarms, userContext, filterContext)
     icon: '🚀',
     showCondition: (userContext) => !userContext.isCreator,
     getContent: (t) => ({ ... }),
-    onClick: (navigate) => navigate('/farmer-info'),
+    onClick: (navigate) => navigate('/landing-page'),
   },
   // ...
 }
@@ -123,8 +123,8 @@ const customConfig = {
   firstCTAPosition: 2,    // Après le 2ème profil au lieu du 1er
 };
 
-const farmsWithCTAs = useCTAInjection(
-  filteredFarms, 
+const profilesWithCTAs = useCTAInjection(
+  filteredProfiles, 
   userContext, 
   filterContext,
   customConfig  // Configuration personnalisée

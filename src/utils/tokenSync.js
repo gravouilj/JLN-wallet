@@ -1,10 +1,7 @@
 /**
- * Service de synchronisation des données blockchain vers farms.json
+ * Service de synchronisation des données blockchain vers Supabase
  * Met à jour automatiquement les informations dynamiques des tokens
  */
-
-import React from 'react';
-import farmsData from '../data/farms.json';
 
 /**
  * Synchronise les données d'un token depuis la blockchain
@@ -49,30 +46,6 @@ export async function syncTokenData(tokenId, wallet) {
     console.error(`❌ Erreur sync token ${tokenId.substring(0, 8)}:`, error);
     return null;
   }
-}
-
-/**
- * Synchronise tous les tokens de farms.json
- * @param {Object} wallet - Instance du wallet ecash-lib
- * @returns {Array} Données mises à jour
- */
-export async function syncAllFarmTokens(wallet) {
-  const results = [];
-  
-  for (const farm of farmsData) {
-    if (farm.tokenId) {
-      const dynamicData = await syncTokenData(farm.tokenId, wallet);
-      if (dynamicData) {
-        results.push({
-          tokenId: farm.tokenId,
-          name: farm.name,
-          ...dynamicData
-        });
-      }
-    }
-  }
-  
-  return results;
 }
 
 /**

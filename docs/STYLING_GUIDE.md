@@ -389,7 +389,7 @@ Tous les éléments ont des transitions automatiques :
 </div>
 ```
 
-### 3. Utiliser les Composants Réutilisables
+### 3. Utiliser les Composants Réutilisables si existants OU demander à en créer un si pertinent
 
 ```jsx
 {/* Transaction */}

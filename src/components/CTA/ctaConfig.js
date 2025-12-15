@@ -41,7 +41,7 @@ export const CTA_TYPES = {
       rewards: t('directory.ctaMyEstablishmentReward'),
       buttonText: t('directory.ctaStartButton'),
     }),
-    onClick: (navigate) => navigate('/farmer-info'),
+    onClick: (navigate) => navigate('/landing-page'),
   },
   
   INVITE_PRODUCER: {
@@ -60,7 +60,7 @@ export const CTA_TYPES = {
       rewards: t('directory.ctaInviteProducerReward'),
       buttonText: t('directory.ctaInviteButton'),
     }),
-    onClick: (navigate) => navigate('/farmer-info'),
+    onClick: (navigate) => navigate('/landing-page'),
   },
 };
 

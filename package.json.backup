@@ -1,5 +1,5 @@
 {
-  "name": "farm-wallet",
+  "name": "jln-wallet",
   "description": "Simple single-token eCash wallet with internationalization",
   "private": true,
   "version": "1.0.0",

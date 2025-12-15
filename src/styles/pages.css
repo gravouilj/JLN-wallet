@@ -4,6 +4,22 @@
    ======================================== */
 
 /* ========================================
+   MANAGE FARM PAGE - Grid Layout
+   ======================================== */
+.manage-farm-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+  margin-top: 24px;
+}
+
+@media (max-width: 768px) {
+  .manage-farm-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ========================================
    FAQ PAGE
    ======================================== */
 .faq-section {

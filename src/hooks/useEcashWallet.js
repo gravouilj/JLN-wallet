@@ -113,7 +113,7 @@ export const useEcashWallet = () => {
   const resetWallet = useCallback(() => {
     setMnemonic('');
     disconnectWallet();
-    localStorage.removeItem('farm-wallet-mnemonic');
+    localStorage.removeItem('profil-wallet-mnemonic');
     window.location.reload();
   }, [setMnemonic, disconnectWallet]);
 

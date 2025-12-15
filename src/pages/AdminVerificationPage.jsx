@@ -6,16 +6,16 @@ import AdminProfilCard from '../components/Admin/AdminProfilCard';
 import AdminReportCard from '../components/Admin/AdminReportCard';
 import { useAdmin } from '../hooks/useAdmin';
 import { useEcashWallet } from '../hooks/useEcashWallet';
-import { useFarmStatus } from '../hooks/useFarmStatus';
+import { useProfileStatus } from '../hooks/useProfileStatus';
 import { notificationAtom } from '../atoms';
 import { useSetAtom } from 'jotai';
-import { FarmService } from '../services/farmService';
+import { ProfilService } from '../services/profilService';
 import { syncTokenData } from '../utils/tokenSync';
 import { supabase } from '../services/supabaseClient';
-import { FarmStatusActions, ReportActions } from '../components/Admin/FarmStatusActions';
+import { ProfilStatusActions, ReportActions } from '../components/Admin/ProfilStatusActions';
 import { AdminChatSection, AdminReportMessaging } from '../components/Communication';
 
-const AdminVerificationPage = () => {
+const AdminVerificationPage = ({ embedded = false }) => {
   const navigate = useNavigate();
   const { isAdmin } = useAdmin();
   const { wallet } = useEcashWallet();
@@ -27,7 +27,7 @@ const AdminVerificationPage = () => {
     closeConversation,
     ignoreReports: ignoreReportsHook,
     toggleReportVisibility: toggleVisibilityHook
-  } = useFarmStatus();
+  } = useProfileStatus();
   
   const [activeTab, setActiveTab] = useState('pending');
   const [requests, setRequests] = useState([]);
@@ -36,7 +36,7 @@ const AdminVerificationPage = () => {
   
   // Chat
   const [replyMessage, setReplyMessage] = useState('');
-  const [activeChatFarmId, setActiveChatFarmId] = useState(null);
+  const [activeChatProfilId, setActiveChatProfilId] = useState(null);
   const [showAllMessages, setShowAllMessages] = useState({});
   
   // Badges de notification par onglet
@@ -57,22 +57,22 @@ const AdminVerificationPage = () => {
   const calculateUnreadCounts = async () => {
     try {
       // Récupérer toutes les fermes
-      const allFarms = await FarmService.getPendingFarms();
-      const reported = await FarmService.getReportedFarms();
+      const allProfils = await ProfilService.getPendingProfils();
+      const reported = await ProfilService.getReportedProfils();
       
-      const hasUnreadMessage = (farm) => {
-        const history = farm.communication_history;
+      const hasUnreadMessage = (profil) => {
+        const history = profil.communication_history;
         if (!history || history.length === 0) return false;
         const lastMsg = history[history.length - 1];
         return lastMsg.author !== 'admin' && lastMsg.author !== 'system';
       };
       
       const counts = {
-        pending: allFarms.filter(f => 
+        pending: allProfils.filter(f => 
           ['pending', 'info_requested'].includes(f.verification_status) && hasUnreadMessage(f)
         ).length,
-        reported: (reported || []).filter(item => hasUnreadMessage(item.farm)).length,
-        all: allFarms.filter(hasUnreadMessage).length
+        reported: (reported || []).filter(item => hasUnreadMessage(item.profil)).length,
+        all: allProfils.filter(hasUnreadMessage).length
       };
       
       console.log('Badges:', counts);
@@ -90,16 +90,16 @@ const AdminVerificationPage = () => {
       
       if (activeTab === 'pending') {
         // Demandes en attente de badge (pending + info_requested)
-        const allFarms = await FarmService.getPendingFarms();
-        filtered = allFarms.filter(f => ['pending', 'info_requested'].includes(f.verification_status));
+        const allProfils = await ProfilService.getPendingProfils();
+        filtered = allProfils.filter(f => ['pending', 'info_requested'].includes(f.verification_status));
       } else if (activeTab === 'reported') {
         // Fermes signalées
-        const reported = await FarmService.getReportedFarms();
+        const reported = await ProfilService.getReportedProfils();
         filtered = reported || [];
       } else if (activeTab === 'all') {
         // Tous les profils (tous statuts)
         const { data, error } = await supabase
-          .from('farms')
+          .from('profiles')
           .select('*')
           .order('created_at', { ascending: false });
         
@@ -112,14 +112,14 @@ const AdminVerificationPage = () => {
       // 2. Enrichir avec infos blockchain (si wallet connecté)
       if (wallet && filtered.length > 0) {
         const infos = {};
-        // Extraction sécurisée des fermes selon le type d'objet
-        const farmsToScan = activeTab === 'reported' 
-          ? filtered.map(r => r.farm).filter(Boolean) 
+        // Extraction sécurisée des profils selon le type d'objet
+        const profilsToScan = activeTab === 'reported' 
+          ? filtered.map(r => r.profil).filter(Boolean) 
           : filtered;
         
-        for (const farm of farmsToScan) {
-          if (Array.isArray(farm.tokens)) {
-            for (const token of farm.tokens) {
+        for (const profil of profilsToScan) {
+          if (Array.isArray(profil.tokens)) {
+            for (const token of profil.tokens) {
               try {
                 // On charge sans bloquer l'UI
                 syncTokenData(token.tokenId, wallet).then(data => {
@@ -141,22 +141,22 @@ const AdminVerificationPage = () => {
     await calculateUnreadCounts();
   };
 
-  const handleUpdateStatus = async (farmId, newStatus, message = '') => {
-    await updateStatus(farmId, newStatus, message, async () => {
+  const handleUpdateStatus = async (profilId, newStatus, message = '') => {
+    await updateStatus(profilId, newStatus, message, async () => {
       await loadRequests();
       await calculateUnreadCounts();
     });
   };
 
-  const handleSendMessage = async (farm, messageText, messageType = 'verification') => {
-    await sendMessage(farm, messageText, messageType, async () => {
+  const handleSendMessage = async (profil, messageText, messageType = 'verification') => {
+    await sendMessage(profil, messageText, messageType, async () => {
       await loadRequests();
       await calculateUnreadCounts();
     });
   };
 
-  const handleCloseConversation = async (farm) => {
-    await closeConversation(farm, async () => {
+  const handleCloseConversation = async (profil) => {
+    await closeConversation(profil, async () => {
       await loadRequests();
       await calculateUnreadCounts();
     });
@@ -166,38 +166,39 @@ const AdminVerificationPage = () => {
 
   // Filtrer les requêtes selon la recherche
   const filteredRequests = requests.filter(item => {
-    const farm = activeTab === 'reported' ? item.farm : item;
-    if (!farm) return false;
+    const profil = activeTab === 'reported' ? item.profil : item;
+    if (!profil) return false;
     
     const query = searchQuery.toLowerCase();
     return (
-      farm.name?.toLowerCase().includes(query) ||
-      farm.email?.toLowerCase().includes(query) ||
-      farm.owner_address?.toLowerCase().includes(query)
+      profil.name?.toLowerCase().includes(query) ||
+      profil.email?.toLowerCase().includes(query) ||
+      profil.owner_address?.toLowerCase().includes(query)
     );
   });
 
-  return (
-    <MobileLayout title="Admin Panel">
-      <PageLayout hasBottomNav>
-        <Stack spacing="md">
+  const pageContent = (
+    <PageLayout hasBottomNav>
+      <Stack spacing="md">
+        {!embedded && (
           <PageHeader 
             icon="🛡️" 
             title="Administration" 
             subtitle="Validation et Modération"
           />
+        )}
 
-          {/* Filtre de recherche */}
-          <Card>
-            <CardContent style={{ padding: '16px' }}>
-              <input
-                type="text"
-                placeholder="🔍 Rechercher par nom, email ou adresse..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
+        {/* Filtre de recherche */}
+        <Card>
+          <CardContent style={{ padding: '16px' }}>
+            <input
+              type="text"
+              placeholder="🔍 Rechercher par nom, email ou adresse..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '12px 16px',
                   fontSize: '0.95rem',
                   border: '1px solid #e5e7eb',
                   borderRadius: '8px',
@@ -235,28 +236,28 @@ const AdminVerificationPage = () => {
             <Card><CardContent className="text-center p-8"><div className="text-4xl mb-2">✅</div><p>{searchQuery ? 'Aucun résultat pour cette recherche.' : 'Aucune demande à traiter.'}</p></CardContent></Card>
           ) : (
             filteredRequests.map(item => {
-              // Si onglet 'reported', la structure est { farm: {...}, reports: [...] }
-              // Sinon, item est directement l'objet farm
+              // Si onglet 'reported', la structure est { profil: {...}, reports: [...] }
+              // Sinon, item est directement l'objet profil
               const isReportedTab = activeTab === 'reported';
-              const farm = isReportedTab ? item.farm : item;
+              const profil = isReportedTab ? item.profil : item;
               const reports = isReportedTab ? item.reports : [];
               
-              if (!farm) return null;
+              if (!profil) return null;
 
               // Rendu selon le type d'onglet
               if (isReportedTab) {
                 return (
                   <AdminReportCard
-                    key={farm.id}
-                    farm={farm}
+                    key={profil.id}
+                    profil={profil}
                     reports={reports}
                     onUpdateStatus={handleUpdateStatus}
-                    onSendReportMessage={async (message, showToFarmer) => {
-                      await handleSendMessage(farm, message, showToFarmer ? 'general' : 'report');
+                    onSendReportMessage={async (message, showToCreator) => {
+                      await handleSendMessage(profil, message, showToCreator ? 'general' : 'report');
                       
-                      if (showToFarmer && reports.length > 0) {
+                      if (showToCreator && reports.length > 0) {
                         for (const report of reports) {
-                          if (!report.visible_to_farmer) {
+                          if (!report.visible_to_creator) {
                             await toggleVisibilityHook(report.id, true, loadRequests);
                           }
                         }
@@ -265,22 +266,22 @@ const AdminVerificationPage = () => {
                     onToggleReportVisibility={(reportId, visible) => 
                       toggleVisibilityHook(reportId, visible, loadRequests)
                     }
-                    onIgnoreReports={async (farmId) => {
-                      await ignoreReportsHook(farmId, supabase, loadRequests);
+                    onIgnoreReports={async (profilId) => {
+                      await ignoreReportsHook(profilId, supabase, loadRequests);
                     }}
-                    processing={processing === farm.id}
+                    processing={processing === profil.id}
                   />
                 );
               } else {
                 return (
                   <AdminProfilCard
-                    key={farm.id}
-                    farm={farm}
+                    key={profil.id}
+                    profil={profil}
                     onUpdateStatus={handleUpdateStatus}
-                    onSendMessage={(message, type) => handleSendMessage(farm, message, type)}
-                    onCloseConversation={() => handleCloseConversation(farm)}
+                    onSendMessage={(message, type) => handleSendMessage(profil, message, type)}
+                    onCloseConversation={() => handleCloseConversation(profil)}
                     showActions={activeTab === 'pending'}
-                    processing={processing === farm.id}
+                    processing={processing === profil.id}
                   />
                 );
               }
@@ -288,6 +289,11 @@ const AdminVerificationPage = () => {
           )}
         </Stack>
       </PageLayout>
+  );
+
+  return embedded ? pageContent : (
+    <MobileLayout title="Admin Panel">
+      {pageContent}
     </MobileLayout>
   );
 };

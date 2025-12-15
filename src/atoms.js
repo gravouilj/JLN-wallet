@@ -25,7 +25,7 @@ const getBrowserLanguage = () => {
 // Language/Locale atom with localStorage persistence and browser auto-detection
 const getInitialLocale = () => {
   if (typeof window !== 'undefined') {
-    const saved = localStorage.getItem('farm-wallet-language');
+    const saved = localStorage.getItem('jlnwallet-language');
     return saved || getBrowserLanguage(); // Auto-détecte si rien n'est sauvegardé
   }
   return getBrowserLanguage();
@@ -37,7 +37,7 @@ export const localeAtom = atom(
   (get) => get(_localeAtom),
   (get, set, newLocale) => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('farm-wallet-language', newLocale);
+      localStorage.setItem('jlnwallet-language', newLocale);
     }
     set(_localeAtom, newLocale);
   }
@@ -49,40 +49,40 @@ export const languageAtom = localeAtom;
 languageAtom.debugLabel = 'languageAtom';
 
 // ============================================
-// FARM WALLET PLATFORM - Dynamic Token System
+// JLN WALLET PLATFORM - Dynamic Token System
 // ============================================
 
-// Selected farm atom with localStorage persistence
-const getInitialSelectedFarm = () => {
+// Selected profile atom with localStorage persistence
+const getInitialSelectedProfile = () => {
   if (typeof window !== 'undefined') {
-    const saved = localStorage.getItem('farm-wallet-selected-farm');
+    const saved = localStorage.getItem('jlnwallet-selected-profile');
     return saved ? JSON.parse(saved) : null;
   }
   return null;
 };
 
-const _selectedFarmAtom = atom(getInitialSelectedFarm());
+const _selectedProfileAtom = atom(getInitialSelectedProfile());
 
-export const selectedFarmAtom = atom(
-  (get) => get(_selectedFarmAtom),
-  (get, set, newFarm) => {
+export const selectedProfileAtom = atom(
+  (get) => get(_selectedProfileAtom),
+  (get, set, newProfile) => {
     if (typeof window !== 'undefined') {
-      if (newFarm) {
-        localStorage.setItem('farm-wallet-selected-farm', JSON.stringify(newFarm));
+      if (newProfile) {
+        localStorage.setItem('jlnwallet-selected-profile', JSON.stringify(newProfile));
       } else {
-        localStorage.removeItem('farm-wallet-selected-farm');
+        localStorage.removeItem('jlnwallet-selected-profile');
       }
     }
-    set(_selectedFarmAtom, newFarm);
+    set(_selectedProfileAtom, newProfile);
   }
 );
-selectedFarmAtom.debugLabel = 'selectedFarmAtom';
+selectedProfileAtom.debugLabel = 'selectedProfileAtom';
 
-// Current Token ID atom - derived from selected farm
+// Current Token ID atom - derived from selected profile
 // This replaces the old static VITE_TOKEN_ID approach
 export const currentTokenIdAtom = atom((get) => {
-  const selectedFarm = get(selectedFarmAtom);
-  return selectedFarm?.tokenId || '';
+  const selectedProfile = get(selectedProfileAtom);
+  return selectedProfile?.tokenId || '';
 });
 currentTokenIdAtom.debugLabel = 'currentTokenIdAtom';
 
@@ -164,7 +164,7 @@ scriptErrorAtom.debugLabel = 'scriptErrorAtom';
 // Theme management atom with localStorage persistence
 const getInitialTheme = () => {
   if (typeof window !== 'undefined') {
-    const savedTheme = localStorage.getItem('farm-wallet-theme');
+    const savedTheme = localStorage.getItem('jlnwallet-theme');
     return savedTheme || 'light'; // Default to light theme
   }
   return 'light';
@@ -177,7 +177,7 @@ themeAtom.debugLabel = 'themeAtom';
 export const themeSetterAtom = atom(null, (get, set, newTheme) => {
   set(themeAtom, newTheme);
   if (typeof window !== 'undefined') {
-    localStorage.setItem('farm-wallet-theme', newTheme);
+    localStorage.setItem('jlnwallet-theme', newTheme);
     // Apply theme to document root
     document.documentElement.setAttribute('data-theme', newTheme);
   }
@@ -197,7 +197,7 @@ blockchainStatusAtom.debugLabel = 'blockchainStatusAtom';
 // Mnemonic UI state management with localStorage persistence
 const getInitialMnemonicCollapsed = () => {
   if (typeof window !== 'undefined') {
-    const saved = localStorage.getItem('farm-wallet-mnemonic-collapsed');
+    const saved = localStorage.getItem('jlnwallet-mnemonic-collapsed');
     return saved === 'true'; // Convert string to boolean, default false (expanded)
   }
   return false;
@@ -209,7 +209,7 @@ export const mnemonicCollapsedAtom = atom(
   (get) => get(_mnemonicCollapsedAtom),
   (get, set, collapsed) => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('farm-wallet-mnemonic-collapsed', collapsed.toString());
+      localStorage.setItem('jlnwallet-mnemonic-collapsed', collapsed.toString());
     }
     set(_mnemonicCollapsedAtom, collapsed);
   }
@@ -222,7 +222,7 @@ coinSelectionStrategyAtom.debugLabel = 'coinSelectionStrategyAtom';
 
 // Saved mnemonic atom with localStorage persistence for wallet restoration
 // Using atomWithStorage for automatic localStorage sync (Jotai best practice)
-export const savedMnemonicAtom = atomWithStorage('farm-wallet-mnemonic', '', undefined, { unstable_getOnInit: true });
+export const savedMnemonicAtom = atomWithStorage('jlnwallet-mnemonic', '', undefined, { unstable_getOnInit: true });
 savedMnemonicAtom.debugLabel = 'savedMnemonicAtom';
 
 // Mnemonic setter atom for backward compatibility
@@ -233,54 +233,54 @@ export const mnemonicSetterAtom = atom(null, (get, set, newMnemonic) => {
 mnemonicSetterAtom.debugLabel = 'mnemonicSetterAtom';
 
 // ============================================
-// FAVORITE FARMS SYSTEM
+// FAVORITE PROFILE SYSTEM
 // ============================================
 
-// Load favorite farms from localStorage
-const getInitialFavoriteFarms = () => {
+// Load favorite profiles from localStorage
+const getInitialFavoriteProfiles = () => {
   if (typeof window !== 'undefined') {
-    const saved = localStorage.getItem('farm-wallet-favorite-farms');
+    const saved = localStorage.getItem('jlnwallet-favorite-profiles');
     return saved ? JSON.parse(saved) : [];
   }
   return [];
 };
 
-const _favoriteFarmsAtom = atom(getInitialFavoriteFarms());
+const _favoriteProfilesAtom = atom(getInitialFavoriteProfiles());
 
-// Favorite farms atom with localStorage persistence
-export const favoriteFarmsAtom = atom(
-  (get) => get(_favoriteFarmsAtom),
+// Favorite profiles atom with localStorage persistence
+export const favoriteProfilesAtom = atom(
+  (get) => get(_favoriteProfilesAtom),
   (get, set, newFavorites) => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('farm-wallet-favorite-farms', JSON.stringify(newFavorites));
+      localStorage.setItem('jlnwallet-favorite-profiles', JSON.stringify(newFavorites));
     }
-    set(_favoriteFarmsAtom, newFavorites);
+    set(_favoriteProfilesAtom, newFavorites);
   }
 );
-favoriteFarmsAtom.debugLabel = 'favoriteFarmsAtom';
+favoriteProfilesAtom.debugLabel = 'favoriteProfilesAtom';
 
-// Helper atom to check if a farm is favorite
-export const isFarmFavoriteAtom = atom((get) => (farmId) => {
-  const favorites = get(favoriteFarmsAtom);
-  return favorites.includes(farmId);
+// Helper atom to check if a profile is favorite
+export const isProfileFavoriteAtom = atom((get) => (profileId) => {
+  const favorites = get(favoriteProfilesAtom);
+  return favorites.includes(profileId);
 });
-isFarmFavoriteAtom.debugLabel = 'isFarmFavoriteAtom';
+isProfileFavoriteAtom.debugLabel = 'isProfileFavoriteAtom';
 
 // Helper atom to toggle favorite status
-export const toggleFarmFavoriteAtom = atom(
+export const toggleProfileFavoriteAtom = atom(
   null,
-  (get, set, farmId) => {
-    const favorites = get(favoriteFarmsAtom);
-    if (favorites.includes(farmId)) {
+  (get, set, profileId) => {
+    const favorites = get(favoriteProfilesAtom);
+    if (favorites.includes(profileId)) {
       // Remove from favorites
-      set(favoriteFarmsAtom, favorites.filter(id => id !== farmId));
+      set(favoriteProfilesAtom, favorites.filter(id => id !== profileId));
     } else {
       // Add to favorites
-      set(favoriteFarmsAtom, [...favorites, farmId]);
+      set(favoriteProfilesAtom, [...favorites, profileId]);
     }
   }
 );
-toggleFarmFavoriteAtom.debugLabel = 'toggleFarmFavoriteAtom';
+toggleProfileFavoriteAtom.debugLabel = 'toggleProfileFavoriteAtom';
 
 // Wallet Modal Open State
 export const walletModalOpenAtom = atom(false);

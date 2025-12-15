@@ -6,18 +6,18 @@ import i18n from './i18n';
 
 // Pages
 import DirectoryPage from './pages/DirectoryPage';
-import WalletDashboard from './pages/WalletDashboard';
+import ClientWalletPage from './pages/ClientWalletPage';
 import SendPage from './pages/SendPage';
 import SettingsPage from './pages/SettingsPage';
-import FavoritesPage from './pages/FavoritesPage';
-import FarmerInfoPage from './pages/FarmerInfoPage';
+import LandingPage from './pages/LandingPage';
 import FaqPage from './pages/FaqPage';
 import CreateTokenPage from './pages/CreateTokenPage';
 import CompleteTokenImportPage from './pages/CompleteTokenImportPage';
 import ManageTokenPage from './pages/ManageTokenPage';
-import ManageFarmPage from './pages/ManageFarmPage';
+import ManageProfilePage from './pages/ManageProfilePage';
 import AdminVerificationPage from './pages/AdminVerificationPage';
-import TokenDetailsPage from './pages/TokenDetailsPage';
+import AdminDashboard from './pages/AdminDashboard';
+import CreatorTokenPage from './pages/CreatorTokenPage';
 import RequestListingPage from './pages/RequestListingPage';
 
 // Layout & Components
@@ -88,7 +88,7 @@ function App() {
               <Route path="/" element={<DirectoryPage />} />
               
               {/* Espace Producteur - DOIT Être PUBLIC */}
-              <Route path="/farmer-info" element={<FarmerInfoPage />} />
+              <Route path="/landing" element={<LandingPage />} />
               
               {/* FAQ - Page d'aide publique */}
               <Route path="/faq" element={<FaqPage />} />
@@ -101,9 +101,9 @@ function App() {
               <Route 
                 path="/wallet" 
                 element={
-                  <ProtectedRoute requireFarm={false}>
+                  <ProtectedRoute requireProfile={false}>
                     <ErrorBoundary>
-                      <WalletDashboard />
+                      <ClientWalletPage />
                     </ErrorBoundary>
                   </ProtectedRoute>
                 } 
@@ -113,7 +113,7 @@ function App() {
               <Route 
                 path="/send" 
                 element={
-                  <ProtectedRoute requireFarm={false}>
+                  <ProtectedRoute requireProfile={false}>
                     <ErrorBoundary>
                       <SendPage />
                     </ErrorBoundary>
@@ -121,23 +121,14 @@ function App() {
                 } 
               />
               
-              {/* Fermes favorites */}
-              <Route 
-                path="/favorites" 
-                element={
-                  <ProtectedRoute requireFarm={false}>
-                    <ErrorBoundary>
-                      <FavoritesPage />
-                    </ErrorBoundary>
-                  </ProtectedRoute>
-                } 
-              />
+              {/* Profil favorites - redirection vers annuaire */}
+              <Route path="/favorites" element={<Navigate to="/" replace />} />
               
               {/* Paramètres */}
               <Route 
                 path="/settings" 
                 element={
-                  <ProtectedRoute requireFarm={false}>
+                  <ProtectedRoute requireProfile={false}>
                     <ErrorBoundary>
                       <SettingsPage />
                     </ErrorBoundary>
@@ -149,7 +140,7 @@ function App() {
               <Route 
                 path="/create-token" 
                 element={
-                  <ProtectedRoute requireFarm={false}>
+                  <ProtectedRoute requireProfile={false}>
                     <ErrorBoundary>
                       <CreateTokenPage />
                     </ErrorBoundary>
@@ -161,7 +152,7 @@ function App() {
               <Route 
                 path="/complete-token-import" 
                 element={
-                  <ProtectedRoute requireFarm={false}>
+                  <ProtectedRoute requireProfile={false}>
                     <ErrorBoundary>
                       <CompleteTokenImportPage />
                     </ErrorBoundary>
@@ -185,9 +176,9 @@ function App() {
               <Route 
                 path="/token/:tokenId" 
                 element={
-                  <ProtectedRoute requireFarm={false}>
+                  <ProtectedRoute requireProfile={false}>
                     <ErrorBoundary>
-                      <TokenDetailsPage />
+                      <CreatorTokenPage />
                     </ErrorBoundary>
                   </ProtectedRoute>
                 } 
@@ -197,7 +188,7 @@ function App() {
               <Route 
                 path="/request-listing/:tokenId" 
                 element={
-                  <ProtectedRoute requireFarm={false}>
+                  <ProtectedRoute requireProfile={false}>
                     <ErrorBoundary>
                       <RequestListingPage />
                     </ErrorBoundary>
@@ -205,37 +196,48 @@ function App() {
                 } 
               />
               
-              {/* Gestion des informations de la ferme */}
+              {/* Gestion des informations du profil */}
               <Route 
-                path="/manage-farm/:tokenId" 
+                path="/manage-profile/:tokenId" 
                 element={
                   <AdminGateRoute fallbackRoute="/manage-token">
                     <ErrorBoundary>
-                      <ManageFarmPage />
+                      <ManageProfilePage />
                     </ErrorBoundary>
                   </AdminGateRoute>
                 }
               />
               
-              {/* Page de gestion sans tokenId (création nouvelle ferme) */}
+              {/* Page de gestion sans tokenId (création nouveau profil) */}
               <Route 
-                path="/manage-farm" 
+                path="/manage-profile" 
                 element={
-                  <ProtectedRoute requireFarm={false}>
+                  <ProtectedRoute requireProfile={false}>
                     <ErrorBoundary>
-                      <ManageFarmPage />
+                      <ManageProfilePage />
                     </ErrorBoundary>
                   </ProtectedRoute>
-                }
+                } 
               />
-              
-              {/* Page d'administration - Vérification des fermes */}
+              {/* Page d'administration - Vérification des profils */}
               <Route 
                 path="/admin/verification" 
                 element={
                   <AdminGateRoute fallbackRoute="/">
                     <ErrorBoundary>
                       <AdminVerificationPage />
+                    </ErrorBoundary>
+                  </AdminGateRoute>
+                }
+              />
+              
+              {/* Page d'administration - Dashboard principal */}
+              <Route 
+                path="/admin" 
+                element={
+                  <AdminGateRoute fallbackRoute="/">
+                    <ErrorBoundary>
+                      <AdminDashboard />
                     </ErrorBoundary>
                   </AdminGateRoute>
                 }

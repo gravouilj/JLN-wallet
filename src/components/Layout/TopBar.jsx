@@ -128,8 +128,8 @@ const TopBar = () => {
             <button
               onClick={() => navigate('/manage-token')}
               className="creator-shortcut"
-              title={t('topBar.manageTokens') || 'Gérer les tokens'}
-              aria-label={t('topBar.manageTokens') || 'Gérer les tokens'}
+              title={t('topBar.creatorDashboard') || 'Tableau de bord créateur'}
+              aria-label={t('topBar.creatorDashboard') || 'Tableau de bord créateur'}
             >
               🗝️
             </button>

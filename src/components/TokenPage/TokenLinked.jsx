@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { supabase } from '../../services/supabaseClient';
+import React, { useState, useEffect } from 'react';
+import { FarmService } from '../../services/profilService';
+import { useEcashWallet } from '../../hooks/useEcashWallet';
 import { Switch } from '../UI';
 
 /**
@@ -7,40 +8,27 @@ import { Switch } from '../UI';
  * Si dissocié : n'apparaît pas dans ManageFarmPage mais reste visible dans ManageTokenPage
  */
 const TokenLinked = ({ tokenId, farmId, isLinked: initialIsLinked = true, onUpdate }) => {
+  const { address } = useEcashWallet();
   const [isLinked, setIsLinked] = useState(initialIsLinked);
   const [loading, setLoading] = useState(false);
 
+  // Synchroniser avec les changements de props
+  useEffect(() => {
+    setIsLinked(initialIsLinked);
+  }, [initialIsLinked]);
+
   const handleToggle = async () => {
-    if (!farmId) {
-      alert('Erreur : Aucune ferme associée');
+    if (!address) {
+      console.error('Erreur : Aucune adresse wallet');
       return;
     }
 
     setLoading(true);
     try {
-      // Mettre à jour dans la table farms le tableau tokens
-      const { data: farm, error: fetchError } = await supabase
-        .from('farms')
-        .select('tokens')
-        .eq('id', farmId)
-        .single();
-
-      if (fetchError) throw fetchError;
-
-      const tokens = farm.tokens || [];
-      const updatedTokens = tokens.map(t => {
-        if (t.tokenId === tokenId) {
-          return { ...t, isLinked: !isLinked };
-        }
-        return t;
+      // Utiliser FarmService.updateTokenMetadata pour la cohérence
+      await FarmService.updateTokenMetadata(address, tokenId, {
+        isLinked: !isLinked
       });
-
-      const { error: updateError } = await supabase
-        .from('farms')
-        .update({ tokens: updatedTokens })
-        .eq('id', farmId);
-
-      if (updateError) throw updateError;
 
       setIsLinked(!isLinked);
       if (onUpdate) onUpdate(!isLinked);
@@ -48,7 +36,8 @@ const TokenLinked = ({ tokenId, farmId, isLinked: initialIsLinked = true, onUpda
       console.log(`✅ Jeton ${!isLinked ? 'lié' : 'dissocié'} du profil Public`);
     } catch (error) {
       console.error('❌ Erreur lors de la mise à jour:', error);
-      alert('Erreur lors de la mise à jour');
+      // Restaurer l'état précédent en cas d'erreur
+      setIsLinked(isLinked);
     } finally {
       setLoading(false);
     }

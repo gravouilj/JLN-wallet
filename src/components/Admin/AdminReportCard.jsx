@@ -13,16 +13,16 @@ import { AdminReportMessaging } from '../Communication';
  * Utilisé dans l'onglet "Signalés" de AdminVerificationPage
  * 
  * @param {Object} props
- * @param {Object} props.farm - Données de la ferme
+ * @param {Object} props.profil - Données du profil
  * @param {Array} props.reports - Liste des signalements
- * @param {Function} props.onUpdateStatus - Callback pour changer le statut de la ferme
+ * @param {Function} props.onUpdateStatus - Callback pour changer le statut du profil
  * @param {Function} props.onSendReportMessage - Callback pour envoyer un message lié au signalement
  * @param {Function} props.onToggleReportVisibility - Callback pour changer la visibilité d'un signalement
  * @param {Function} props.onIgnoreReports - Callback pour ignorer tous les signalements
  * @param {boolean} props.processing - Indique si une action est en cours
  */
 const AdminReportCard = ({
-  farm,
+  profil,
   reports = [],
   onUpdateStatus,
   onSendReportMessage,
@@ -33,7 +33,7 @@ const AdminReportCard = ({
   const navigate = useNavigate();
 
   // Détection nouveau message du créateur
-  const lastMsg = farm.communication_history?.slice(-1)[0];
+  const lastMsg = profil.communication_history?.slice(-1)[0];
   const hasNewReply = lastMsg && lastMsg.author !== 'admin' && lastMsg.author !== 'system';
 
   // Séparer les signalements ouverts et clos
@@ -57,25 +57,25 @@ const AdminReportCard = ({
             <h3 className="text-lg font-bold d-flex align-center gap-2 mb-2" style={{
               color: 'var(--text-primary)'
             }}>
-              {farm.name}
+              {profil.name}
               {hasNewReply && <Badge variant="info">💬 Nouvelle réponse</Badge>}
             </h3>
             <div className="text-xs text-secondary" style={{ 
               fontFamily: 'monospace',
               opacity: 0.7 
             }}>
-              ID: {farm.owner_address?.substring(0, 12)}...
+              ID: {profil.owner_address?.substring(0, 12)}...
             </div>
           </div>
           
           {/* Badges de statut */}
           <div className="d-flex flex-column gap-2" style={{ alignItems: 'flex-end' }}>
-            <StatusBadge status={farm.status} type="farm" />
-            <StatusBadge status={farm.verification_status} type="verification" />
+            <StatusBadge status={profil.status} type="profil" />
+            <StatusBadge status={profil.verification_status} type="verification" />
           </div>
         </div>
 
-        {/* Informations de la ferme */}
+        {/* Informations du profil */}
         <div className="admin-report-info mb-4" style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
@@ -90,25 +90,25 @@ const AdminReportCard = ({
               <div className="d-flex align-center gap-2">
                 <span className="text-lg">📍</span>
                 <div className="flex-1" style={{ color: 'var(--text-primary)' }}>
-                  <strong>Adresse:</strong> {farm.street_address || farm.address || farm.city || 'Non renseignée'}
+                  <strong>Adresse:</strong> {profil.street_address || profil.address || profil.city || 'Non renseignée'}
                 </div>
               </div>
               <div className="d-flex align-center gap-2">
                 <span className="text-lg">🏙️</span>
                 <div className="flex-1" style={{ color: 'var(--text-primary)' }}>
-                  <strong>Ville:</strong> {farm.city || 'Non renseignée'} {farm.postal_code ? `(${farm.postal_code})` : ''}
+                  <strong>Ville:</strong> {profil.city || 'Non renseignée'} {profil.postal_code ? `(${profil.postal_code})` : ''}
                 </div>
               </div>
               <div className="d-flex align-center gap-2">
                 <span className="text-lg">📧</span>
                 <div className="flex-1" style={{ color: 'var(--text-primary)' }}>
                   <strong>Email:</strong>{' '}
-                  {farm.email ? (
+                  {profil.email ? (
                     <a 
-                      href={`mailto:${farm.email}`} 
+                      href={`mailto:${profil.email}`} 
                       style={{ color: 'var(--accent-primary)', textDecoration: 'underline' }}
                     >
-                      {farm.email}
+                      {profil.email}
                     </a>
                   ) : (
                     'Non renseigné'
@@ -118,7 +118,7 @@ const AdminReportCard = ({
               <div className="d-flex align-center gap-2">
                 <span className="text-lg">📞</span>
                 <div className="flex-1" style={{ color: 'var(--text-primary)' }}>
-                  <strong>Tel:</strong> {farm.phone || 'Non renseigné'}
+                  <strong>Tel:</strong> {profil.phone || 'Non renseigné'}
                 </div>
               </div>
             </div>
@@ -133,12 +133,12 @@ const AdminReportCard = ({
               <div className="d-flex align-center gap-2">
                 <span className="text-lg">🏢</span>
                 <div className="flex-1" style={{ color: 'var(--text-info)' }}>
-                  <strong>SIRET:</strong> {farm.certifications?.siret || 'Non renseigné'}
+                  <strong>SIRET:</strong> {profil.certifications?.siret || 'Non renseigné'}
                 </div>
               </div>
-              {farm.certifications?.siret_link && (
+              {profil.certifications?.siret_link && (
                 <a 
-                  href={farm.certifications.siret_link} 
+                  href={profil.certifications.siret_link} 
                   target="_blank" 
                   rel="noreferrer"
                   className="text-xs hover-opacity"
@@ -154,7 +154,7 @@ const AdminReportCard = ({
               <div className="d-flex align-center gap-2">
                 <span className="text-lg">👤</span>
                 <div className="flex-1" style={{ color: 'var(--text-info)' }}>
-                  <strong>Représentant:</strong> {farm.certifications?.legal_representative || 'Non renseigné'}
+                  <strong>Représentant:</strong> {profil.certifications?.legal_representative || 'Non renseigné'}
                 </div>
               </div>
             </div>
@@ -199,21 +199,21 @@ const AdminReportCard = ({
                         
                         {/* Toggle de visibilité */}
                         <button
-                          onClick={() => onToggleReportVisibility(report.id, !report.visible_to_farmer)}
+                          onClick={() => onToggleReportVisibility(report.id, !report.visible_to_creator)}
                           disabled={processing}
                           className="text-xs px-3 py-1.5 rounded font-medium cursor-pointer hover-lift"
                           style={{
-                            backgroundColor: report.visible_to_farmer 
+                            backgroundColor: report.visible_to_creator 
                               ? 'var(--notification-error-bg)' 
                               : 'var(--bg-secondary)',
-                            color: report.visible_to_farmer 
+                            color: report.visible_to_creator 
                               ? 'var(--notification-error-text)' 
                               : 'var(--text-secondary)',
-                            border: `1px solid ${report.visible_to_farmer ? 'var(--notification-error-border)' : 'var(--border-primary)'}`,
+                            border: `1px solid ${report.visible_to_creator ? 'var(--notification-error-border)' : 'var(--border-primary)'}`,
                             transition: 'all 0.2s'
                           }}
                         >
-                          {report.visible_to_farmer ? '👁️ Visible' : '🙈 Masqué'}
+                          {report.visible_to_creator ? '👁️ Visible' : '🙈 Masqué'}
                         </button>
                       </div>
                       
@@ -289,13 +289,13 @@ const AdminReportCard = ({
         )}
 
         {/* Jetons Associés */}
-        {farm.tokens && farm.tokens.length > 0 && (
+        {profil.tokens && profil.tokens.length > 0 && (
           <div className="mb-4">
             <h4 className="text-xs font-bold text-secondary uppercase mb-2">
               Jetons associés
             </h4>
             <div className="d-flex flex-wrap gap-2">
-              {farm.tokens.map((token, i) => (
+              {profil.tokens.map((token, i) => (
                 <Button 
                   key={i}
                   size="sm"
@@ -316,7 +316,7 @@ const AdminReportCard = ({
 
         {/* Section Chat Admin pour Signalements */}
         <AdminReportMessaging
-          farm={farm}
+          profil={profil}
           reports={reports}
           onSendReportMessage={onSendReportMessage}
           onToggleReportVisibility={onToggleReportVisibility}
@@ -330,7 +330,7 @@ const AdminReportCard = ({
           <Button 
             variant="outline"
             size="sm"
-            onClick={() => onIgnoreReports(farm.id)}
+            onClick={() => onIgnoreReports(profil.id)}
             disabled={processing}
             className="hover-lift"
           >
@@ -339,7 +339,7 @@ const AdminReportCard = ({
           <Button 
             variant="secondary"
             size="sm"
-            onClick={() => onUpdateStatus(farm.id, 'suspended')}
+            onClick={() => onUpdateStatus(profil.id, 'suspended')}
             disabled={processing}
             className="hover-lift"
           >
@@ -348,7 +348,7 @@ const AdminReportCard = ({
           <Button 
             variant="danger"
             size="sm"
-            onClick={() => onUpdateStatus(farm.id, 'banned')}
+            onClick={() => onUpdateStatus(profil.id, 'banned')}
             disabled={processing}
             className="hover-lift"
           >

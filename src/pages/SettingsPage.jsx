@@ -9,7 +9,9 @@ import { useTranslation } from '../hooks/useTranslation';
 import { useEcashWallet } from '../hooks/useEcashWallet';
 import { useXecPrice } from '../hooks/useXecPrice';
 import { walletConnectedAtom, walletAtom, notificationAtom, currencyAtom, localeAtom } from '../atoms';
-import { Card, CardContent, Button, Input, Stack, PageLayout, PageHeader, Select } from '../components/UI';
+import { Card, CardContent, Button, Input, Stack, PageLayout, PageHeader, Select, Tabs } from '../components/UI';
+import ClientTicketForm from '../components/Client/ClientTicketForm';
+import ClientTicketsList from '../components/Client/ClientTicketsList';
 
 const SettingsPage = () => {
   const { t, changeLanguage } = useTranslation();
@@ -23,6 +25,12 @@ const SettingsPage = () => {
   const [showReceive, setShowReceive] = useState(false);
   const [showEmptyWallet, setShowEmptyWallet] = useState(false);
   const [showWalletInfo, setShowWalletInfo] = useState(false);
+  
+  // Onglets
+  const [activeTab, setActiveTab] = useState('settings');
+  
+  // Support
+  const [showNewTicketForm, setShowNewTicketForm] = useState(false);
   
   const { address, wallet: walletInstance } = useEcashWallet();
   const price = useXecPrice();
@@ -41,6 +49,17 @@ const SettingsPage = () => {
   const handleCopyAddress = () => {
     navigator.clipboard.writeText(address);
     setNotification({ type: 'success', message: 'Adresse copiée !' });
+  };
+
+  const handleTicketSubmit = (ticket) => {
+    setNotification({ type: 'success', message: 'Ticket créé avec succès !' });
+    setShowNewTicketForm(false);
+  };
+
+  const handleTicketClick = (ticket) => {
+    // TODO: Ouvrir une page de détails du ticket
+    console.log('Ticket cliqué:', ticket);
+    setNotification({ type: 'info', message: 'Détails du ticket à venir' });
   };
 
   const handleEmptyWallet = async (e) => {
@@ -67,6 +86,24 @@ const SettingsPage = () => {
       <PageLayout hasBottomNav>
         <Stack spacing="lg">
           <PageHeader icon="⚙️" title={t('settings.title')} />
+
+          {/* Onglets */}
+          <Card>
+            <CardContent noPadding>
+              <Tabs
+                tabs={[
+                  { id: 'settings', label: '⚙️ Paramètres' },
+                  { id: 'support', label: '💬 Support' },
+                ]}
+                activeTab={activeTab}
+                onChange={setActiveTab}
+              />
+            </CardContent>
+          </Card>
+
+          {/* ONGLET: PARAMÈTRES */}
+          {activeTab === 'settings' && (
+            <Stack spacing="lg">
 
           {/* PRIX DU MARCHÉ */}
           <Card>
@@ -170,12 +207,59 @@ const SettingsPage = () => {
             </Card>
           </Stack>
 
-          {/* SYSTEME */}
-          <Stack spacing="sm">
-            <h2 style={{ fontSize: '1.1rem', fontWeight: 'bold', marginLeft: '8px' }}>Système</h2>
-            <BlockchainStatus />
-            <div className="text-center text-sm text-gray-400">v1.0.0</div>
-          </Stack>
+              {/* SYSTEME */}
+              <Stack spacing="sm">
+                <h2 style={{ fontSize: '1.1rem', fontWeight: 'bold', marginLeft: '8px' }}>Système</h2>
+                <BlockchainStatus />
+                <div className="text-center text-sm text-gray-400">v1.0.0</div>
+              </Stack>
+            </Stack>
+          )}
+
+          {/* ONGLET: SUPPORT */}
+          {activeTab === 'support' && (
+            <Stack spacing="lg">
+              {/* Bouton Nouveau Ticket */}
+              {!showNewTicketForm && (
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="d-flex justify-between align-center">
+                      <div>
+                        <h3 className="text-lg font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
+                          Besoin d'aide ?
+                        </h3>
+                        <p className="text-sm text-secondary mb-0">
+                          Créez un ticket pour contacter notre équipe support
+                        </p>
+                      </div>
+                      <Button
+                        variant="primary"
+                        onClick={() => setShowNewTicketForm(true)}
+                      >
+                        ✉️ Nouveau ticket
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Formulaire de ticket */}
+              {showNewTicketForm && (
+                <ClientTicketForm
+                  type="admin"
+                  walletAddress={address}
+                  onSubmit={handleTicketSubmit}
+                  onCancel={() => setShowNewTicketForm(false)}
+                />
+              )}
+
+              {/* Liste des tickets */}
+              <ClientTicketsList
+                walletAddress={address}
+                onTicketClick={handleTicketClick}
+              />
+            </Stack>
+          )}
 
         </Stack>
       </PageLayout>

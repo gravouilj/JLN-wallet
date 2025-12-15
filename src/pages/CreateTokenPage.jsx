@@ -7,7 +7,7 @@ import { useEcashWallet, useEcashBalance } from '../hooks/useEcashWallet';
 import { useXecPrice } from '../hooks/useXecPrice';
 import { useAdmin } from '../hooks/useAdmin';
 import { walletConnectedAtom, walletAtom, notificationAtom, walletModalOpenAtom } from '../atoms';
-import { FarmService } from '../services/farmService';
+import { profilService } from '../services/profilService';
 import { addEntry, ACTION_TYPES } from '../services/historyService';
 
 const CreateTokenPage = () => {
@@ -236,11 +236,11 @@ const CreateTokenPage = () => {
       
       console.log('✅ Token created:', result);
       
-      // Pré-enregistrer la farm dans Supabase avec l'objectif et la contrepartie
+      // Pré-enregistrer le profile dans Supabase avec l'objectif et la contrepartie
       if (address && formData.purpose && formData.counterpart) {
         try {
-          // Vérifier si une farm existe déjà
-          const existingFarm = await FarmService.getMyFarm(address);
+          // Vérifier si un profile existe déjà
+          const existingProfile = await profilService.getMyProfile(address);
           
           const tokenEntry = {
             tokenId: result.txid,
@@ -252,20 +252,20 @@ const CreateTokenPage = () => {
             isVisible: true
           };
           
-          if (existingFarm) {
+          if (existingProfile) {
             // Ajouter le token à la liste existante
-            const existingTokens = existingFarm.tokens || [];
+            const existingTokens = existingProfile.tokens || [];
             const updatedTokens = [...existingTokens, tokenEntry];
             
-            await FarmService.saveFarm({
-              ...existingFarm,
+            await profilService.saveProfile({
+              ...existingProfile,
               tokens: updatedTokens
             }, address);
             
-            console.log('✅ Token ajouté à la farm existante');
+            console.log('✅ Token ajouté à la profile existant');
           } else {
-            // Créer une nouvelle farm minimale
-            await FarmService.saveFarm({
+            // Créer un nouveau profile minimal
+            await profilService.saveProfile({
               name: formData.name,
               description: '', // Description vide, le purpose/counterpart sont dans le token
               country: 'France',
@@ -273,10 +273,10 @@ const CreateTokenPage = () => {
               tokens: [tokenEntry]
             }, address);
             
-            console.log('✅ Farm créée avec le token');
+            console.log('✅ Profile créé avec le token');
           }
-        } catch (farmErr) {
-          console.warn('⚠️ Erreur pré-enregistrement farm (non bloquant):', farmErr);
+        } catch (profileErr) {
+          console.warn('⚠️ Erreur pré-enregistrement profile (non bloquant):', profileErr);
         }
       }
       
@@ -975,7 +975,7 @@ const CreateTokenPage = () => {
               type="url"
               value={formData.url}
               onChange={(e) => handleInputChange('url', e.target.value)}
-              placeholder="https://votre-site.com ou https://farmwallet.cash"
+              placeholder="https://votre-site.com"
               disabled={creating}
               style={{
                 width: '100%',

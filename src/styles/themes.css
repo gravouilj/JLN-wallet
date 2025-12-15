@@ -106,6 +106,18 @@
   --gradient-warning: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
   --gradient-hero: linear-gradient(135deg, #0074e4 0%, #8b5cf6 50%, #10b981 100%);
   --gradient-glass: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.7) 100%);
+  
+  /* Ticket System - Status colors */
+  --ticket-open-bg: #dbeafe;
+  --ticket-progress-bg: #fef3c7;
+  --ticket-resolved-bg: #d1fae5;
+  --ticket-closed-bg: #f3f4f6;
+  
+  /* Ticket System - Priority colors */
+  --priority-low: #9ca3af;
+  --priority-normal: #3b82f6;
+  --priority-high: #f59e0b;
+  --priority-urgent: #ef4444;
 }
 
 /* Dark Theme - Premium Dark Mode */
@@ -221,6 +233,18 @@
   --gradient-warning: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
   --gradient-hero: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 50%, #10b981 100%);
   --gradient-glass: linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(30, 41, 59, 0.7) 100%);
+  
+  /* Ticket System - Status colors (dark mode) */
+  --ticket-open-bg: rgba(59, 130, 246, 0.15);
+  --ticket-progress-bg: rgba(245, 158, 11, 0.15);
+  --ticket-resolved-bg: rgba(16, 185, 129, 0.15);
+  --ticket-closed-bg: rgba(100, 116, 139, 0.15);
+  
+  /* Ticket System - Priority colors (unchanged for visibility) */
+  --priority-low: #9ca3af;
+  --priority-normal: #3b82f6;
+  --priority-high: #f59e0b;
+  --priority-urgent: #ef4444;
 }
 
 /* Theme Transition - Smooth and professional */

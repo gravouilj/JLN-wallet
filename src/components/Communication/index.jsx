@@ -19,7 +19,7 @@ import {
  * 3. Signalements (gérés par ReportsSection)
  */
 export const CommunicationSection = ({ 
-  farm, 
+  profil, 
   onSendMessage, 
   loading = false,
   showReplyBox = true,
@@ -30,17 +30,17 @@ export const CommunicationSection = ({
   const [showAllVerification, setShowAllVerification] = useState(false);
   const [showAllGeneral, setShowAllGeneral] = useState(false);
   
-  if (!farm) return null;
+  if (!profil) return null;
   
-  const allMessages = farm.communication_history || [];
+  const allMessages = profil.communication_history || [];
   
   // Séparer messages selon le type
   const verificationMessages = allMessages.filter(msg => msg.type === 'verification' || !msg.type);
   const generalMessages = allMessages.filter(msg => msg.type === 'general');
   
-  const isVerified = farm.verification_status === 'verified';
-  const isConversationClosed = farm.conversation_closed === true;
-  const isPending = ['pending', 'info_requested'].includes(farm.verification_status);
+  const isVerified = profil.verification_status === 'verified';
+  const isConversationClosed = profil.conversation_closed === true;
+  const isPending = ['pending', 'info_requested'].includes(profil.verification_status);
   
   // Masquer section vérification si clôturée par l'admin
   const showVerification = !isConversationClosed;
@@ -242,14 +242,14 @@ export const CommunicationSection = ({
 
 /**
  * ReportsSection - Section pour afficher les signalements reçus
- * Masquée par défaut, visible seulement si signalements marqués visible_to_farmer
+ * Masquée par défaut, visible seulement si signalements marqués visible_to_creator
  */
 export const ReportsSection = ({ 
   reports = [], 
   loading = false 
 }) => {
   // Filtrer uniquement les signalements visibles au créateur
-  const visibleReports = reports.filter(r => r.visible_to_farmer === true);
+  const visibleReports = reports.filter(r => r.visible_to_creator === true);
   
   // Ne rien afficher si aucun signalement visible
   if (!visibleReports || visibleReports.length === 0) return null;
@@ -354,7 +354,7 @@ export const ReportsSection = ({
  * AdminChatSection - Section chat pour l'interface admin avec séparation vérification/général
  */
 export const AdminChatSection = ({ 
-  farm, 
+  profil, 
   onSendMessage, 
   onSendGeneralMessage,
   onCloseConversation,
@@ -365,13 +365,13 @@ export const AdminChatSection = ({
   const [isVerificationExpanded, setIsVerificationExpanded] = useState(false);
   const [isGeneralExpanded, setIsGeneralExpanded] = useState(false);
   
-  if (!farm) return null;
+  if (!profil) return null;
   
-  const allMessages = farm.communication_history || [];
+  const allMessages = profil.communication_history || [];
   const verificationMessages = allMessages.filter(msg => msg.type === 'verification' || !msg.type);
   const generalMessages = allMessages.filter(msg => msg.type === 'general');
   
-  const isConversationClosed = farm.conversation_closed === true;
+  const isConversationClosed = profil.conversation_closed === true;
   
   // Détecter nouvelles réponses du créateur
   const lastVerifMsg = verificationMessages.slice(-1)[0];
@@ -557,30 +557,30 @@ export const AdminChatSection = ({
  * AdminReportMessaging - Section spéciale pour communiquer sur les signalements (onglet reported)
  */
 export const AdminReportMessaging = ({
-  farm,
+  profil,
   reports = [],
   onSendReportMessage,
   onToggleReportVisibility,
   loading = false
 }) => {
   const [reportMessage, setReportMessage] = useState('');
-  const [showMessageToFarmer, setShowMessageToFarmer] = useState(true); // TRUE par défaut pour afficher au créateur
+  const [showMessageToCreator, setShowMessageToCreator] = useState(true); // TRUE par défaut pour afficher au créateur
   
-  if (!farm) return null;
+  if (!profil) return null;
   
   const openReports = reports.filter(r => r.admin_status !== 'resolved');
   
   // Récupérer les messages de type 'report' ou 'general' de l'historique
-  const allMessages = farm.communication_history || [];
+  const allMessages = profil.communication_history || [];
   const reportMessages = allMessages.filter(msg => msg.type === 'report' || msg.type === 'general');
   
   const handleSendMessage = () => {
     if (!reportMessage.trim()) return;
     
     // Envoyer le message avec le flag de visibilité
-    onSendReportMessage(reportMessage.trim(), showMessageToFarmer);
+    onSendReportMessage(reportMessage.trim(), showMessageToCreator);
     setReportMessage('');
-    // Garder showMessageToFarmer à true par défaut
+    // Garder showMessageToCreator à true par défaut
   };
   
   return (
@@ -652,36 +652,36 @@ export const AdminReportMessaging = ({
         gap: '0.75rem',
         marginBottom: '0.75rem',
         padding: '0.5rem',
-        backgroundColor: showMessageToFarmer ? '#d1fae5' : '#fee2e2',
+        backgroundColor: showMessageToCreator ? '#d1fae5' : '#fee2e2',
         borderRadius: '6px',
-        border: `2px solid ${showMessageToFarmer ? '#10b981' : '#fecaca'}`
+        border: `2px solid ${showMessageToCreator ? '#10b981' : '#fecaca'}`
       }}>
         <input
           type="checkbox"
-          checked={showMessageToFarmer}
-          onChange={(e) => setShowMessageToFarmer(e.target.checked)}
+          checked={showMessageToCreator}
+          onChange={(e) => setShowMessageToCreator(e.target.checked)}
           style={{ width: '1.25rem', height: '1.25rem', cursor: 'pointer', accentColor: '#10b981' }}
         />
         <label style={{ 
           fontSize: '0.85rem', 
-          color: showMessageToFarmer ? '#065f46' : '#991b1b',
+          color: showMessageToCreator ? '#065f46' : '#991b1b',
           flex: 1,
           cursor: 'pointer',
           fontWeight: '600'
         }}
-        onClick={() => setShowMessageToFarmer(!showMessageToFarmer)}
+        onClick={() => setShowMessageToCreator(!showMessageToCreator)}
         >
-          {showMessageToFarmer ? '👁️ Message VISIBLE au créateur (recommandé)' : '🙈 Message MASQUÉ au créateur (interne uniquement)'}
+          {showMessageToCreator ? '👁️ Message VISIBLE au créateur (recommandé)' : '🙈 Message MASQUÉ au créateur (interne uniquement)'}
         </label>
       </div>
       
       <Button 
         onClick={handleSendMessage} 
         disabled={!reportMessage.trim() || loading}
-        variant={showMessageToFarmer ? "primary" : "secondary"}
+        variant={showMessageToCreator ? "primary" : "secondary"}
         fullWidth
       >
-        {loading ? '⏳ Envoi...' : showMessageToFarmer ? '📤 Envoyer au créateur' : '📝 Enregistrer en interne'}
+        {loading ? '⏳ Envoi...' : showMessageToCreator ? '📤 Envoyer au créateur' : '📝 Enregistrer en interne'}
       </Button>
       
       {openReports.length > 0 && (

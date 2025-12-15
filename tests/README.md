@@ -35,7 +35,7 @@ npm run test:report
 ```
 tests/
 ├── wallet-connection.spec.js   # Connexion/déconnexion wallet
-├── farm-selection.spec.js      # Sélecteur de ferme + filtrage tokens
+├── profil-selection.spec.js      # Sélecteur de profil + filtrage tokens
 ├── token-send.spec.js          # Envoi de tokens (form validation)
 ├── qr-scanner.spec.js          # Scanner QR + affichage QR code
 └── sendXEC.spec.js            # Tests existants Send XEC
@@ -61,12 +61,12 @@ tests/
 - ✅ Persistance connexion après reload
 - ✅ Déconnexion
 
-### 2. Farm Selection (`farm-selection.spec.js`)
+### 2. Prodil Selection (`profil-selection.spec.js`)
 - ✅ Affichage dropdown fermes
-- ✅ Chargement fermes depuis farms.json
+- ✅ Chargement fermes depuis profiles.json
 - ✅ Filtrage tokens par ferme
 - ✅ Persistance sélection ferme
-- ✅ Option "All Farms"
+- ✅ Option "All Profiles"
 
 ### 3. Token Send (`token-send.spec.js`)
 - ✅ Affichage formulaire send

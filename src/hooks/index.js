@@ -11,8 +11,9 @@ export {
   useEcashXec        // XEC transaction utilities
 } from './useEcashWallet';
 
-// Farm & Token Management
-export { useFarms, useFarm } from './useFarms';
+// Profil & Token Management
+export { useProfiles, useFarms, useProfile, useFarm } from './useProfiles';
+export { useProfileStatus } from './useProfileStatus';
 
 // Admin & Permissions
 export { useAdmin } from './useAdmin';

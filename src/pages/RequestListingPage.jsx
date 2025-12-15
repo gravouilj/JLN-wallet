@@ -5,7 +5,7 @@ import MobileLayout from '../components/Layout/MobileLayout';
 import { Card, CardContent, Button, PageLayout, Stack } from '../components/UI';
 import { useEcashWallet } from '../hooks/useEcashWallet';
 import { notificationAtom } from '../atoms';
-import { FarmService } from '../services/farmService';
+import { profilService } from '../services/profilService';
 
 const RequestListingPage = () => {
   const { tokenId } = useParams();
@@ -16,7 +16,7 @@ const RequestListingPage = () => {
   const [loading, setLoading] = useState(true);
   const [tokenInfo, setTokenInfo] = useState(null);
   const [formData, setFormData] = useState({
-    farmName: '',
+    profileName: '',
     description: '',
     country: 'France',
     region: '',
@@ -71,7 +71,7 @@ const RequestListingPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!formData.farmName || !formData.description || !formData.email) {
+    if (!formData.profileName || !formData.description || !formData.email) {
       setNotification({
         type: 'error',
         message: 'Veuillez remplir tous les champs obligatoires'
@@ -85,9 +85,9 @@ const RequestListingPage = () => {
         throw new Error('Wallet non connecté');
       }
 
-      // Construire l'objet farm pour Supabase
-      const farmData = {
-        name: formData.farmName,
+      // Construire l'objet profile pour Supabase
+      const profileData = {
+        name: formData.profileName,
         description: formData.description,
         location_country: formData.country,
         location_region: formData.region,
@@ -131,9 +131,9 @@ const RequestListingPage = () => {
       };
 
       // Sauvegarder dans Supabase
-      const savedFarm = await FarmService.saveFarm(farmData, address);
+      const savedProfile = await ProfileService.saveProfile(profileData, address);
 
-      console.log('✅ Demande de listing enregistrée:', savedFarm);
+      console.log('✅ Demande de listing enregistrée:', savedProfile);
 
       setNotification({
         type: 'success',
@@ -141,7 +141,7 @@ const RequestListingPage = () => {
       });
 
       // Rediriger vers la page de gestion après 1.5s
-      setTimeout(() => navigate(`/manage-farm/${tokenId}`), 1500);
+      setTimeout(() => navigate(`/manage-profile/${tokenId}`), 1500);
 
     } catch (err) {
       console.error('❌ Erreur:', err);
@@ -206,8 +206,8 @@ const RequestListingPage = () => {
                   </label>
                   <input
                     type="text"
-                    value={formData.farmName}
-                    onChange={(e) => setFormData({ ...formData, farmName: e.target.value })}
+                    value={formData.profileName}
+                    onChange={(e) => setFormData({ ...formData, profileName: e.target.value })}
                     placeholder="Ferme du Soleil"
                     required
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"

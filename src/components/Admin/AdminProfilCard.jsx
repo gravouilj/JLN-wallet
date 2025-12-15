@@ -13,7 +13,7 @@ import { AdminChatSection } from '../Communication';
  * Utilisé dans les onglets "En Attente" et "Tous" de AdminVerificationPage
  * 
  * @param {Object} props
- * @param {Object} props.farm - Données de la ferme
+ * @param {Object} props.profil - Données de la ferme
  * @param {Function} props.onUpdateStatus - Callback pour changer le statut
  * @param {Function} props.onSendMessage - Callback pour envoyer un message
  * @param {Function} props.onCloseConversation - Callback pour fermer une conversation
@@ -21,7 +21,7 @@ import { AdminChatSection } from '../Communication';
  * @param {boolean} props.processing - Indique si une action est en cours
  */
 const AdminProfilCard = ({
-  farm,
+  profil,
   onUpdateStatus,
   onSendMessage,
   onCloseConversation,
@@ -31,7 +31,7 @@ const AdminProfilCard = ({
   const navigate = useNavigate();
 
   // Détection nouveau message du créateur
-  const lastMsg = farm.communication_history?.slice(-1)[0];
+  const lastMsg = profil.communication_history?.slice(-1)[0];
   const hasNewReply = lastMsg && lastMsg.author !== 'admin' && lastMsg.author !== 'system';
 
   return (
@@ -51,25 +51,25 @@ const AdminProfilCard = ({
             <h3 className="text-lg font-bold d-flex align-center gap-2 mb-2" style={{
               color: 'var(--text-primary)'
             }}>
-              {farm.name}
+              {profil.name}
               {hasNewReply && <Badge variant="info">💬 Nouvelle réponse</Badge>}
             </h3>
             <div className="text-xs text-secondary" style={{ 
               fontFamily: 'monospace',
               opacity: 0.7 
             }}>
-              ID: {farm.owner_address?.substring(0, 12)}...
+              ID: {profil.owner_address?.substring(0, 12)}...
             </div>
           </div>
           
           {/* Badges de statut */}
           <div className="d-flex flex-column gap-2" style={{ alignItems: 'flex-end' }}>
-            <StatusBadge status={farm.status} type="farm" />
-            <StatusBadge status={farm.verification_status} type="verification" />
+            <StatusBadge status={profil.status} type="farm" />
+            <StatusBadge status={profil.verification_status} type="verification" />
           </div>
         </div>
 
-        {/* Informations de la ferme */}
+        {/* Informations du profil */}
         <div className="admin-profil-info mb-4" style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
@@ -84,25 +84,25 @@ const AdminProfilCard = ({
               <div className="d-flex align-center gap-2">
                 <span className="text-lg">📍</span>
                 <div className="flex-1" style={{ color: 'var(--text-primary)' }}>
-                  <strong>Adresse:</strong> {farm.street_address || farm.address || farm.city || 'Non renseignée'}
+                  <strong>Adresse:</strong> {profil.street_address || profil.address || profil.city || 'Non renseignée'}
                 </div>
               </div>
               <div className="d-flex align-center gap-2">
                 <span className="text-lg">🏙️</span>
                 <div className="flex-1" style={{ color: 'var(--text-primary)' }}>
-                  <strong>Ville:</strong> {farm.city || 'Non renseignée'} {farm.postal_code ? `(${farm.postal_code})` : ''}
+                  <strong>Ville:</strong> {profil.city || 'Non renseignée'} {profil.postal_code ? `(${profil.postal_code})` : ''}
                 </div>
               </div>
               <div className="d-flex align-center gap-2">
                 <span className="text-lg">📧</span>
                 <div className="flex-1" style={{ color: 'var(--text-primary)' }}>
                   <strong>Email:</strong>{' '}
-                  {farm.email ? (
+                  {profil.email ? (
                     <a 
-                      href={`mailto:${farm.email}`} 
+                      href={`mailto:${profil.email}`} 
                       style={{ color: 'var(--accent-primary)', textDecoration: 'underline' }}
                     >
-                      {farm.email}
+                      {profil.email}
                     </a>
                   ) : (
                     'Non renseigné'
@@ -112,7 +112,7 @@ const AdminProfilCard = ({
               <div className="d-flex align-center gap-2">
                 <span className="text-lg">📞</span>
                 <div className="flex-1" style={{ color: 'var(--text-primary)' }}>
-                  <strong>Tel:</strong> {farm.phone || 'Non renseigné'}
+                  <strong>Tel:</strong> {profil.phone || 'Non renseigné'}
                 </div>
               </div>
             </div>
@@ -127,12 +127,12 @@ const AdminProfilCard = ({
               <div className="d-flex align-center gap-2">
                 <span className="text-lg">🏢</span>
                 <div className="flex-1" style={{ color: 'var(--text-info)' }}>
-                  <strong>SIRET:</strong> {farm.certifications?.siret || 'Non renseigné'}
+                  <strong>SIRET:</strong> {profil.certifications?.siret || 'Non renseigné'}
                 </div>
               </div>
-              {farm.certifications?.siret_link && (
+              {profil.certifications?.siret_link && (
                 <a 
-                  href={farm.certifications.siret_link} 
+                  href={profil.certifications.siret_link} 
                   target="_blank" 
                   rel="noreferrer"
                   className="text-xs hover-opacity"
@@ -148,7 +148,7 @@ const AdminProfilCard = ({
               <div className="d-flex align-center gap-2">
                 <span className="text-lg">👤</span>
                 <div className="flex-1" style={{ color: 'var(--text-info)' }}>
-                  <strong>Représentant:</strong> {farm.certifications?.legal_representative || 'Non renseigné'}
+                  <strong>Représentant:</strong> {profil.certifications?.legal_representative || 'Non renseigné'}
                 </div>
               </div>
             </div>
@@ -156,13 +156,13 @@ const AdminProfilCard = ({
         </div>
 
         {/* Jetons Associés */}
-        {farm.tokens && farm.tokens.length > 0 && (
+        {profil.tokens && profil.tokens.length > 0 && (
           <div className="mb-4">
             <h4 className="text-xs font-bold text-secondary uppercase mb-2">
               Jetons associés
             </h4>
             <div className="d-flex flex-wrap gap-2">
-              {farm.tokens.map((token, i) => (
+              {profil.tokens.map((token, i) => (
                 <Button 
                   key={i}
                   size="sm"
@@ -183,7 +183,7 @@ const AdminProfilCard = ({
 
         {/* Section Chat Admin */}
         <AdminChatSection
-          farm={farm}
+          profil={profil}
           onSendMessage={onSendMessage}
           onSendGeneralMessage={onSendMessage}
           onCloseConversation={onCloseConversation}
@@ -198,7 +198,7 @@ const AdminProfilCard = ({
             <Button 
               variant="danger"
               size="sm"
-              onClick={() => onUpdateStatus(farm.id, 'rejected')}
+              onClick={() => onUpdateStatus(profil.id, 'rejected')}
               disabled={processing}
               className="hover-lift"
             >
@@ -206,7 +206,7 @@ const AdminProfilCard = ({
             </Button>
             <Button 
               size="sm"
-              onClick={() => onUpdateStatus(farm.id, 'verified')}
+              onClick={() => onUpdateStatus(profil.id, 'verified')}
               disabled={processing}
               className="hover-lift"
               style={{ 

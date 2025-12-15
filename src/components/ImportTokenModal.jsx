@@ -100,7 +100,7 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
       }
 
       // Vérifier si l'utilisateur a déjà une ferme
-      const { FarmService } = await import('../services/farmService');
+      const { FarmService } = await import('../services/profilService');
       const existingFarm = await FarmService.getMyFarm(address);
       setHasExistingFarm(!!existingFarm);
 
@@ -204,7 +204,7 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
 
     setIsImporting(true);
     try {
-      const { FarmService } = await import('../services/farmService');
+      const { FarmService } = await import('../services/profilService');
       
       // 🔒 NOUVEAU: Vérifier la disponibilité du token avant import
       console.log('🔍 Vérification disponibilité avant import rapide...');

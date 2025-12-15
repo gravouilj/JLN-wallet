@@ -22,17 +22,19 @@ const TokenCard = ({
   // Charger le nombre de détenteurs depuis la blockchain
   useEffect(() => {
     const loadHolderCount = async () => {
-      // TODO: Implémenter avec Chronik
-      // Simulé pour l'instant
+      // Utiliser holdersCount passé en prop si disponible
       setLoadingHolders(false);
-      setHolderCount(token.holderCount || 0);
+      setHolderCount(token.holdersCount || 0);
     };
     
     loadHolderCount();
-  }, [token.tokenId]);
+  }, [token.tokenId, token.holdersCount]);
 
   const isDeleted = token.isDeleted || false;
   const isActive = token.isActive !== false;
+  
+  // Si isLinked est false, isVisible devrait être désactivé
+  const canToggleVisible = token.isLinked !== false;
 
   return (
     <Card style={{ 
@@ -133,12 +135,13 @@ const TokenCard = ({
         </div>
 
         {/* Toggles - isVisible et isLinked superposés */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
           {showVisibleToggle && (
             <TokenVisible
               tokenId={token.tokenId}
               farmId={farmId}
               isVisible={token.isVisible}
+              disabled={!canToggleVisible}
               onUpdate={(newValue) => onUpdate && onUpdate({ ...token, isVisible: newValue })}
             />
           )}
@@ -152,7 +155,6 @@ const TokenCard = ({
             />
           )}
         </div>
-
         {/* Description si présente */}
         {token.description && (
           <div style={{ 

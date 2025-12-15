@@ -1,8 +1,8 @@
-# 🌾 Farm Wallet
+# 🌾 JLN Wallet
 
 > **Version Indépendante** - Architecture CSS Custom & Zero UI Framework
 
-A beautiful, lightweight wallet for **eCash (XEC)** and farm tokens, built with React 19, pure CSS, and modern web standards.
+A beautiful, lightweight wallet for **eCash (XEC)** and P2P tokens, built with React 19, pure CSS, and modern web standards.
 
 [![React](https://img.shields.io/badge/React-19.1-blue.svg)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-6.4-purple.svg)](https://vitejs.dev/)
@@ -14,7 +14,7 @@ A beautiful, lightweight wallet for **eCash (XEC)** and farm tokens, built with 
 - ✅ Fixed-supply token support (import & management)
 - ✅ TokenDetailsPage UI refactor with unified action tabs
 - ✅ ManageTokenPage compact card design (48x48 images)
-- ✅ Dashboard v2 with farm selector & responsive design
+- ✅ Dashboard v2 with profil selector & responsive design
 - ✅ Real-time balance updates via Chronik WebSocket
 - ✅ Complete E2E test infrastructure (Playwright)
 
@@ -42,9 +42,9 @@ A beautiful, lightweight wallet for **eCash (XEC)** and farm tokens, built with 
 ## ✨ Features
 
 ### Core Wallet
-- 🪙 **Multi-token support** - XEC + farm tokens with dynamic filtering
+- 🪙 **Multi-token support** - XEC + tokens with dynamic filtering
 - 🔒 **Fixed & Variable supply** - Support for both token types (mint/burn/import)
-- 🏪 **Farm selector** - Filter tokens by farm with persistent selection
+- 🏪 **Profil selector** - Filter tokens by profil with persistent selection
 - 💰 **Smart balance display** - 70% XEC / 30% USD split with real-time rates
 - 📷 **QR codes** - Scan & generate QR codes for payments
 - 🔐 **Secure** - Non-custodial, keys stored locally
@@ -181,7 +181,7 @@ npm run preview
 
 **Test Suites** (40+ scenarios):
 - ✅ Wallet connection flow (5 tests)
-- ✅ Farm selection & filtering (5 tests)
+- ✅ Profil selection & filtering (5 tests)
 - ✅ Token send validation (8 tests)
 - ✅ QR scanner & display (8 tests)
 - ✅ Send XEC flow (15 tests)
@@ -237,7 +237,7 @@ Les traductions sont dans `src/i18n/locales/`
 - No MintBaton (authPubkey empty)
 - Immutable total supply
 - Can only burn tokens (no minting)
-- Creator detected via: balance > 0 AND Farm-Wallet reference
+- Creator detected via: balance > 0 AND JLN-Wallet reference
 
 ### Token Actions
 
@@ -251,7 +251,7 @@ Les traductions sont dans `src/i18n/locales/`
 - 🟢 **En Circulation** - Tokens with supply > 0
 - ⚫ **Inactifs** - Tokens with supply = 0
 - 🗑️ **Supprimés** - Deleted tokens (admin only)
-- 📋 **Tous** - All Farm-Wallet tokens (admin only)
+- 📋 **Tous** - All JLN-Wallet tokens (admin only)
 
 ### Import Tokens
 
@@ -293,7 +293,7 @@ Atoms principaux :
 | `/manage-token` | ManageTokenPage | Gestion tokens créateur (privé) |
 | `/settings` | SettingsPage | Paramètres (privé) |
 | `/favorites` | FavoritesPage | Fermes favorites (privé) |
-| `/farmer-info` | FarmerInfoPage | Info fermier (public) |
+| `/landingpage` | LandingPage | Info fermier (public) |
 | `/faq` | FaqPage | FAQ (public) |
 
 ## 🚀 Deployment
@@ -394,7 +394,7 @@ npm run test
 ## 📂 Repository Structure
 
 ```
-farm-wallet-independant/
+jln-wallet-independant/
 ├── src/
 │   ├── components/            # Reusable UI components
 │   │   ├── UI.jsx            # Atomic: Card, Button, Stack
@@ -406,22 +406,22 @@ farm-wallet-independant/
 │   │   ├── QrCodeScanner.jsx # QR scanning
 │   │   └── ChronikConnectionIndicator.jsx  # WebSocket status
 │   ├── pages/                # Application pages
-│   │   ├── WalletDashboard.jsx    # Dashboard v2 (farm selector, tabs)
-│   │   ├── DirectoryPage.jsx      # Farm directory (public)
+│   │   ├── WalletDashboard.jsx    # Dashboard v2 (profil selector, tabs)
+│   │   ├── DirectoryPage.jsx      # Profil directory (public)
 │   │   ├── SendPage.jsx           # Send XEC/Tokens
 │   │   ├── TokenDetailsPage.jsx   # Token details & actions (send/airdrop/mint/burn)
 │   │   ├── ManageTokenPage.jsx    # Token management (creators) - compact cards
 │   │   ├── CreateTokenPage.jsx    # Token creation (admin)
 │   │   ├── ImportTokenModal.jsx   # Import token modal (fixed/variable)
 │   │   ├── SettingsPage.jsx       # User settings
-│   │   └── FavoritesPage.jsx      # Favorite farms
+│   │   └── FavoritesPage.jsx      # Favorite profiles
 │   ├── hooks/                # Custom React hooks
 │   │   ├── useEcashWallet.js      # Wallet initialization
 │   │   ├── useBalance.js          # Balance fetching
 │   │   ├── useToken.js            # Token data
 │   │   ├── useChronikWebSocket.js # Real-time updates
 │   │   ├── useAdmin.js            # Super admin detection
-│   │   ├── useFarms.js            # Farm data loading
+│   │   ├── useProfiles.js            # Profil data loading
 │   │   └── useXecPrice.js         # XEC/USD price
 │   ├── services/             # Business logic & blockchain
 │   │   ├── ecashWallet.js         # EcashWallet class (CORE)
@@ -444,14 +444,14 @@ farm-wallet-independant/
 │   │       ├── fr.json            # French translations
 │   │       └── en.json            # English translations
 │   ├── data/                 # Static data
-│   │   └── farms.json             # Farm whitelist
+│   │   └── profiles.json             # Profil whitelist
 │   ├── atoms.js              # Jotai state atoms
 │   ├── App.jsx               # Root component
 │   └── main.jsx              # Entry point
 ├── tests/                    # E2E tests (Playwright)
 │   ├── README.md                  # Testing guide
 │   ├── wallet-connection.spec.js  # Connection flow
-│   ├── farm-selection.spec.js     # Farm selector
+│   ├── profil-selection.spec.js     # Profil selector
 │   ├── token-send.spec.js         # Token send form
 │   ├── qr-scanner.spec.js         # QR scanner
 │   └── sendXEC.spec.js            # XEC send (existing)
@@ -571,7 +571,7 @@ const { isConnected, lastError, reconnectAttempts } = useChronikWebSocket();
 
 - 🔐 **Super Admin:** SHA-256 hash-based authentication (no address exposure)
 - 🎫 **Creator Detection:** Mint Baton ownership verification
-- 🏷️ **Token Filtering:** farms.json whitelist system
+- 🏷️ **Token Filtering:** profiles.json whitelist system
 - 🔒 **Non-custodial:** Keys stored locally in browser (localStorage)
 - 🚫 **No server:** 100% client-side wallet logic
 
@@ -595,7 +595,7 @@ npm run lint:fix
 ## 📂 Project Structure
 
 ```
-farm-wallet/
+jln-wallet/
 ├── docs/                  # 📚 Complete documentation
 │   ├── INDEX.md          # Documentation index
 │   ├── ARCHITECTURE.md   # Project architecture
