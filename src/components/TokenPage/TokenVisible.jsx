@@ -1,12 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { FarmService } from '../../services/profilService';
+import { profilService } from '../../services/profilService';
 import { useEcashWallet } from '../../hooks/useEcashWallet';
 import { Switch } from '../UI';
 
 /**
- * TokenVisible - Switch pour afficher/masquer un jeton sur le profil public (DirectoryPage)
+ * TokenVisible - Switch pour afficher/masquer un jeton lié (isLinked=true) sur le profil public (DirectoryPage)
+ * Si visible (par défaut) : le jeton apparaît dans l'annuaire public (DirectoryPage) avec des données enrichies (objectif & contrepartie à minima) qui sont accessibles aux visiteurs et détenteurs.
+ * Si masqué : le jeton n'apparaît pas dans l'annuaire public, mais reste gérable par le créateur depuis ManageTokenPage.
+ * Si le jeton est masqué mais lié (isLinked=true), le créateur peut toujours gérer les infos enrichies du jeton dans ManageProfilePage et les détenteurs y accédernt également.
+ * Si le jeton est masqué et non lié (isLinked=false), le créateur ne peut plus gérer les infos enrichies du jeton dans ManageProfilePage et les détenteurs les voir, mais ils peuvent toujours interagir avec le jeton via jlnwallet et la blockchain (seules les infos basiques sont disponibles : name, ticker, offer, tokenId, totalSupply, holdersCount, transactions...).
+ * Utilisation : Permettre aux créateurs de contrôler la visibilité publique de leurs jetons, tout en conservant la gestion privée.
  */
-const TokenVisible = ({ tokenId, farmId, isVisible: initialIsVisible = true, onUpdate, disabled = false }) => {
+const TokenVisible = ({ tokenId, profileId, isVisible: initialIsVisible = true, onUpdate, disabled = false }) => {
   const { address } = useEcashWallet();
   const [isVisible, setIsVisible] = useState(initialIsVisible);
   const [loading, setLoading] = useState(false);
@@ -24,8 +29,8 @@ const TokenVisible = ({ tokenId, farmId, isVisible: initialIsVisible = true, onU
 
     setLoading(true);
     try {
-      // Utiliser FarmService.updateTokenMetadata pour la cohérence
-      await FarmService.updateTokenMetadata(address, tokenId, {
+      // Utiliser profilService.updateTokenMetadata pour la cohérence
+      await profilService.updateTokenMetadata(address, tokenId, {
         isVisible: !isVisible
       });
 

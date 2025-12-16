@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAtom } from 'jotai';
-import { walletConnectedAtom } from '../../atoms';
+import { useAtom, useSetAtom } from 'jotai';
+import { walletConnectedAtom, notificationAtom } from '../../atoms';
 import { StatusBadge, Badge, Modal, Button, Textarea } from '../UI';
 import { ProfilService } from '../../services/profilService';
-import { useEcashWallet } from '../../hooks/useEcashWallet';
+import { useEcashWallet, useEcashToken } from '../../hooks/useEcashWallet';
+import { supabase } from '../../services/supabaseClient';
+import ClientTicketForm from '../Client/ClientTicketForm';
 
 /**
  * CreatorProfileModal - Popup détaillée du profil standardisée
@@ -14,8 +16,11 @@ const CreatorProfileModal = ({ profile, isOpen, onClose, profileTickers = {} }) 
   const navigate = useNavigate();
   const { wallet } = useEcashWallet();
   const [walletConnected] = useAtom(walletConnectedAtom);
+  const setNotification = useSetAtom(notificationAtom);
   const [expandedTokens, setExpandedTokens] = useState(new Set());
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showContactModal, setShowContactModal] = useState(false);
+  const [selectedContactToken, setSelectedContactToken] = useState(null);
   const [reportReason, setReportReason] = useState('');
   const [isReporting, setIsReporting] = useState(false);
   
@@ -105,7 +110,7 @@ const CreatorProfileModal = ({ profile, isOpen, onClose, profileTickers = {} }) 
           right: 0,
           bottom: 0,
           backgroundColor: 'rgba(0,0,0,0.6)',
-          zIndex: 1000,
+          zIndex: 9999,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -167,6 +172,60 @@ const CreatorProfileModal = ({ profile, isOpen, onClose, profileTickers = {} }) 
                 )}
               </div>
             </div>
+            
+            {/* Bouton de contact principal si au moins un token est lié ET possédé */}
+            {walletConnected && (() => {
+              // Trouver le premier token lié que le client possède
+              const linkedTokensWithBalance = visibleTokens.filter(token => {
+                if (token.isLinked !== true) return false;
+                // Vérifier le solde pour ce token
+                const { tokenBalance } = useEcashToken(token.tokenId);
+                return Number(tokenBalance) > 0;
+              });
+              
+              if (linkedTokensWithBalance.length === 0) return null;
+              
+              return (
+                <div style={{ marginBottom: '24px' }}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedContactToken(linkedTokensWithBalance[0]);
+                      setShowContactModal(true);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '14px 20px',
+                      backgroundColor: '#8b5cf6',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '10px',
+                      fontWeight: '600',
+                      fontSize: '1rem',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}
+                    onMouseEnter={(e) => e.target.style.opacity = '0.9'}
+                    onMouseLeave={(e) => e.target.style.opacity = '1'}
+                  >
+                    💬 Contacter le créateur
+                  </button>
+                  <p style={{
+                    fontSize: '0.75rem',
+                    color: 'var(--text-secondary)',
+                    marginTop: '8px',
+                    textAlign: 'center',
+                    marginBottom: 0
+                  }}>
+                    Envoyez un message directement au créateur
+                  </p>
+                </div>
+              );
+            })()}
             
             {/* Location Tags */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
@@ -326,6 +385,7 @@ const CreatorProfileModal = ({ profile, isOpen, onClose, profileTickers = {} }) 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {visibleTokens.map((token) => {
                     const isExpanded = expandedTokens.has(token.tokenId);
+                    const isTokenLinked = token.isLinked === true;
                     return (
                       <div 
                         key={token.tokenId}
@@ -368,7 +428,7 @@ const CreatorProfileModal = ({ profile, isOpen, onClose, profileTickers = {} }) 
                               </div>
                             )}
                             {token.counterpart && (
-                              <div>
+                              <div style={{ marginBottom: '12px' }}>
                                 <div style={{ fontSize: '0.75rem', opacity: 0.8, marginBottom: '4px' }}>
                                   🎁 Contrepartie :
                                 </div>
@@ -377,6 +437,41 @@ const CreatorProfileModal = ({ profile, isOpen, onClose, profileTickers = {} }) 
                                 </div>
                               </div>
                             )}
+                            
+                            {/* Bouton contact si token isLinked ET client possède le token */}
+                            {walletConnected && isTokenLinked && (() => {
+                              const { tokenBalance } = useEcashToken(token.tokenId);
+                              const hasBalance = Number(tokenBalance) > 0;
+                              
+                              if (!hasBalance) return null;
+                              
+                              return (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedContactToken(token);
+                                    setShowContactModal(true);
+                                  }}
+                                  style={{
+                                    padding: '8px 16px',
+                                    backgroundColor: 'rgba(255,255,255,0.2)',
+                                    color: 'white',
+                                    border: '1px solid rgba(255,255,255,0.3)',
+                                    borderRadius: '6px',
+                                    fontWeight: '600',
+                                    fontSize: '0.875rem',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    width: '100%',
+                                    marginTop: '8px'
+                                  }}
+                                  onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255,255,255,0.3)'}
+                                  onMouseLeave={(e) => e.target.style.backgroundColor = 'rgba(255,255,255,0.2)'}
+                                >
+                                  💬 Contacter pour ce jeton
+                                </button>
+                              );
+                            })()}
                           </div>
                         )}
                       </div>
@@ -556,6 +651,69 @@ const CreatorProfileModal = ({ profile, isOpen, onClose, profileTickers = {} }) 
             </Button>
           </Modal.Footer>
         </Modal>
+      )}
+      
+      {/* Modal de contact créateur - z-index supérieur au modal parent */}
+      {showContactModal && selectedContactToken && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            zIndex: 10000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            overflowY: 'auto'
+          }}
+          onClick={() => {
+            setShowContactModal(false);
+            setSelectedContactToken(null);
+          }}
+        >
+          <div 
+            style={{
+              backgroundColor: 'var(--bg-primary, #fff)',
+              borderRadius: '16px',
+              maxWidth: '600px',
+              width: '100%',
+              maxHeight: '90vh',
+              overflow: 'auto',
+              boxShadow: '0 10px 25px rgba(0,0,0,0.3)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ padding: '1.5rem', borderBottom: '1px solid #e5e7eb', fontSize: '1.25rem', fontWeight: 'bold' }}>
+              💬 Contacter {profile.name}
+            </div>
+            <div style={{ padding: '1.5rem' }}>
+              <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px' }}>
+                <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                  <strong>Jeton concerné :</strong> {profileTickers[selectedContactToken.tokenId] || selectedContactToken.ticker || 'Jeton'}
+                </div>
+              </div>
+              <ClientTicketForm
+                type="creator"
+                tokenId={selectedContactToken.tokenId}
+                profilId={profile.id}
+                walletAddress={wallet?.getAddress()}
+                setNotification={setNotification}
+                onSubmit={() => {
+                  setShowContactModal(false);
+                  setSelectedContactToken(null);
+                }}
+                onCancel={() => {
+                  setShowContactModal(false);
+                  setSelectedContactToken(null);
+                }}
+              />
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

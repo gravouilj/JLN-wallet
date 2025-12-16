@@ -16,6 +16,7 @@ import CertificationsTab from '../components/Creators/CertificationsTab';
 import TokensListTab from '../components/Creators/TokensListTab';
 import SecurityTab from '../components/Creators/SecurityTab';
 import SupportTab from '../components/Creators/SupportTab';
+// CreatorTicketForm maintenant utilisé inline dans SupportTab
 
 const ManageProfilePage = () => {
   const { tokenId } = useParams();
@@ -75,7 +76,7 @@ const ManageProfilePage = () => {
   const [activeTab, setActiveTab] = useState(location.state?.activeTab || 'profile');
   
   // States pour Onglet Support
-  const [showNewTicketModal, setShowNewTicketModal] = useState(false);
+  // (formulaire affiché inline dans SupportTab)
   
   // Tags pour produits et services (séparés)
   const [productTags, setProductTags] = useState([]);
@@ -563,7 +564,7 @@ const ManageProfilePage = () => {
     try {
       setLoadingReports(true);
       // En tant que créateur, ne charger que les signalements visibles
-      const reports = await profileService.getMyProfileReports(profileId, 'creator');
+      const reports = await ProfilService.getMyProfileReports(profileId, 'creator');
       setProfileReports(reports || []);
     } catch (err) {
       console.error('❌ Erreur chargement signalements:', err);
@@ -578,7 +579,7 @@ const ManageProfilePage = () => {
     
     setTogglingProfileStatus(true);
     try {
-      const updatedProfile = await ProfileService.saveProfile(
+      const updatedProfile = await ProfilService.saveProfil(
         { 
           ...existingProfile,
           status: newStatus 
@@ -860,7 +861,7 @@ const ManageProfilePage = () => {
       profileData.verified = isVerified;
       
       // Sauvegarder dans Supabase (Cloud)
-      const savedProfile = await ProfileService.saveProfile(profileData, address);
+      const savedProfile = await ProfilService.saveProfil(profileData, address);
       
       console.log('✅ Profile sauvegardé sur Supabase:', savedProfile);
       console.log('☁️ Accessible depuis n\'importe quel appareil avec:', address);
@@ -880,7 +881,7 @@ const ManageProfilePage = () => {
       
       // Recharger les données
       await refreshProfiles();
-      const updatedProfile = await ProfileService.getMyProfile(address);
+      const updatedProfile = await ProfilService.getMyProfil(address);
       setExistingProfile(updatedProfile);
       
       // Réinitialiser les trackers
@@ -950,12 +951,12 @@ const ManageProfilePage = () => {
   const handleConfirmInformation = async () => {
     setConfirmingInfo(true);
     try {
-      await ProfileService.updateProfile(address, {
+      await ProfilService.updateProfile(address, {
         verified_at: new Date().toISOString()
       });
       
       // Recharger les données
-      const updatedProfile = await ProfileService.getMyProfile(address);
+      const updatedProfile = await ProfilService.getMyProfil(address);
       setExistingProfile(updatedProfile);
       
       setNotification({
@@ -988,10 +989,10 @@ const ManageProfilePage = () => {
 
     setSendingMessage(true);
     try {
-      await ProfileService.addMessage(address, 'creator', text.trim(), messageType);
+      await ProfilService.addMessage(address, 'creator', text.trim(), messageType);
       
       // Recharger les données
-      const updatedProfile = await ProfileService.getMyProfile(address);
+      const updatedProfile = await ProfilService.getMyProfil(address);
       setExistingProfile(updatedProfile);
       
       setNewMessage('');
@@ -1023,7 +1024,7 @@ const ManageProfilePage = () => {
   const handleConfirmDeleteStep2 = async () => {
     setDeleting(true);
     try {
-      await ProfileService.deleteProfile(address);
+      await ProfilService.deleteProfile(address);
       
       setNotification({
         type: 'success',
@@ -1087,165 +1088,14 @@ const ManageProfilePage = () => {
                 </div>
                 {existingProfile && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '120px' }}>
-                    {/* Badge Visibilité */}
-                    <div style={{
-                      padding: '6px 12px',
-                      borderRadius: '6px',
-                      fontSize: '0.75rem',
-                      fontWeight: '600',
-                      textAlign: 'center',
-                      backgroundColor: existingProfile.status === 'active' ? '#d1fae5' : '#fee2e2',
-                      color: existingProfile.status === 'active' ? '#065f46' : '#991b1b',
-                      border: `1px solid ${existingProfile.status === 'active' ? '#10b981' : '#ef4444'}`
-                    }}>
-                      {existingProfile.status === 'active' ? '🌐 Public' : '📝 Brouillon'}
-                    </div>
-                    {/* Badge Vérification */}
-                    <div style={{
-                      padding: '6px 12px',
-                      borderRadius: '6px',
-                      fontSize: '0.75rem',
-                      fontWeight: '600',
-                      textAlign: 'center',
-                      backgroundColor: existingProfile.verified ? '#d1fae5' : existingProfile.verification_status === 'pending' ? '#fef3c7' : '#f3f4f6',
-                      color: existingProfile.verified ? '#065f46' : existingProfile.verification_status === 'pending' ? '#92400e' : '#6b7280',
-                      border: `1px solid ${existingProfile.verified ? '#10b981' : existingProfile.verification_status === 'pending' ? '#f59e0b' : '#d1d5db'}`
-                    }}>
-                      {existingProfile.verified ? '✅ Vérifié' : existingProfile.verification_status === 'pending' ? '⏳ En cours' : '⚪ Non vérifié'}
-                    </div>
+                
                   </div>
                 )}
               </div>
             </CardContent>
           </Card>
 
-          {/* Section supprimée - désormais dans l'onglet Sécurité */}
-
-          {/* ALERTE DEMANDE D'INFO ADMIN */}
-          {existingProfile && existingProfile.verification_status === 'info_requested' && (
-            <InfoBox type="warning" icon="💬" title="Informations supplémentaires demandées">
-              <strong>Message de l'administrateur :</strong> {existingProfile.admin_message || 'Consultez l\'historique des échanges ci-dessous'}
-              <br /><br />
-              Répondez dans l'historique des échanges ou corrigez les informations demandées.
-            </InfoBox>
-          )}
-
-          {/* ALERTE DEMANDE DE VÉRIFICATION EN COURS */}
-          {existingProfile && existingProfile.verification_status === 'pending' && (
-            <Card style={{ 
-              backgroundColor: '#fef3c7', 
-              border: '2px solid #fbbf24' 
-            }}>
-              <CardContent style={{ padding: '1.25rem' }}>
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '0.75rem',
-                  marginBottom: '0.5rem'
-                }}>
-                  <span style={{ fontSize: '1.5rem' }}>⏳</span>
-                  <h3 style={{ 
-                    fontSize: '1rem', 
-                    fontWeight: '600', 
-                    color: '#92400e',
-                    margin: 0
-                  }}>
-                    Demande de vérification en cours
-                  </h3>
-                </div>
-                <p style={{ 
-                  fontSize: '0.875rem', 
-                  color: '#92400e',
-                  margin: 0,
-                  paddingLeft: '2.25rem'
-                }}>
-                  Votre demande de validation est en cours d'examen par un administrateur. 
-                  Vous serez notifié dès que celle-ci sera traitée.
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* ALERTE DEMANDE REFUSÉE */}
-          {existingProfile && existingProfile.verification_status === 'rejected' && existingProfile.status !== 'banned' && existingProfile.status !== 'deleted' && (
-            <InfoBox type="error" icon="🚫" title="Demande de vérification refusée">
-              <strong>Motif :</strong> {existingProfile.admin_message || 'Aucun motif fourni'}
-              <br /><br />
-              Vous pouvez corriger les informations demandées et soumettre une nouvelle demande de vérification.
-            </InfoBox>
-          )}
-
-          {/* ALERTE FERME BANNIE */}
-          {existingProfile && (existingProfile.status === 'banned' || existingProfile.status === 'deleted') && (
-            <InfoBox 
-              type="error" 
-              icon="🛑" 
-              title={existingProfile.status === 'banned' ? 'FERME BANNIE' : 'SUPPRESSION EN COURS'}
-              style={{ backgroundColor: '#450a0a', borderColor: '#ef4444' }}
-            >
-              <strong style={{ color: '#fecaca' }}>Motif :</strong> 
-              <span style={{ color: '#fecaca' }}> {existingProfile.deletion_reason || existingProfile.admin_message || 'Non spécifié'}</span>
-              <br /><br />
-              <span style={{ color: '#fecaca' }}>
-                {existingProfile.status === 'banned' 
-                  ? 'Votre ferme a été bannie. Contactez l\'administrateur pour plus d\'informations.'
-                  : 'Votre ferme sera supprimée définitivement dans 1 an. Contactez l\'administrateur si c\'est une erreur.'
-                }
-              </span>
-            </InfoBox>
-          )}
-
-          {/* ALERTE RE-VÉRIFICATION ANNUELLE */}
-          {existingProfile && checkVerificationAge() !== null && (
-            <Card style={{ 
-              backgroundColor: '#fee2e2', 
-              border: '2px solid #ef4444' 
-            }}>
-              <CardContent style={{ padding: '1.25rem' }}>
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'flex-start', 
-                  gap: '0.75rem',
-                  marginBottom: '0.75rem'
-                }}>
-                  <span style={{ fontSize: '1.5rem' }}>⚠️</span>
-                  <div style={{ flex: 1 }}>
-                    <h3 style={{ 
-                      fontSize: '1rem', 
-                      fontWeight: '600', 
-                      color: '#991b1b',
-                      margin: 0,
-                      marginBottom: '0.5rem'
-                    }}>
-                      Vérification annuelle requise
-                    </h3>
-                    <p style={{ 
-                      fontSize: '0.875rem', 
-                      color: '#991b1b',
-                      margin: 0,
-                      marginBottom: '0.75rem'
-                    }}>
-                      Votre vérification date de plus d'un an ({Math.floor(checkVerificationAge() / 365)} an
-                      {Math.floor(checkVerificationAge() / 365) > 1 ? 's' : ''}). 
-                      Veuillez confirmer que vos informations sont toujours à jour.
-                    </p>
-                    <Button 
-                      variant="danger"
-                      onClick={handleConfirmInformation}
-                      disabled={confirmingInfo}
-                      style={{ 
-                        fontSize: '0.875rem',
-                        padding: '0.5rem 1rem'
-                      }}
-                    >
-                      {confirmingInfo ? 'Confirmation...' : '✓ Confirmer les informations'}
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
+         
           <form onSubmit={handleSubmit}>
             <Stack spacing="md">
               {/* Onglets de navigation */}
@@ -1384,8 +1234,40 @@ const ManageProfilePage = () => {
                   togglingProfileStatus={togglingProfileStatus}
                   onToggleProfileStatus={(checked) => handleToggleProfileStatus(checked ? 'active' : 'draft')}
                   privacy={privacy}
-                  onPrivacyChange={(field, value) => {
+                  onPrivacyChange={async (field, value) => {
+                    // Mettre à jour le state local immédiatement
                     setPrivacy(prev => ({ ...prev, [field]: value }));
+                    
+                    // Sauvegarder automatiquement dans la DB
+                    try {
+                      const updatedPrivacy = { ...privacy, [field]: value };
+                      await ProfilService.updateProfil(address, {
+                        certifications: {
+                          ...existingProfile?.certifications,
+                          hide_email: updatedPrivacy.hideEmail || false,
+                          hide_phone: updatedPrivacy.hidePhone || false,
+                          hide_company_id: updatedPrivacy.hideCompanyID || false,
+                          hide_legal_rep: updatedPrivacy.hideLegalRep || false
+                        }
+                      });
+                      
+                      setNotification({
+                        type: 'success',
+                        message: 'Paramètres de confidentialité enregistrés'
+                      });
+                      
+                      // Recharger le profil
+                      const updatedProfile = await ProfilService.getMyProfil(address);
+                      setExistingProfile(updatedProfile);
+                    } catch (err) {
+                      console.error('Erreur sauvegarde privacy:', err);
+                      setNotification({
+                        type: 'error',
+                        message: 'Erreur lors de l\'enregistrement'
+                      });
+                      // Rollback le state local en cas d'erreur
+                      setPrivacy(prev => ({ ...prev, [field]: !value }));
+                    }
                   }}
                   onDeleteProfile={() => setShowDeleteModal(true)}
                 />
@@ -1394,9 +1276,10 @@ const ManageProfilePage = () => {
               {/* ONGLET 4: SUPPORT & COMMUNICATION */}
               {activeTab === 'support' && (
                 <SupportTab
-                  profileId={existingProfile?.id}
-                  existingProfile={existingProfile}
+                  profilId={existingProfile?.id}
+                  existingProfiles={existingProfile}
                   onCreateTicket={() => setShowNewTicketModal(true)}
+                  setNotification={setNotification}
                 />
               )}
 

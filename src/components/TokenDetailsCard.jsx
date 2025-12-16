@@ -158,51 +158,14 @@ const TokenDetailsCard = ({
           <Badge variant={token.isActive ? 'success' : 'secondary'}>
             {token.isActive ? '🟢 En Circulation' : '⚫ Inactif'}
           </Badge>
-          {token.isListed && (
-            <Badge variant="success">
-              🏡 Actif dans l'annuaire
+          <Badge variant={token.isVisible ? 'primary' : 'secondary'}>
+          {token.isVisible ? '👁️ Visible' : '🙈 Masqué'}
             </Badge>
-          )}
+            <Badge variant={token.isLinked ? 'primary' : 'secondary'}>
+          {token.isLinked ? '🔗 Lié' : '🔗 Non lié'}
+            </Badge>
         </div>
 
-        {/* Switches: Visibilité et Liaison */}
-        {farmId && (
-          <div className="mb-4">
-            <div className="d-flex justify-between align-items-center p-3 mb-2 rounded-lg" 
-                 style={{ backgroundColor: 'var(--bg-secondary)' }}>
-              <div>
-                <div className="font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
-                  👁️ Visible dans l'annuaire
-                </div>
-                <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                  {token.isVisible ? 'Les visiteurs peuvent voir ce jeton' : 'Ce jeton est masqué'}
-                </div>
-              </div>
-              <Switch
-                checked={token.isVisible}
-                onChange={onToggleVisibility}
-                disabled={togglingVisibility}
-              />
-            </div>
-
-            <div className="d-flex justify-between align-items-center p-3 rounded-lg" 
-                 style={{ backgroundColor: 'var(--bg-secondary)' }}>
-              <div>
-                <div className="font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
-                  🔗 Lié au profil
-                </div>
-                <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                  {token.isLinked ? 'Associé à votre profil de ferme' : 'Usage permissionless uniquement'}
-                </div>
-              </div>
-              <Switch
-                checked={token.isLinked}
-                onChange={onToggleLinking}
-                disabled={togglingLinking}
-              />
-            </div>
-          </div>
-        )}
 
         {/* Objectif et Contrepartie - Grid 2 colonnes */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

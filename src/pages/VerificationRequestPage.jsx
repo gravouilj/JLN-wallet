@@ -131,7 +131,7 @@ const RequestListingPage = () => {
       };
 
       // Sauvegarder dans Supabase
-      const savedProfile = await ProfileService.saveProfile(profileData, address);
+      const savedProfile = await profilService.saveProfil(profileData, address);
 
       console.log('✅ Demande de listing enregistrée:', savedProfile);
 

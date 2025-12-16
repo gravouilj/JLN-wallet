@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import QrCodeScanner from '../components/QrCodeScanner';
 import MobileLayout from '../components/Layout/MobileLayout';
+import AddressBook from '../components/AddressBook';
 import { useTranslation } from '../hooks/useTranslation';
 import { useProfiles } from '../hooks/useProfiles';
 import { useEcashBalance, useEcashToken, useEcashWallet } from '../hooks/useEcashWallet';
@@ -22,7 +23,7 @@ import {
 const ClientWalletPage = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('receive'); // 'receive' or 'send'
+  const [activeTab, setActiveTab] = useState('receive'); // 'receive', 'send', or 'addressbook'
   const [showScanner, setShowScanner] = useState(false);
   
   // Page title
@@ -737,6 +738,12 @@ const ClientWalletPage = () => {
               >
                 📤 {t('wallet.send') || 'Envoyer eCash (XEC)'}
               </button>
+              <button 
+                className={`tab-button ${activeTab === 'addressbook' ? 'active' : ''}`}
+                onClick={() => setActiveTab('addressbook')}
+              >
+                📇 Carnet d'adresses
+              </button>
             </div>
 
             {/* Tab Content */}
@@ -1007,6 +1014,12 @@ const ClientWalletPage = () => {
                       {sendLoading ? '⌛ Envoi en cours...' : `✔️ ${t('common.confirmSend') || 'Confirmer l’envoi'}`}
                     </button>
                   </form>
+                </div>
+              )}
+
+              {activeTab === 'addressbook' && (
+                <div style={{ marginTop: '16px' }}>
+                  <AddressBook tokenId={null} compact={false} />
                 </div>
               )}
             </div>

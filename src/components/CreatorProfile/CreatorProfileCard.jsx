@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ReactDOM from 'react-dom';
 import { useAtom } from 'jotai';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -6,10 +7,13 @@ import {
   toggleProfileFavoriteAtom, 
   walletConnectedAtom,
   selectedProfileAtom,
-  currentTokenIdAtom 
+  currentTokenIdAtom,
+  notificationAtom
 } from '../../atoms';
 import { useEcashToken } from '../../hooks/useEcashWallet';
-import { StatusBadge, Badge } from '../UI';
+import { StatusBadge, Badge, Modal } from '../UI';
+import ClientTicketForm from '../Client/ClientTicketForm';
+import { useEcashWallet } from '../../hooks/useEcashWallet';
 
 /**
  * CreatorProfileCard - Carte de profil standardisée pour Directory et Favorites
@@ -17,17 +21,24 @@ import { StatusBadge, Badge } from '../UI';
  */
 const CreatorProfileCard = ({ profile, profileTickers = {}, onCardClick }) => {
   const navigate = useNavigate();
+  const { wallet } = useEcashWallet();
   const [walletConnected] = useAtom(walletConnectedAtom);
   const [favoriteProfileIds] = useAtom(favoriteProfilesAtom);
   const [, toggleFavorite] = useAtom(toggleProfileFavoriteAtom);
   const [, setSelectedProfile] = useAtom(selectedProfileAtom);
   const [, setCurrentTokenId] = useAtom(currentTokenIdAtom);
+  const [, setNotification] = useAtom(notificationAtom);
+  
+  const [showContactModal, setShowContactModal] = useState(false);
   
   const isFavorite = favoriteProfileIds.includes(profile.id);
   
   // Get visible tokens
   const visibleTokens = profile.tokens?.filter(token => token.isVisible) || [];
   const primaryToken = visibleTokens[0];
+  
+  // Check if primary token is linked (pour afficher le bouton de contact)
+  const isPrimaryTokenLinked = primaryToken?.isLinked === true;
   
   // Check token balance for primary token
   const { tokenBalance, loading: balanceLoading } = useEcashToken(primaryToken?.tokenId);
@@ -303,7 +314,86 @@ const CreatorProfileCard = ({ profile, profileTickers = {}, onCardClick }) => {
             </button>
           )}
         </div>
+        
+        {/* Contact Button - Visible uniquement si token isLinked ET client possède le token */}
+        {walletConnected && isPrimaryTokenLinked && hasBalance && primaryToken && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowContactModal(true);
+            }}
+            style={{
+              marginTop: '8px',
+              padding: '10px 16px',
+              backgroundColor: '#8b5cf6',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '8px',
+              fontWeight: '600',
+              fontSize: '0.875rem',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              width: '100%'
+            }}
+            onMouseEnter={(e) => e.target.style.opacity = '0.9'}
+            onMouseLeave={(e) => e.target.style.opacity = '1'}
+          >
+            💬 Contacter le créateur
+          </button>
+        )}
       </div>
+      
+      {/* Modal de contact créateur via Portal */}
+      {showContactModal && isPrimaryTokenLinked && hasBalance && primaryToken && ReactDOM.createPortal(
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            zIndex: 10000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            overflowY: 'auto'
+          }}
+          onClick={() => setShowContactModal(false)}
+        >
+          <div 
+            style={{
+              backgroundColor: 'var(--bg-primary, #fff)',
+              borderRadius: '16px',
+              maxWidth: '600px',
+              width: '100%',
+              maxHeight: '90vh',
+              overflow: 'auto',
+              boxShadow: '0 10px 25px rgba(0,0,0,0.3)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ padding: '1.5rem', borderBottom: '1px solid #e5e7eb', fontSize: '1.25rem', fontWeight: 'bold' }}>
+              💬 Contacter {profile.name}
+            </div>
+            <div style={{ padding: '1.5rem' }}>
+              <ClientTicketForm
+                type="creator"
+                tokenId={primaryToken.tokenId}
+                profilId={profile.id}
+                walletAddress={wallet?.getAddress()}
+                setNotification={setNotification}
+                onSubmit={() => {
+                  setShowContactModal(false);
+                }}
+                onCancel={() => setShowContactModal(false)}
+              />
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };

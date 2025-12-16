@@ -41,16 +41,32 @@ const NotificationBell = ({ compact = false }) => {
     try {
       setLoading(true);
       
-      // 1. Charger les tickets non lus (créateur/client)
-      const { data: ticketsData, error: ticketsError } = await supabase
-        .from('tickets')
-        .select('id, type, status, title, created_at')
-        .or(`creator_address.eq.${address},client_address.eq.${address}`)
-        .eq('read_by_user', false)
-        .order('created_at', { ascending: false })
-        .limit(10);
+      // Récupérer le profil du créateur pour obtenir le profilId
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('wallet_address', address)
+        .single();
 
-      if (ticketsError) throw ticketsError;
+      if (profileError && profileError.code !== 'PGRST116') throw profileError;
+      const profilId = profileData?.id;
+      
+      // 1. Charger les tickets non lus pour ce créateur
+      // Inclure : tickets créateur→admin (sans token_id) et signalements de profil
+      let ticketsData = null;
+      if (profilId) {
+        const { data, error: ticketsError } = await supabase
+          .from('tickets')
+          .select('id, type, status, subject, created_at, farm_id, token_id')
+          .eq('farm_id', profilId)
+          .or('and(type.eq.creator,token_id.is.null),type.eq.report')
+          .in('status', ['open', 'in_progress'])
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        if (ticketsError) throw ticketsError;
+        ticketsData = data;
+      }
 
       // 2. Charger les changements de statut de vérification (depuis profiles)
       const { data: farmsData, error: farmsError } = await supabase
@@ -72,8 +88,8 @@ const NotificationBell = ({ compact = false }) => {
           allNotifications.push({
             id: `ticket-${ticket.id}`,
             type: 'ticket',
-            title: ticket.title,
-            subtitle: `Type: ${ticket.type} - ${ticket.status}`,
+            title: ticket.type === 'report' ? '🚨 Nouveau signalement' : '💬 Nouveau ticket',
+            subtitle: ticket.subject || `Statut: ${ticket.status}`,
             timestamp: new Date(ticket.created_at),
             data: ticket,
             isRead: false

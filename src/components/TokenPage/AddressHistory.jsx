@@ -7,14 +7,16 @@ import * as ecashaddrjs from 'ecashaddrjs';
 /**
  * AddressHistory - Affiche l'historique des transactions XEC de l'adresse
  * Par défaut affiche les 4 dernières avec option "Voir plus"
+ * @param {boolean} compact - Mode compact (affiche seulement 2 transactions par défaut)
  */
-const AddressHistory = ({ address, currency = 'EUR' }) => {
+const AddressHistory = ({ address, currency = 'EUR', compact = false }) => {
   const price = useXecPrice();
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showAll, setShowAll] = useState(false);
   const [formattedAddress, setFormattedAddress] = useState('');
+  const [isCompact, setIsCompact] = useState(compact);
 
   useEffect(() => {
     if (!address) {
@@ -148,7 +150,8 @@ const AddressHistory = ({ address, currency = 'EUR' }) => {
   }, [address]);
 
 
-  const displayedTxs = showAll ? transactions : transactions.slice(0, 4);
+  const defaultLimit = isCompact ? 2 : 4;
+  const displayedTxs = showAll ? transactions : transactions.slice(0, defaultLimit);
 
   if (loading) {
     return (
@@ -191,7 +194,7 @@ const AddressHistory = ({ address, currency = 'EUR' }) => {
 
   return (
     <Card>
-      <CardContent style={{ padding: '24px' }}>
+      <CardContent style={{ padding: isCompact ? '16px' : '24px' }}>
         <div className="section-header">
           <span className="section-icon">🔄</span>
           <div className="section-header-content">
@@ -202,9 +205,25 @@ const AddressHistory = ({ address, currency = 'EUR' }) => {
               {transactions.length} transaction{transactions.length > 1 ? 's' : ''}
             </p>
           </div>
+          <button
+            onClick={() => setIsCompact(!isCompact)}
+            style={{
+              padding: '6px 12px',
+              fontSize: '0.85rem',
+              backgroundColor: 'transparent',
+              color: 'var(--primary-color, #0074e4)',
+              border: '1px solid var(--primary-color, #0074e4)',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+            title={isCompact ? 'Mode normal' : 'Mode compact'}
+          >
+            {isCompact ? '📖' : '📋'}
+          </button>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: isCompact ? '8px' : '12px' }}>
           {displayedTxs.map((tx) => (
             <TxType
               key={tx.txid}
@@ -216,14 +235,14 @@ const AddressHistory = ({ address, currency = 'EUR' }) => {
           ))}
         </div>
 
-        {transactions.length > 4 && (
-          <div style={{ marginTop: '16px', textAlign: 'center' }}>
+        {transactions.length > defaultLimit && (
+          <div style={{ marginTop: isCompact ? '12px' : '16px', textAlign: 'center' }}>
             <Button
               onClick={() => setShowAll(!showAll)}
               variant="secondary"
               size="sm"
             >
-              {showAll ? 'Voir moins' : `Voir plus (${transactions.length - 4} autres)`}
+              {showAll ? 'Voir moins' : `Voir plus (${transactions.length - defaultLimit} autres)`}
             </Button>
           </div>
         )}

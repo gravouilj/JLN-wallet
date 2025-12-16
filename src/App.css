@@ -313,3 +313,20 @@ pre {
     padding: 0 0.75rem;
   }
 }
+
+/* ========================================
+   MANAGE PROFILE GRID LAYOUT
+   ======================================== */
+
+/* Grid 2 colonnes pour l'onglet profil de ManageProfilePage */
+.manage-profile-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .manage-profile-grid {
+    grid-template-columns: 1fr;
+  }
+}

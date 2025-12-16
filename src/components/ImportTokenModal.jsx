@@ -99,14 +99,14 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
         }
       }
 
-      // Vérifier si l'utilisateur a déjà une ferme
-      const { FarmService } = await import('../services/profilService');
-      const existingFarm = await FarmService.getMyFarm(address);
-      setHasExistingFarm(!!existingFarm);
+      // Vérifier si l'utilisateur a déjà un profil
+      const { ProfilService } = await import('../services/profilService');
+      const existingProfile = await ProfilService.getMyProfil(address);
+      setHasExistingFarm(!!existingProfile);
 
       // 🔒 NOUVEAU: Vérifier la disponibilité du token (sécurité anti-conflit)
       console.log('🔍 Vérification disponibilité token...');
-      const availability = await FarmService.checkTokenAvailability(tokenId, address);
+      const availability = await ProfilService.checkTokenAvailability(tokenId, address);
       
       if (!availability.isAvailable) {
         setNotification({
@@ -204,11 +204,11 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
 
     setIsImporting(true);
     try {
-      const { FarmService } = await import('../services/profilService');
+      const { ProfilService } = await import('../services/profilService');
       
       // 🔒 NOUVEAU: Vérifier la disponibilité du token avant import
       console.log('🔍 Vérification disponibilité avant import rapide...');
-      const availability = await FarmService.checkTokenAvailability(tokenPreview.tokenId, address);
+      const availability = await ProfilService.checkTokenAvailability(tokenPreview.tokenId, address);
       
       if (!availability.isAvailable) {
         setNotification({
@@ -219,7 +219,7 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
         return;
       }
       
-      const existingFarm = await FarmService.getMyFarm(address);
+      const existingProfile = await ProfilService.getMyProfil(address);
 
       const newTokenData = {
         tokenId: tokenPreview.tokenId,
@@ -233,9 +233,9 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
         counterpartUpdatedAt: new Date().toISOString()
       };
 
-      if (existingFarm) {
-        // Ferme existante: ajouter le token
-        const existingTokens = Array.isArray(existingFarm.tokens) ? existingFarm.tokens : [];
+      if (existingProfile) {
+        // Profil existant: ajouter le token
+        const existingTokens = Array.isArray(existingProfile.tokens) ? existingProfile.tokens : [];
         const tokenExists = existingTokens.some(t => t.tokenId === tokenPreview.tokenId);
         
         if (tokenExists) {
@@ -247,15 +247,15 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
           return;
         }
 
-        const updatedFarm = {
-          ...existingFarm,
+        const updatedProfile = {
+          ...existingProfile,
           tokens: [...existingTokens, newTokenData]
         };
 
-        await FarmService.saveFarm(updatedFarm, address);
+        await ProfilService.saveProfil(updatedProfile, address);
         setNotification({
           type: 'success',
-          message: `Token "${tokenPreview.name}" ajouté à votre ferme !`
+          message: `Token "${tokenPreview.name}" ajouté à votre profil !`
         });
         
         // Enregistrer dans l'historique
@@ -277,9 +277,9 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
           console.warn('⚠️ Erreur enregistrement historique:', histErr);
         }
       } else {
-        // Pas de ferme: créer une ferme minimale
-        const farmData = {
-          name: tokenPreview.name || 'Ma Ferme',
+        // Pas de profil: créer un profil minimal
+        const profileData = {
+          name: tokenPreview.name || 'Mon Profil',
           description: '', // Description vide, le purpose/counterpart sont dans le token
           tokens: [newTokenData],
           verification_status: 'none',
@@ -287,7 +287,7 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
           products: []
         };
 
-        await FarmService.saveFarm(farmData, address);
+        await ProfilService.saveProfil(profileData, address);
         setNotification({
           type: 'success',
           message: `Token "${tokenPreview.name}" importé ! Pour apparaître dans l'annuaire, complétez votre profil.`
@@ -315,7 +315,7 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
 
       if (onImportSuccess) onImportSuccess();
       handleClose();
-      setTimeout(() => window.location.reload(), 100);
+      // Laisser le parent gérer le rafraîchissement des données
     } catch (err) {
       console.error('Erreur import rapide:', err);
       setNotification({

@@ -15,7 +15,8 @@ export const ACTION_TYPES = {
   BURN: 'BURN',
   AIRDROP: 'AIRDROP',
   CREATE: 'CREATE',
-  IMPORT: 'IMPORT'
+  IMPORT: 'IMPORT',
+  MESSAGE: 'MESSAGE'
 };
 
 /**

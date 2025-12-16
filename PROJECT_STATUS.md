@@ -367,7 +367,52 @@ src/
 
 ---
 
-## 📞 Support & Contact
+## � Système de Carnet d'Adresses (Nouveau - 16 déc 2025)
+
+### Vue d'ensemble
+Système complet de gestion des contacts eCash permettant aux créateurs de sauvegarder des noms personnalisés pour les adresses. Les noms remplacent automatiquement l'affichage des adresses dans les résultats d'airdrop.
+
+### Fichiers ajoutés
+- ✅ **`src/services/addressBookService.js`** - Service de gestion du stockage (localStorage)
+- ✅ **`src/components/AddressBook.jsx`** - Composant réutilisable avec modes compact/complet
+- ✅ **`docs/ADDRESS_BOOK_SYSTEM.md`** - Documentation complète du système
+
+### Modifications apportées
+- ✅ **Airdrop.jsx** - Affichage adresse complète + sauvegarde inline dans le carnet
+- ✅ **ManageTokenPage.jsx** - Section carnet d'adresses global masquable
+
+### Fonctionnalités
+1. **Dans Airdrop** :
+   - Adresse complète affichée (cliquable pour copier)
+   - Bouton "💾 Sauvegarder dans le carnet" pour chaque détenteur
+   - Input inline pour entrer le nom du contact
+   - Affichage automatique du nom si existant dans le carnet
+   - Bordure bleue et icône 👤 pour les contacts enregistrés
+
+2. **Carnet d'adresses du jeton** (sous bouton Distribuer) :
+   - Bouton toggle "Afficher/Masquer le carnet d'adresses du jeton"
+   - Liste filtrée par tokenId
+   - Mode compact avec actions rapides
+
+3. **Carnet d'adresses global** (ManageTokenPage) :
+   - Section masquable au-dessus de l'historique créateur
+   - Recherche par nom ou adresse
+   - Export/Import JSON
+   - Gestion complète (ajouter, modifier, supprimer)
+
+### Stockage
+- **LocalStorage** : `jln_address_book`
+- Format JSON avec `address`, `name`, `tokenId`, timestamps
+- Export/Import pour backup/synchronisation manuelle
+
+### Évolution prévue
+- [ ] Option Supabase pour sync cloud (choix utilisateur)
+- [ ] Groupes de contacts (VIP, Équipe, etc.)
+- [ ] Historique des interactions par contact
+
+---
+
+## �📞 Support & Contact
 
 ### Pour Questions Techniques
 - **GitHub Issues** : Bugs et features

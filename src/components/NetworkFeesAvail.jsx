@@ -23,7 +23,8 @@ import { currencyAtom } from '../atoms';
 const NetworkFeesAvail = ({ 
   compact = false, 
   showActions = true,
-  onRefresh 
+  onRefresh,
+  estimatedFee = null // Fee estimé pour l'action en cours (en sats)
 }) => {
   const navigate = useNavigate();
   const { wallet, walletConnected } = useEcashWallet();
@@ -73,8 +74,10 @@ const NetworkFeesAvail = ({
 
   const status = getFeesStatus();
 
-  // Estimation nombre de transactions possibles (5 XEC par tx en moyenne)
-  const estimatedTxCount = Math.floor(xecBalance / 5);
+  // Estimation nombre de transactions possibles
+  // Si estimatedFee fourni, utiliser sa valeur, sinon 5 XEC par défaut
+  const feePerTx = estimatedFee ? estimatedFee / 100 : 5; // Conversion sats -> XEC
+  const estimatedTxCount = Math.floor(xecBalance / feePerTx);
 
   if (loading) {
     return (
@@ -101,32 +104,102 @@ const NetworkFeesAvail = ({
   if (compact) {
     return (
       <div 
-        className="d-flex align-center justify-between p-3 rounded"
+        className="p-3 rounded"
         style={{
           backgroundColor: 'var(--bg-secondary)',
-          border: `2px solid ${status.color}`
+          border: `2px solid ${status.color}`,
+          display: 'flex',
+          flexDirection: 'column', // Changé en colonne pour empiler les boutons si nécessaire
+          gap: '8px'
         }}
       >
-        <div className="d-flex align-center gap-2">
-          <span className="text-xl">💰</span>
-          <div>
-            <div className="font-bold" style={{ color: 'var(--text-primary)' }}>
-              {xecBalance.toFixed(2)} XEC
-            </div>
-            <div className="text-xs text-secondary">
-              ~{estimatedTxCount} transactions
+        {/* Ligne du haut : Solde et Badge */}
+        <div className="d-flex align-center justify-between">
+          <div className="d-flex align-center gap-2">
+            <span className="text-xl">💰</span>
+            <div>
+              <div className="font-bold" style={{ color: 'var(--text-primary)' }}>
+                {xecBalance.toFixed(2)} XEC
+              </div>
+              {price && xecBalance > 0 && (
+                <div className="text-xs text-secondary">
+                  ≈ {(() => {
+                    try {
+                      const fiatAmount = price.convert(xecBalance, currency);
+                      return fiatAmount > 0 ? `${fiatAmount.toFixed(2)} ${currency}` : '';
+                    } catch (e) {
+                      console.warn('Conversion FIAT error:', e);
+                      return '';
+                    }
+                  })()} • ~{estimatedTxCount} transactions
+                </div>
+              )}
+              {(!price || xecBalance === 0) && (
+                <div className="text-xs text-secondary">
+                  ~{estimatedTxCount} transactions
+                </div>
+              )}
             </div>
           </div>
+          <div 
+            className="text-xs font-semibold px-2 py-1 rounded"
+            style={{
+              backgroundColor: `${status.color}20`,
+              color: status.color
+            }}
+          >
+            {status.label}
+          </div>
         </div>
-        <div 
-          className="text-xs font-semibold px-2 py-1 rounded"
+
+        {/* NOUVEAU : Boutons d'action en mode compact */}
+        {showActions && (
+          <div className="d-flex gap-2 mt2">
+            <Button
+              variant="outline" // Style plus léger pour le mode compact
+              onClick={() => navigate('/settings')}
+              style={{ 
+                fontSize: '0.75rem', 
+                padding: '4px 8px', 
+                height: '',
+                flex: 1
+              }}
+            >
+              💳 Gérer
+            </Button>
+
+            <a
+          href="https://docs.e.cash/guides/get-ecash"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-center text-sm hover-underline"
           style={{
-            backgroundColor: `${status.color}20`,
-            color: status.color
+            color: 'var(--accent-primary)',
+            textDecoration: 'none',
+            padding: '8px',
+            display: 'none' // Masqué
           }}
         >
-          {status.label}
-        </div>
+          📚 Obtenir des 💎 eCash
+        </a>
+
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="text-sm px-2 rounded hover-lift"
+              style={{
+                backgroundColor: 'transparent',
+                border: '1px solid var(--border-primary)',
+                color: 'var(--text-secondary)',
+                cursor: refreshing ? 'not-allowed' : 'pointer',
+                opacity: refreshing ? 0.6 : 1,
+                display: 'none' // Masqué
+              }}
+            >
+              {refreshing ? '⏳' : '🔄'}
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -139,7 +212,7 @@ const NetworkFeesAvail = ({
           <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
             💰 Frais Réseau
           </h3>
-          {showActions && (
+          {false && showActions && (
             <button
               onClick={handleRefresh}
               disabled={refreshing}
@@ -179,9 +252,17 @@ const NetworkFeesAvail = ({
           </div>
           
           {/* Conversion fiat */}
-          {price && typeof price.convert === 'function' && (
+          {price && xecBalance > 0 && (
             <div className="text-sm text-secondary">
-              ≈ {price.convert(xecBalance, currency)}
+              ≈ {(() => {
+                try {
+                  const fiatAmount = price.convert(xecBalance, currency);
+                  return fiatAmount > 0 ? `${fiatAmount.toFixed(2)} ${currency}` : '';
+                } catch (e) {
+                  console.warn('Conversion FIAT error:', e);
+                  return '';
+                }
+              })()}
             </div>
           )}
         </div>
@@ -234,7 +315,7 @@ const NetworkFeesAvail = ({
               <span className="font-semibold">Niveau critique</span>
             </div>
             <p className="text-xs mb-0" style={{ lineHeight: '1.4' }}>
-              Votre solde XEC est insuffisant pour effectuer des transactions. 
+              Votre solde 💎 XEC est insuffisant pour effectuer des transactions. 
               Rechargez votre portefeuille pour continuer à utiliser vos tokens.
             </p>
           </div>
@@ -254,7 +335,7 @@ const NetworkFeesAvail = ({
               <span className="font-semibold">Niveau faible</span>
             </div>
             <p className="text-xs mb-0" style={{ lineHeight: '1.4' }}>
-              Pensez à recharger votre solde XEC bientôt pour éviter les interruptions.
+              Pensez à recharger votre solde 💎 XEC bientôt pour éviter les interruptions.
             </p>
           </div>
         )}
@@ -273,8 +354,8 @@ const NetworkFeesAvail = ({
             <span className="font-semibold text-sm">Pourquoi des frais ?</span>
           </div>
           <p className="text-xs mb-0" style={{ lineHeight: '1.4' }}>
-            Les transactions sur eCash nécessitent des frais réseau (environ 5 XEC par transaction).
-            Ces frais rémunèrent les mineurs qui sécurisent la blockchain.
+            Les transactions sur l'application nécessitent des frais pour le réseau eCash (environ 5 XEC par transaction) et pour les infrastructures de l'application (environ 5 XEC par transaction).<br />
+            Les frais d'infrastructures sont uniquement appliqués sur les envois en eCash (XEC) et lors des Distributions (Airdrop) initiées par les Créateurs de jeton.
           </p>
         </div>
 
@@ -285,8 +366,9 @@ const NetworkFeesAvail = ({
               variant="primary"
               fullWidth
               onClick={() => navigate('/settings')}
+              style={{ display: 'none' }} // Masqué
             >
-              💳 Gérer mes eCash (XEC)
+              💳 Gérer mes 💎 eCash (XEC)
             </Button>
             
             <a
@@ -297,10 +379,11 @@ const NetworkFeesAvail = ({
               style={{
                 color: 'var(--accent-primary)',
                 textDecoration: 'none',
-                padding: '8px'
+                padding: '8px',
+                display: 'none' // Masqué
               }}
             >
-              📚 Comment obtenir des XEC ?
+               Obtenir des 💎 XEC
             </a>
           </div>
         )}

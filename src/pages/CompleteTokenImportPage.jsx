@@ -147,7 +147,7 @@ const CompleteTokenImportPage = () => {
           tokens: [...existingTokens, newTokenData]
         };
 
-        await profilService.saveProfile(updatedProfile, address);
+        await profilService.saveProfil(updatedProfile, address);
 
         setNotification({
           type: 'success',
@@ -194,7 +194,7 @@ const CompleteTokenImportPage = () => {
           }
         };
 
-        await profilService.saveProfile(profileData, address);
+        await profilService.saveProfil(profileData, address);
 
         setNotification({
           type: 'success',

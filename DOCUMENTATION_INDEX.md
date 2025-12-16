@@ -146,6 +146,15 @@ Ce document vous guide vers la bonne documentation selon votre besoin.
 | [docs/CONFORMITE_CAHIER_DES_CHARGES.md](./docs/CONFORMITE_CAHIER_DES_CHARGES.md) | Conformité et design system | 15 min |
 | [docs/CHRONIK_WEBSOCKET.md](./docs/CHRONIK_WEBSOCKET.md) | Integration WebSocket Chronik | 10 min |
 
+### 📇 Carnet d'Adresses (Nouveau - 16 déc 2025)
+
+| Document | Description | Temps Lecture |
+|----------|-------------|---------------|
+| [docs/ADDRESS_BOOK_USER_GUIDE.md](./docs/ADDRESS_BOOK_USER_GUIDE.md) | **Guide utilisateur** - Démarrage rapide | 10 min |
+| [docs/ADDRESS_BOOK_SYSTEM.md](./docs/ADDRESS_BOOK_SYSTEM.md) | **Documentation technique** - Architecture complète | 15 min |
+| [docs/ADDRESS_BOOK_IMPLEMENTATION.md](./docs/ADDRESS_BOOK_IMPLEMENTATION.md) | **Récapitulatif développeur** - Implémentation | 20 min |
+| [docs/ADDRESS_BOOK_TREE.md](./docs/ADDRESS_BOOK_TREE.md) | **Arborescence visuelle** - Fichiers et relations | 5 min |
+
 ### 🎨 Design & UI
 
 | Document | Description | Temps Lecture |
@@ -170,6 +179,10 @@ Ce document vous guide vers la bonne documentation selon votre besoin.
 ### "Je veux comprendre l'architecture"
 ➡️ [docs/WALLET_ARCHITECTURE.md](./docs/WALLET_ARCHITECTURE.md)  
 ➡️ [PROJECT_STATUS.md](./PROJECT_STATUS.md) - Section Architecture
+
+### "Je veux utiliser le carnet d'adresses"
+➡️ [docs/ADDRESS_BOOK_USER_GUIDE.md](./docs/ADDRESS_BOOK_USER_GUIDE.md) - **Guide complet**  
+➡️ [docs/ADDRESS_BOOK_SYSTEM.md](./docs/ADDRESS_BOOK_SYSTEM.md) - Détails techniques
 
 ### "Je veux savoir quoi développer en priorité"
 ➡️ [PRIORITIES.md](./PRIORITIES.md)  
@@ -270,6 +283,16 @@ farm-wallet-independant/
 ---
 
 ## 🆕 Dernières Mises à Jour
+
+**16 décembre 2025** : 📇 **Système de Carnet d'Adresses**
+- ✅ ADDRESS_BOOK_USER_GUIDE.md créé (guide utilisateur)
+- ✅ ADDRESS_BOOK_SYSTEM.md créé (documentation technique)
+- ✅ ADDRESS_BOOK_IMPLEMENTATION.md créé (récapitulatif développeur)
+- ✅ ADDRESS_BOOK_TREE.md créé (arborescence visuelle)
+- ✅ addressBookService.js implémenté (service de gestion)
+- ✅ AddressBook.jsx créé (composant réutilisable)
+- ✅ Airdrop.jsx amélioré (affichage adresses + sauvegarde)
+- ✅ ManageTokenPage.jsx enrichi (carnet global)
 
 **1er décembre 2025** :
 - ✅ README.md mis à jour (architecture CSS custom)

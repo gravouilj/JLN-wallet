@@ -12,6 +12,7 @@ import { walletConnectedAtom, walletAtom, notificationAtom, currencyAtom, locale
 import { Card, CardContent, Button, Input, Stack, PageLayout, PageHeader, Select, Tabs } from '../components/UI';
 import ClientTicketForm from '../components/Client/ClientTicketForm';
 import ClientTicketsList from '../components/Client/ClientTicketsList';
+import { NetworkFeesAvail, AddressHistory, } from '../components/TokenPage';
 
 const SettingsPage = () => {
   const { t, changeLanguage } = useTranslation();
@@ -105,15 +106,17 @@ const SettingsPage = () => {
           {activeTab === 'settings' && (
             <Stack spacing="lg">
 
-          {/* PRIX DU MARCHÉ */}
-          <Card>
-            <CardContent className="text-center">
-              <div style={{ fontSize: '0.9rem', color: '#666' }}>💰 {t('settings.marketPrice')}</div>
-              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--primary-color)' }}>
-                1 XEC = {price ? price.convert(1, currency)?.toFixed(6) : '...'} {currency}
-              </div>
-            </CardContent>
-          </Card>
+          {/* Balance XEC et Valeur estimée */}
+        <NetworkFeesAvail 
+          compact={false} 
+          showActions={true} 
+          xecBalance={balance}
+          fiatValue={price && typeof price.convert === 'function' 
+            ? price.convert(balance, currency)?.toFixed(2) || '...'
+            : '...'
+          }
+          currency={currency}
+        />
 
           {/* PRÉFÉRENCES */}
           <Stack spacing="sm">
@@ -248,6 +251,7 @@ const SettingsPage = () => {
                 <ClientTicketForm
                   type="admin"
                   walletAddress={address}
+                  setNotification={setNotification}
                   onSubmit={handleTicketSubmit}
                   onCancel={() => setShowNewTicketForm(false)}
                 />

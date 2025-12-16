@@ -9,7 +9,7 @@ import TokenVisible from './TokenVisible';
  */
 const TokenCard = ({ 
   token, 
-  farmId, 
+  profileId, 
   onUpdate, 
   showAdminActions = false,
   showLinkedToggle = true,
@@ -49,57 +49,7 @@ const TokenCard = ({
           justifyContent: 'space-between',
           marginBottom: '16px'
         }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <h3 style={{ 
-                fontSize: '1.25rem', 
-                fontWeight: '700', 
-                margin: 0,
-                color: 'var(--text-primary)'
-              }}>
-                {token.ticker || token.name || 'Token'}
-              </h3>
-              
-              {isDeleted && (
-                <Badge variant="danger" style={{ fontSize: '0.75rem' }}>
-                  🗑️ Supprimé
-                </Badge>
-              )}
-              
-              {!isActive && !isDeleted && (
-                <Badge variant="secondary" style={{ fontSize: '0.75rem' }}>
-                  ⚫ Inactif
-                </Badge>
-              )}
-              
-              {token.isFromFarmWallet && (
-                <Badge variant="success" style={{ fontSize: '0.75rem' }}>
-                  ✅ Farm Wallet
-                </Badge>
-              )}
-            </div>
-            
-            {token.name && token.name !== token.ticker && (
-              <p style={{ 
-                fontSize: '0.875rem', 
-                color: 'var(--text-secondary)',
-                margin: '0 0 4px 0'
-              }}>
-                {token.name}
-              </p>
-            )}
-            
-            <p style={{ 
-              fontSize: '0.75rem', 
-              color: 'var(--text-secondary)',
-              fontFamily: 'monospace',
-              margin: 0,
-              wordBreak: 'break-all'
-            }}>
-              {token.tokenId?.substring(0, 16)}...
-            </p>
-          </div>
-          
+        
           <Button
             onClick={() => navigate(`/token/${token.tokenId}`)}
             variant="primary"
@@ -139,7 +89,7 @@ const TokenCard = ({
           {showVisibleToggle && (
             <TokenVisible
               tokenId={token.tokenId}
-              farmId={farmId}
+              profileId={profileId}
               isVisible={token.isVisible}
               disabled={!canToggleVisible}
               onUpdate={(newValue) => onUpdate && onUpdate({ ...token, isVisible: newValue })}
@@ -149,7 +99,7 @@ const TokenCard = ({
           {showLinkedToggle && (
             <TokenLinked
               tokenId={token.tokenId}
-              farmId={farmId}
+              profileId={profileId}
               isLinked={token.isLinked !== false}
               onUpdate={(newValue) => onUpdate && onUpdate({ ...token, isLinked: newValue })}
             />

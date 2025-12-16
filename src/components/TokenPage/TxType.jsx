@@ -1,3 +1,6 @@
+// TxType.jsx - Composant pour afficher le type de transaction (reçue, envoyée, interne) avec détails dans une liste de transactions.
+// Utilisé dans TokenPage pour afficher les transactions liées à un jeton spécifique.
+
 import React from 'react';
 import { Badge } from '../UI';
 import * as ecashaddrjs from 'ecashaddrjs';

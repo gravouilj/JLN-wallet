@@ -25,7 +25,8 @@ const ClientTicketForm = ({
   profilId = null,
   walletAddress,
   onSubmit,
-  onCancel
+  onCancel,
+  setNotification
 }) => {
   const [formData, setFormData] = useState({
     subject: '',
@@ -97,23 +98,21 @@ const ClientTicketForm = ({
     setError('');
 
     try {
-      // Données du ticket
+      // Données du ticket selon le schéma SQL
       const ticketData = {
+        type: type === 'creator' ? 'creator' : 'client', // 'creator' pour client→créateur avec token_id
         subject: formData.subject.trim(),
         category: formData.category,
         priority: formData.priority,
         description: formData.description.trim(),
         status: 'open',
-        client_wallet: walletAddress || null,
+        created_by: walletAddress || 'anonymous',
       };
 
       // Ajouter les identifiants selon le type
       if (type === 'creator') {
-        ticketData.token_id = tokenId;
-        ticketData.profil_id = profilId;
-        ticketData.recipient_type = 'creator';
-      } else {
-        ticketData.recipient_type = 'admin';
+        ticketData.token_id = tokenId; // Token concerné par le ticket
+        ticketData.farm_id = profilId; // Profil du créateur
       }
 
       // Créer le ticket
@@ -124,6 +123,16 @@ const ClientTicketForm = ({
         .single();
 
       if (ticketError) throw ticketError;
+
+      // Notification de succès
+      if (setNotification) {
+        setNotification({
+          type: 'success',
+          message: type === 'creator' 
+            ? 'Message envoyé au créateur avec succès !' 
+            : 'Ticket créé avec succès ! Notre équipe vous répondra bientôt.'
+        });
+      }
 
       // Réinitialiser le formulaire
       setFormData({
@@ -140,7 +149,15 @@ const ClientTicketForm = ({
 
     } catch (err) {
       console.error('Erreur création ticket:', err);
-      setError(err.message || 'Erreur lors de la création du ticket');
+      const errorMessage = err.message || 'Erreur lors de la création du ticket';
+      setError(errorMessage);
+      
+      if (setNotification) {
+        setNotification({
+          type: 'error',
+          message: errorMessage
+        });
+      }
     } finally {
       setSubmitting(false);
     }

@@ -17,8 +17,8 @@ import ManageTokenPage from './pages/ManageTokenPage';
 import ManageProfilePage from './pages/ManageProfilePage';
 import AdminVerificationPage from './pages/AdminVerificationPage';
 import AdminDashboard from './pages/AdminDashboard';
-import CreatorTokenPage from './pages/CreatorTokenPage';
-import RequestListingPage from './pages/RequestListingPage';
+import TokenPage from './pages/TokenPage';
+import RequestListingPage from './pages/VerificationRequestPage';
 
 // Layout & Components
 import ProtectedRoute from './components/ProtectedRoute';
@@ -178,7 +178,7 @@ function App() {
                 element={
                   <ProtectedRoute requireProfile={false}>
                     <ErrorBoundary>
-                      <CreatorTokenPage />
+                      <TokenPage />
                     </ErrorBoundary>
                   </ProtectedRoute>
                 } 

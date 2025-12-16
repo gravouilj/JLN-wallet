@@ -69,12 +69,12 @@ const InfosTab = ({
         
         <Stack spacing="md">
           <Input
-            label="Nom du créateur *"
+            label="Nom de l'établissement *"
             type="text"
-            name="creatorName"
-            value={formData.creatorName}
+            name="profileName"
+            value={formData.profileName}
             onChange={handleChange}
-            placeholder="Ex: Jean Dupont"
+            placeholder="Ex: Entreprise Agricole Dupont"
             required
           />
 

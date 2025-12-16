@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
-import { Card, CardContent, Button, Badge, InfoBox, Stack } from '../UI';
+import { useState, useEffect, useMemo } from 'react';
+import { Card, CardContent, Button, Badge, InfoBox, Stack, Tabs, Modal } from '../UI';
 import { supabase } from '../../services/supabaseClient';
+import CreatorTicketForm from './CreatorTicketForm';
+import SearchFilters from '../SearchFilters';
 
 /**
  * SupportTab - Système de support et communication avec l'équipe
@@ -13,15 +15,21 @@ import { supabase } from '../../services/supabaseClient';
  * - Consulter ses signalements et y répondre
  * 
  * @param {Object} props
- * @param {String} props.profilid - ID du profil de créateur
+ * @param {String} props.profilId - ID du profil de créateur
  * @param {Object} props.existingProfiles - Profil de créateur actuel
  * @param {Function} props.onCreateTicket - Callback création ticket
+ * @param {Function} props.setNotification - Fonction pour afficher les notifications
  */
-const SupportTab = ({ profilid, existingProfiles, onCreateTicket }) => {
+const SupportTab = ({ profilId, existingProfiles, onCreateTicket, setNotification, walletAddress }) => {
   const [myTickets, setMyTickets] = useState([]);
   const [loadingTickets, setLoadingTickets] = useState(true);
-  const [newMessage, setNewMessage] = useState('');
-  const [sendingMessage, setSendingMessage] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [activeTicketTab, setActiveTicketTab] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [selectedTicket, setSelectedTicket] = useState(null);
+  const [showTicketModal, setShowTicketModal] = useState(false);
+
 
   // Badge colors par statut
   const statusColors = {
@@ -41,22 +49,64 @@ const SupportTab = ({ profilid, existingProfiles, onCreateTicket }) => {
 
   // Charger les tickets de l'utilisateur
   useEffect(() => {
-    if (profilid) {
+    if (profilId) {
       loadMyTickets();
     }
-  }, [profilid]);
+  }, [profilId]);
 
   const loadMyTickets = async () => {
     try {
       setLoadingTickets(true);
-      const { data, error } = await supabase
+      
+      // Charger tickets créateur→admin (sans token_id)
+      const { data: adminTickets, error: adminError } = await supabase
         .from('tickets')
-        .select('*')
-        .eq('creator_id', profilid)
+        .select(`
+          *,
+          messages:ticket_messages(*)
+        `)
+        .eq('farm_id', profilId)
+        .eq('type', 'creator')
+        .is('token_id', null)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setMyTickets(data || []);
+      if (adminError) throw adminError;
+
+      // Charger signalements de profil (type='report' avec farm_id)
+      const { data: reportTickets, error: reportError } = await supabase
+        .from('tickets')
+        .select(`
+          *,
+          messages:ticket_messages(*)
+        `)
+        .eq('farm_id', profilId)
+        .eq('type', 'report')
+        .order('created_at', { ascending: false });
+
+      if (reportError) throw reportError;
+
+      // Charger tickets client→créateur (type='creator' avec token_id)
+      const { data: clientTickets, error: clientError } = await supabase
+        .from('tickets')
+        .select(`
+          *,
+          messages:ticket_messages(*)
+        `)
+        .eq('farm_id', profilId)
+        .eq('type', 'creator')
+        .not('token_id', 'is', null)
+        .order('created_at', { ascending: false });
+
+      if (clientError) throw clientError;
+
+      // Combiner tous les tickets avec catégorie
+      const allTickets = [
+        ...(adminTickets || []).map(t => ({ ...t, ticketCategory: 'admin' })),
+        ...(reportTickets || []).map(t => ({ ...t, ticketCategory: 'report' })),
+        ...(clientTickets || []).map(t => ({ ...t, ticketCategory: 'client' }))
+      ];
+
+      setMyTickets(allTickets);
     } catch (error) {
       console.error('Erreur chargement tickets:', error);
     } finally {
@@ -64,50 +114,7 @@ const SupportTab = ({ profilid, existingProfiles, onCreateTicket }) => {
     }
   };
 
-  // Envoyer un message direct à l'admin
-  const handleSendMessage = async () => {
-    if (!newMessage.trim() || !profilid) return;
-
-    try {
-      setSendingMessage(true);
-      
-      // Créer un ticket "question" par défaut pour le message
-      const { data: ticket, error: ticketError } = await supabase
-        .from('tickets')
-        .insert({
-          creator_id: profilid,
-          subject: 'Message direct',
-          category: 'question',
-          priority: 'normal',
-          status: 'open'
-        })
-        .select()
-        .single();
-
-      if (ticketError) throw ticketError;
-
-      // Ajouter le message
-      const { error: messageError } = await supabase
-        .from('ticket_messages')
-        .insert({
-          ticket_id: ticket.id,
-          sender_type: 'creator',
-          message: newMessage.trim()
-        });
-
-      if (messageError) throw messageError;
-
-      setNewMessage('');
-      await loadMyTickets();
-
-      alert('Message envoyé avec succès !');
-    } catch (error) {
-      console.error('Erreur envoi message:', error);
-      alert('Erreur lors de l\'envoi du message');
-    } finally {
-      setSendingMessage(false);
-    }
-  };
+  // (Message rapide supprimé - utiliser "Nouveau ticket" à la place)
 
   // Formater la date
   const formatDate = (dateString) => {
@@ -121,6 +128,53 @@ const SupportTab = ({ profilid, existingProfiles, onCreateTicket }) => {
       minute: '2-digit'
     }).format(date);
   };
+
+  // Filtrer les tickets
+  const filteredTickets = useMemo(() => {
+    let filtered = myTickets;
+
+    // Filtrer par catégorie (onglet)
+    if (activeTicketTab === 'admin') {
+      filtered = filtered.filter(t => t.ticketCategory === 'admin');
+    } else if (activeTicketTab === 'reports') {
+      filtered = filtered.filter(t => t.ticketCategory === 'report');
+    } else if (activeTicketTab === 'clients') {
+      filtered = filtered.filter(t => t.ticketCategory === 'client');
+    }
+
+    // Filtrer par statut
+    if (filterStatus !== 'all') {
+      filtered = filtered.filter(t => t.status === filterStatus);
+    }
+
+    // Filtrer par recherche
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(t => 
+        t.subject?.toLowerCase().includes(query) ||
+        t.description?.toLowerCase().includes(query) ||
+        t.id?.toLowerCase().includes(query)
+      );
+    }
+
+    return filtered;
+  }, [myTickets, activeTicketTab, filterStatus, searchQuery]);
+
+  // Compter les tickets par catégorie
+  const ticketCounts = useMemo(() => ({
+    all: myTickets.length,
+    admin: myTickets.filter(t => t.ticketCategory === 'admin').length,
+    reports: myTickets.filter(t => t.ticketCategory === 'report').length,
+    clients: myTickets.filter(t => t.ticketCategory === 'client').length
+  }), [myTickets]);
+
+  // Compter les tickets non traités
+  const unreadCounts = useMemo(() => ({
+    all: myTickets.filter(t => t.status !== 'closed' && t.status !== 'resolved').length,
+    admin: myTickets.filter(t => t.ticketCategory === 'admin' && t.status !== 'closed' && t.status !== 'resolved').length,
+    reports: myTickets.filter(t => t.ticketCategory === 'report' && t.status !== 'closed' && t.status !== 'resolved').length,
+    clients: myTickets.filter(t => t.ticketCategory === 'client' && t.status !== 'closed' && t.status !== 'resolved').length
+  }), [myTickets]);
 
   return (
     <Stack spacing="md">
@@ -137,34 +191,107 @@ const SupportTab = ({ profilid, existingProfiles, onCreateTicket }) => {
               </p>
             </div>
             <Button
+              type="button"
               variant="primary"
-              onClick={onCreateTicket}
+              onClick={() => setShowForm(!showForm)}
             >
-              ✉️ Nouveau ticket
+              {showForm ? '❌ Annuler' : '✉️ Nouveau ticket'}
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Mes tickets */}
+      {/* Formulaire de création de ticket */}
+      {showForm && (
+        <CreatorTicketForm
+          profilId={profilId}
+          walletAddress={walletAddress}
+          setNotification={setNotification}
+          onSubmit={(ticket) => {
+            setShowForm(false);
+            loadMyTickets(); // Refresh la liste
+          }}
+          onCancel={() => setShowForm(false)}
+        />
+      )}
+
+      {/* Mes tickets avec onglets */}
       <Card>
         <CardContent className="p-6">
           <h3 className="text-lg font-bold mb-4" style={{ color: 'var(--text-primary)' }}>
             📋 Mes tickets de support
           </h3>
 
+          {/* Onglets de catégories */}
+          <Tabs
+            tabs={[
+              { 
+                id: 'all', 
+                label: `📋 Tous (${ticketCounts.all}) ${unreadCounts.all > 0 ? '🔴' : ''}` 
+              },
+              { 
+                id: 'admin', 
+                label: `🛡️ Admin (${ticketCounts.admin}) ${unreadCounts.admin > 0 ? '🔴' : ''}` 
+              },
+              { 
+                id: 'reports', 
+                label: `🚨 Signalements (${ticketCounts.reports}) ${unreadCounts.reports > 0 ? '🔴' : ''}` 
+              },
+              { 
+                id: 'clients', 
+                label: `👤 Clients (${ticketCounts.clients}) ${unreadCounts.clients > 0 ? '🔴' : ''}` 
+              }
+            ]}
+            activeTab={activeTicketTab}
+            onChange={setActiveTicketTab}
+          />
+
+          {/* Filtres */}
+          <div style={{ marginTop: '16px', marginBottom: '16px' }}>
+            <SearchFilters
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              searchPlaceholder="Rechercher un ticket par sujet, ID..."
+              filters={[
+                {
+                  id: 'status',
+                  label: 'Tous les statuts',
+                  icon: '📊',
+                  value: filterStatus,
+                  options: [
+                    { value: 'open', label: 'Ouverts' },
+                    { value: 'in_progress', label: 'En cours' },
+                    { value: 'resolved', label: 'Résolus' },
+                    { value: 'closed', label: 'Fermés' }
+                  ],
+                  onChange: setFilterStatus
+                }
+              ]}
+              hasActiveFilters={searchQuery || filterStatus !== 'all'}
+              onClearAll={() => {
+                setSearchQuery('');
+                setFilterStatus('all');
+              }}
+            />
+          </div>
+
           {loadingTickets ? (
             <div className="text-center py-4">
               <p className="text-secondary">Chargement...</p>
             </div>
-          ) : myTickets.length === 0 ? (
+          ) : filteredTickets.length === 0 ? (
             <InfoBox type="info" icon="💡">
-              <strong>Aucun ticket pour le moment</strong><br />
-              Créez un ticket pour poser une question ou signaler un problème.
+              {searchQuery || filterStatus !== 'all' ? (
+                <><strong>Aucun ticket trouvé</strong><br />
+                Aucun ticket ne correspond aux filtres sélectionnés.</>
+              ) : (
+                <><strong>Aucun ticket pour le moment</strong><br />
+                Créez un ticket pour poser une question ou signaler un problème.</>
+              )}
             </InfoBox>
           ) : (
             <Stack spacing="sm">
-              {myTickets.map((ticket) => (
+              {filteredTickets.map((ticket) => (
                 <div
                   key={ticket.id}
                   style={{
@@ -184,6 +311,10 @@ const SupportTab = ({ profilid, existingProfiles, onCreateTicket }) => {
                   <div className="d-flex justify-between align-center mb-2">
                     <div className="d-flex align-center gap-2">
                       <span style={{ fontSize: '1.25rem' }}>
+                        {ticket.ticketCategory === 'admin' ? '🛡️' :
+                         ticket.ticketCategory === 'report' ? '🚨' : '👤'}
+                      </span>
+                      <span style={{ fontSize: '1rem' }}>
                         {ticket.category === 'bug' ? '🐛' : 
                          ticket.category === 'feature' ? '✨' : 
                          ticket.category === 'question' ? '❓' : '💬'}
@@ -201,12 +332,15 @@ const SupportTab = ({ profilid, existingProfiles, onCreateTicket }) => {
                     <span>📅 {formatDate(ticket.created_at)}</span>
                     <span>•</span>
                     <span>
-                      Catégorie: <strong>{ticket.category}</strong>
+                      {ticket.ticketCategory === 'admin' ? 'Admin' :
+                       ticket.ticketCategory === 'report' ? 'Signalement' : 'Client'}
                     </span>
-                    <span>•</span>
-                    <span>
-                      Priorité: <strong>{ticket.priority}</strong>
-                    </span>
+                    {ticket.messages && ticket.messages.length > 0 && (
+                      <>
+                        <span>•</span>
+                        <span>💬 {ticket.messages.length} message{ticket.messages.length > 1 ? 's' : ''}</span>
+                      </>
+                    )}
                   </div>
 
                   {ticket.description && (
@@ -225,11 +359,11 @@ const SupportTab = ({ profilid, existingProfiles, onCreateTicket }) => {
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      // Navigation vers détails ticket (à implémenter)
-                      console.log('Voir ticket', ticket.id);
+                      setSelectedTicket(ticket);
+                      setShowTicketModal(true);
                     }}
                   >
-                    Voir les détails
+                    👁️ Voir les détails
                   </Button>
                 </div>
               ))}
@@ -238,45 +372,94 @@ const SupportTab = ({ profilid, existingProfiles, onCreateTicket }) => {
         </CardContent>
       </Card>
 
-      {/* Message direct à l'équipe */}
-      <Card>
-        <CardContent className="p-6">
-          <h3 className="text-lg font-bold mb-2" style={{ color: 'var(--text-primary)' }}>
-            ✍️ Envoyer un message rapide
-          </h3>
-          <p className="text-sm text-secondary mb-4">
-            Posez une question rapide sans créer de ticket formel
-          </p>
+      {/* Modal détails du ticket */}
+      {showTicketModal && selectedTicket && (
+        <Modal isOpen={showTicketModal} onClose={() => {
+          setShowTicketModal(false);
+          setSelectedTicket(null);
+        }}>
+          <Modal.Header>
+            {selectedTicket.ticketCategory === 'admin' ? '🛡️' :
+             selectedTicket.ticketCategory === 'report' ? '🚨' : '👤'} {selectedTicket.subject}
+          </Modal.Header>
+          <Modal.Body>
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                <Badge variant={statusColors[selectedTicket.status] || 'secondary'}>
+                  {statusLabels[selectedTicket.status] || selectedTicket.status}
+                </Badge>
+                <Badge variant="neutral">
+                  {selectedTicket.category}
+                </Badge>
+                <Badge variant="neutral">
+                  Priorité: {selectedTicket.priority}
+                </Badge>
+              </div>
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                📅 Créé le {formatDate(selectedTicket.created_at)}
+              </p>
+              {selectedTicket.description && (
+                <div style={{
+                  padding: '12px',
+                  backgroundColor: 'var(--bg-secondary)',
+                  borderRadius: '8px',
+                  marginBottom: '16px'
+                }}>
+                  <strong style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)' }}>Description :</strong>
+                  <p style={{ margin: 0, color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                    {selectedTicket.description}
+                  </p>
+                </div>
+              )}
+            </div>
 
-          <textarea
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Écrivez votre message ici..."
-            rows={4}
-            style={{
-              width: '100%',
-              padding: '12px',
-              borderRadius: '8px',
-              border: '1px solid var(--border-primary)',
-              backgroundColor: 'var(--bg-primary)',
-              color: 'var(--text-primary)',
-              fontSize: '0.875rem',
-              resize: 'vertical',
-              fontFamily: 'inherit'
-            }}
-          />
-
-          <div className="d-flex justify-end mt-3">
+            {/* Historique des messages */}
+            {selectedTicket.messages && selectedTicket.messages.length > 0 && (
+              <div>
+                <h4 style={{ fontSize: '0.95rem', fontWeight: '600', marginBottom: '12px', color: 'var(--text-primary)' }}>
+                  💬 Conversation ({selectedTicket.messages.length})
+                </h4>
+                <Stack spacing="sm">
+                  {selectedTicket.messages.map((msg, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        padding: '12px',
+                        backgroundColor: msg.author === 'admin' ? 'var(--info-light)' : 'var(--bg-secondary)',
+                        borderRadius: '8px',
+                        border: `1px solid ${msg.author === 'admin' ? 'var(--border-info)' : 'var(--border-primary)'}`
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                        <strong style={{ fontSize: '0.85rem', color: msg.author === 'admin' ? 'var(--accent-primary)' : 'var(--text-primary)' }}>
+                          {msg.author === 'admin' ? '🛡️ Admin' : msg.author === 'creator' ? '🌾 Créateur' : '👤 Client'}
+                        </strong>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                          {formatDate(msg.created_at)}
+                        </span>
+                      </div>
+                      <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-primary)', lineHeight: '1.5' }}>
+                        {msg.content}
+                      </p>
+                    </div>
+                  ))}
+                </Stack>
+              </div>
+            )}
+          </Modal.Body>
+          <Modal.Footer>
             <Button
-              variant="primary"
-              onClick={handleSendMessage}
-              disabled={!newMessage.trim() || sendingMessage}
+              variant="outline"
+              onClick={() => {
+                setShowTicketModal(false);
+                setSelectedTicket(null);
+              }}
             >
-              {sendingMessage ? 'Envoi...' : '📤 Envoyer'}
+              Fermer
             </Button>
-          </div>
-        </CardContent>
-      </Card>
+          </Modal.Footer>
+        </Modal>
+      )}
 
       {/* Informations utiles */}
       <InfoBox type="info" icon="💡">

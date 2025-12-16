@@ -75,13 +75,6 @@ export const Input = ({ className = '', label, rightIcon, actionButton, helperTe
         {...props} 
       />
       
-      {/* Icône à droite (QR) */}
-      {rightIcon && !actionButton && (
-        <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', display: 'flex' }}>
-          {rightIcon}
-        </div>
-      )}
-
       {/* Bouton d'action (MAX) - Style Texte simple cliquable */}
       {actionButton && (
         <button
@@ -521,7 +514,7 @@ export const InfoBox = ({ type = 'info', title, children, icon, onDismiss, class
 /**
  * StatusBadge - Badges de statut standardisés avec couleurs sémantiques
  * @param {string} status - Statut à afficher
- * @param {string} type - Type de statut: 'verification', 'farm', 'report'
+ * @param {string} type - Type de statut: 'verification', 'profil', 'report'
  */
 export const StatusBadge = ({ status, type = 'verification', className = '' }) => {
   const verificationStyles = {
@@ -532,7 +525,7 @@ export const StatusBadge = ({ status, type = 'verification', className = '' }) =
     rejected: { bg: '#fee2e2', text: '#991b1b', label: '🚫 Refusé' }
   };
   
-  const farmStatusStyles = {
+  const profilStatusStyles = {
     draft: { bg: '#f3f4f6', text: '#6b7280', label: '📝 Brouillon' },
     active: { bg: '#dcfce7', text: '#166534', label: '✅ Public' },
     suspended: { bg: '#fef3c7', text: '#92400e', label: '⏸️ Suspendu' },

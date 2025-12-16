@@ -62,7 +62,7 @@ const ClientTicketsList = ({ walletAddress, onTicketClick }) => {
           *,
           ticket_messages(count)
         `)
-        .eq('client_wallet', walletAddress)
+        .eq('created_by', walletAddress)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -204,7 +204,7 @@ const ClientTicketsList = ({ walletAddress, onTicketClick }) => {
                   <span>📅 {formatDate(ticket.created_at)}</span>
                   <span>•</span>
                   <span>
-                    {ticket.recipient_type === 'admin' ? '👨‍💼 Support' : '🌾 Créateur'}
+                    {ticket.type === 'client' && !ticket.farm_id ? '👨‍💼 Support' : '🌾 Créateur'}
                   </span>
                   {getMessageCount(ticket) > 0 && (
                     <>

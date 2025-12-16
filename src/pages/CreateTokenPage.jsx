@@ -257,7 +257,7 @@ const CreateTokenPage = () => {
             const existingTokens = existingProfile.tokens || [];
             const updatedTokens = [...existingTokens, tokenEntry];
             
-            await profilService.saveProfile({
+            await profilService.saveProfil({
               ...existingProfile,
               tokens: updatedTokens
             }, address);
@@ -265,7 +265,7 @@ const CreateTokenPage = () => {
             console.log('✅ Token ajouté à la profile existant');
           } else {
             // Créer un nouveau profile minimal
-            await profilService.saveProfile({
+            await profilService.saveProfil({
               name: formData.name,
               description: '', // Description vide, le purpose/counterpart sont dans le token
               country: 'France',

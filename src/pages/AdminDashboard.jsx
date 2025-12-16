@@ -9,6 +9,7 @@ import AdminSettings from '../components/Admin/AdminSettings';
 import AdminStats from '../components/Admin/AdminStats';
 import { useAdmin } from '../hooks/useAdmin';
 import { notificationAtom } from '../atoms';
+import { supabase } from '../services/supabaseClient';
 
 /**
  * AdminDashboard - Dashboard principal de l'administration
@@ -26,6 +27,7 @@ const AdminDashboard = () => {
   const { isAdmin, isChecking } = useAdmin();
   const setNotification = useSetAtom(notificationAtom);
   const [activeTab, setActiveTab] = useState('verifications');
+  const [unreadTicketsCount, setUnreadTicketsCount] = useState(0);
 
   // Redirection si non admin
   useEffect(() => {
@@ -37,6 +39,27 @@ const AdminDashboard = () => {
       navigate('/');
     }
   }, [isAdmin, isChecking, navigate, setNotification]);
+
+  // Charger le nombre de tickets non traités
+  useEffect(() => {
+    if (isAdmin) {
+      loadUnreadTicketsCount();
+    }
+  }, [isAdmin, activeTab]);
+
+  const loadUnreadTicketsCount = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('tickets')
+        .select('id, status')
+        .in('status', ['open', 'in_progress']);
+
+      if (error) throw error;
+      setUnreadTicketsCount(data?.length || 0);
+    } catch (err) {
+      console.error('Erreur chargement tickets:', err);
+    }
+  };
 
   if (isChecking) {
     return (
@@ -73,7 +96,7 @@ const AdminDashboard = () => {
               },
               { 
                 id: 'support', 
-                label: '🎫 Support' 
+                label: `🎫 Support${unreadTicketsCount > 0 ? ` (${unreadTicketsCount}) 🔴` : ''}` 
               },
               { 
                 id: 'settings', 
@@ -97,6 +120,7 @@ const AdminDashboard = () => {
             {activeTab === 'support' && (
               <AdminTicketSystem 
                 onNotification={setNotification}
+                onTicketsChange={loadUnreadTicketsCount}
               />
             )}
 

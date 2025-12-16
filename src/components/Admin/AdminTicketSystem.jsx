@@ -17,7 +17,7 @@ import { supabase } from '../../services/supabaseClient';
  * @param {Object} props
  * @param {Function} props.onNotification - Callback pour afficher des notifications
  */
-const AdminTicketSystem = ({ onNotification }) => {
+const AdminTicketSystem = ({ onNotification, onTicketsChange }) => {
   const [activeTab, setActiveTab] = useState('all');
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -45,17 +45,26 @@ const AdminTicketSystem = ({ onNotification }) => {
 
       // Filtrer par onglet
       if (activeTab === 'creators') {
-        query = query.eq('type', 'creator');
+        // Tickets créateur→admin uniquement (sans token_id)
+        query = query.eq('type', 'creator').is('token_id', null);
       } else if (activeTab === 'clients') {
         query = query.eq('type', 'client');
       } else if (activeTab === 'reports') {
         query = query.eq('type', 'report');
+      } else {
+        // Vue "all" : exclure les tickets client→créateur
+        query = query.or('type.neq.creator,and(type.eq.creator,token_id.is.null)');
       }
 
       const { data, error } = await query;
 
       if (error) throw error;
       setTickets(data || []);
+      
+      // Notifier le parent du changement
+      if (onTicketsChange) {
+        onTicketsChange();
+      }
     } catch (err) {
       console.error('Erreur chargement tickets:', err);
       onNotification?.({ 
@@ -230,12 +239,12 @@ const AdminTicketSystem = ({ onNotification }) => {
     reports: tickets.filter(t => t.type === 'report').length
   };
 
-  // Compter les tickets non résolus
+  // Compter les tickets non traités (ni fermés ni résolus)
   const unreadCounts = {
-    all: tickets.filter(t => t.status !== 'closed').length,
-    creators: tickets.filter(t => t.type === 'creator' && t.status !== 'closed').length,
-    clients: tickets.filter(t => t.type === 'client' && t.status !== 'closed').length,
-    reports: tickets.filter(t => t.type === 'report' && t.status !== 'closed').length
+    all: tickets.filter(t => t.status !== 'closed' && t.status !== 'resolved').length,
+    creators: tickets.filter(t => t.type === 'creator' && t.status !== 'closed' && t.status !== 'resolved').length,
+    clients: tickets.filter(t => t.type === 'client' && t.status !== 'closed' && t.status !== 'resolved').length,
+    reports: tickets.filter(t => t.type === 'report' && t.status !== 'closed' && t.status !== 'resolved').length
   };
 
   return (

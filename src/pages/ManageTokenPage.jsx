@@ -13,6 +13,7 @@ import { Card, CardContent, Button, PageLayout, Stack, PageHeader } from '../com
 import ImportTokenModal from '../components/ImportTokenModal';
 import { getGlobalHistory } from '../services/historyService';
 import { NetworkFeesAvail, AddressHistory, TokenCard } from '../components/TokenPage';
+import AddressBook from '../components/AddressBook';
 
 const ManageTokenPage = () => {
   const navigate = useNavigate();
@@ -35,6 +36,7 @@ const ManageTokenPage = () => {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [showXecHistory, setShowXecHistory] = useState(false);
+  const [showGlobalAddressBook, setShowGlobalAddressBook] = useState(false); // Carnet d'adresses global
 
   // Debug: tracker les changements du modal
   useEffect(() => {
@@ -52,7 +54,7 @@ const ManageTokenPage = () => {
       try {
         setLoadingTokens(true);
         
-        // Charger MA ferme directement depuis Supabase (sans filtre de visibilité)
+        // Charger Mon Profil directement depuis Supabase (sans filtre de visibilité)
         // IMPORTANT: En tant que créateur, je dois voir mon profil même si tous mes tokens sont masqués
         if (address) {
           try {
@@ -78,7 +80,7 @@ const ManageTokenPage = () => {
         if (isAdmin) {
           try {
             const { default: ProfilService } = await import('../services/profilService');
-            const pendingProfiles = await ProfilService.getPendingProfiles();
+            const pendingProfiles = await ProfilService.getPendingProfils();
             setPendingCount(pendingProfiles?.length || 0);
             console.log('🔔 Demandes en attente:', pendingProfiles?.length || 0);
           } catch (err) {
@@ -94,14 +96,14 @@ const ManageTokenPage = () => {
         if (import.meta.env.DEV) console.log('🔑 Mint Batons chargés:', batons);
         
         // Construire le Set des tokenIds JlnWallet AVANT tout (admin ET creator)
-        // IMPORTANT: Inclure MA ferme (myProfile) même si non visible + les profiles publiques
+        // IMPORTANT: Inclure Mon profil (myProfile) même si non visible + les profiles publiques
         const jlnWalletTokenIds = new Set();
         const allTokensFromProfiles = [];
         
         // Créer une liste complète : Mon profil + profiles publiques (sans doublons)
         const allProfilesToProcess = [];
         if (myProfile) {
-          allProfilesToProcess.push(myProfile); // MA ferme en premier (même si tokens masqués)
+          allProfilesToProcess.push(myProfile); // Mon profil en premier (même si tokens masqués)
         }
         // Ajouter les autres profiles (venant du hook useProfiles filtré pour l'annuaire)
         profiles.forEach(profile => {
@@ -505,37 +507,6 @@ const ManageTokenPage = () => {
     navigate(`/manage-token/${token.tokenId}`);
   };
 
-  // Créer une carte exemple pour les admins (mode debug)
-  const renderAdminDebugCard = () => (
-    <Card className="opacity-70 border-dashed relative">
-      <div className="absolute top-2 right-2 bg-yellow-500 text-black px-2 py-1 rounded text-xs font-bold">
-        SIMULATION
-      </div>
-      <div className="flex justify-between items-start mb-3">
-        <div className="flex items-center gap-4">
-          <img 
-            src="https://placehold.co/64x64?text=TEST" 
-            alt="Test"
-            className="w-16 h-16 rounded-lg object-cover"
-          />
-          <div>
-            <div className="text-lg font-bold text-gray-900 dark:text-white">Exemple Admin</div>
-            <div className="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase">DEMO</div>
-          </div>
-        </div>
-        <div className="px-3 py-1 bg-yellow-500 text-white rounded-full text-xs font-bold uppercase">
-          DEBUG
-        </div>
-      </div>
-      <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
-        <div className="text-xs text-gray-600 dark:text-gray-400">Token ID</div>
-        <div className="text-sm font-semibold font-mono text-gray-900 dark:text-white">
-          abc123...xyz789
-        </div>
-      </div>
-    </Card>
-  );
-
   return (
     <MobileLayout title="Gestionnaire de Jetons">
       <PageLayout hasBottomNav className="max-w-2xl">
@@ -775,6 +746,8 @@ const ManageTokenPage = () => {
 
         {/* Balance XEC et Valeur estimée */}
         <NetworkFeesAvail 
+          compact={true} 
+          showActions={true} 
           xecBalance={xecBalance}
           fiatValue={price && typeof price.convert === 'function' 
             ? price.convert(xecBalance, currency)?.toFixed(2) || '...'
@@ -846,7 +819,7 @@ const ManageTokenPage = () => {
                           boxShadow: activeFilter === 'active' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
                         }}
                       >
-                        🟢 En Circulation ({tokens.filter(t => t.isActive && !t.isDeleted && t.isFromjlnWallet).length})
+                        🟢 En Circulation ({tokens.filter(t => t.isActive && !t.isDeleted && t.isFromJlnWallet).length})
                       </button>
                       <button
                         onClick={() => setActiveFilter('inactive')}
@@ -863,7 +836,7 @@ const ManageTokenPage = () => {
                           boxShadow: activeFilter === 'inactive' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
                         }}
                       >
-                        ⚫ Inactifs ({tokens.filter(t => !t.isActive && !t.isDeleted && t.isFromjlnWallet).length})
+                        ⚫ Inactifs ({tokens.filter(t => !t.isActive && !t.isDeleted && t.isFromJlnWallet).length})
                       </button>
                       <button
                         onClick={() => setActiveFilter('deleted')}
@@ -880,7 +853,7 @@ const ManageTokenPage = () => {
                           boxShadow: activeFilter === 'deleted' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
                         }}
                       >
-                        🗑️ Supprimés ({tokens.filter(t => t.isDeleted && t.isFromjlnWallet).length})
+                        🗑️ Supprimés ({tokens.filter(t => t.isDeleted && t.isFromJlnWallet).length})
                       </button>
                       <button
                         onClick={() => setActiveFilter('all')}
@@ -898,7 +871,7 @@ const ManageTokenPage = () => {
                         }}
                       >
                         📋 Tous ({(() => {
-                          const allTokensCreatedInApp = [...allJlnTokens, ...tokens.filter(t => t.isFromjlnWallet && !allJlnTokens.some(ft => ft.tokenId === t.tokenId))];
+                          const allTokensCreatedInApp = [...allJlnTokens, ...tokens.filter(t => t.isFromJlnWallet && !allJlnTokens.some(ft => ft.tokenId === t.tokenId))];
                           return allTokensCreatedInApp.length;
                         })()})
                       </button>
@@ -926,25 +899,25 @@ const ManageTokenPage = () => {
               
               if (activeFilter === 'active') {
                 // En circulation: offre > 0 ET JLN-Wallet uniquement
-                displayTokens = tokens.filter(t => t.isActive && !t.isDeleted && t.isFromjlnWallet);
+                displayTokens = tokens.filter(t => t.isActive && !t.isDeleted && t.isFromJlnWallet);
               } else if (activeFilter === 'inactive') {
                 // Inactifs: offre = 0 ET JLN-Wallet uniquement
-                displayTokens = tokens.filter(t => !t.isActive && !t.isDeleted && t.isFromjlnWallet);
+                displayTokens = tokens.filter(t => !t.isActive && !t.isDeleted && t.isFromJlnWallet);
               } else if (activeFilter === 'deleted' && isAdmin) {
                 // Supprimés: tokens marqués comme supprimés (admin uniquement)
-                displayTokens = tokens.filter(t => t.isDeleted && t.isFromjlnWallet);
+                displayTokens = tokens.filter(t => t.isDeleted && t.isFromJlnWallet);
               } else if (activeFilter === 'all' && isAdmin) {
                 // Tous: tous les tokens JLN-Wallet (créés ou importés)
                 const supabaseTokenIds = new Set(allJlnTokens.map(t => t.tokenId));
                 const walletOnlyJlnTokens = tokens.filter(t => 
-                  t.isFromjlnWallet && !supabaseTokenIds.has(t.tokenId)
+                  t.isFromJlnWallet && !supabaseTokenIds.has(t.tokenId)
                 );
                 
                 displayTokens = [...allJlnTokens, ...walletOnlyJlnTokens]
-                  .filter(t => t.isFromjlnWallet);
+                  .filter(t => t.isFromJlnWallet);
               } else {
                 // Par défaut: afficher tous les tokens JLN-Wallet
-                displayTokens = tokens.filter(t => t.isFromjlnWallet);
+                displayTokens = tokens.filter(t => t.isFromJlnWallet);
               }
               
               console.log('🎯 Filtrage tokens:', {
@@ -1024,6 +997,48 @@ const ManageTokenPage = () => {
             });
             })()}
           </>
+        )}
+
+        {/* Section Carnet d'Adresses Global */}
+        {address && (
+          <Card>
+            <CardContent style={{ padding: '24px' }}>
+              <div className="section-header">
+                <span className="section-icon">📇</span>
+                <div className="section-header-content">
+                  <h2 className="section-title">
+                    Carnet d'Adresses Complet
+                  </h2>
+                  <p className="section-subtitle">
+                    Gérez tous vos contacts eCash enregistrés.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowGlobalAddressBook(!showGlobalAddressBook)}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: showGlobalAddressBook ? '#3b82f6' : 'var(--bg-secondary)',
+                    color: showGlobalAddressBook ? '#fff' : 'var(--text-primary)',
+                    border: showGlobalAddressBook ? 'none' : '1px solid var(--border-color)',
+                    borderRadius: '10px',
+                    fontWeight: '600',
+                    fontSize: '0.9rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {showGlobalAddressBook ? '👁️ Masquer' : '👁️‍🗨️ Afficher'}
+                </button>
+              </div>
+
+              {showGlobalAddressBook && (
+                <div style={{ marginTop: '20px' }}>
+                  <AddressBook tokenId={null} compact={false} />
+                </div>
+              )}
+            </CardContent>
+          </Card>
         )}
 
         {/* Section Historique Créateur */}
