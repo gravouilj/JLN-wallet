@@ -47,65 +47,70 @@ export const Stack = ({ children, spacing = 'md', className = '' }) => {
 
 // --- FORMULAIRES (Inputs & Boutons) ---
 
-export const Input = ({ className = '', label, rightIcon, actionButton, helperText, ...props }) => (
-  <div className={`w-full ${className}`} style={{ marginBottom: '16px' }}>
-    {label && (
-      <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '600', marginBottom: '8px', color: 'var(--text-primary)' }}>
-        {label}
-      </label>
-    )}
-    <div style={{ position: 'relative' }}>
-      <input 
-        style={{
-          width: '100%',
-          padding: '0 16px', // Padding horizontal propre
-          height: '50px',    // Hauteur fixe standardisée
-          fontSize: '1rem',
-          border: '1px solid var(--border-color, #e5e7eb)',
-          borderRadius: '12px',
-          backgroundColor: 'var(--bg-input, #fff)',
-          color: 'var(--text-primary)',
-          boxSizing: 'border-box',
-          outline: 'none',
-          transition: 'border-color 0.2s',
-          paddingRight: actionButton ? '60px' : (rightIcon ? '40px' : '16px') // Espace pour l'action
-        }}
-        onFocus={(e) => e.target.style.borderColor = 'var(--primary-color, #0074e4)'}
-        onBlur={(e) => e.target.style.borderColor = 'var(--border-color, #e5e7eb)'}
-        {...props} 
-      />
-      
-      {/* Bouton d'action (MAX) - Style Texte simple cliquable */}
-      {actionButton && (
-        <button
-          type="button"
-          onClick={actionButton.onClick}
+export const Input = ({ className = '', label, rightIcon, actionButton, helperText, ...props }) => {
+  // Extraire leftIcon et rightIcon des props pour ne pas les passer au DOM
+  const { leftIcon, ...inputProps } = props;
+  
+  return (
+    <div className={`w-full ${className}`} style={{ marginBottom: '16px' }}>
+      {label && (
+        <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '600', marginBottom: '8px', color: 'var(--text-primary)' }}>
+          {label}
+        </label>
+      )}
+      <div style={{ position: 'relative' }}>
+        <input 
           style={{
-            position: 'absolute',
-            right: '12px',
-            top: '50%',
-            transform: 'translateY(-50%)',
-            background: 'none',
-            border: 'none',
-            color: 'var(--primary-color, #0074e4)',
-            fontWeight: '700',
-            fontSize: '0.85rem',
-            cursor: 'pointer',
-            padding: '4px 8px',
-            zIndex: 10
+            width: '100%',
+            padding: '0 16px', // Padding horizontal propre
+            height: '50px',    // Hauteur fixe standardisée
+            fontSize: '1rem',
+            border: '1px solid var(--border-color, #e5e7eb)',
+            borderRadius: '12px',
+            backgroundColor: 'var(--bg-input, #fff)',
+            color: 'var(--text-primary)',
+            boxSizing: 'border-box',
+            outline: 'none',
+            transition: 'border-color 0.2s',
+            paddingRight: actionButton ? '60px' : (rightIcon ? '40px' : '16px') // Espace pour l'action
           }}
-        >
-          {actionButton.label}
-        </button>
+          onFocus={(e) => e.target.style.borderColor = 'var(--primary-color, #0074e4)'}
+          onBlur={(e) => e.target.style.borderColor = 'var(--border-color, #e5e7eb)'}
+          {...inputProps} 
+        />
+        
+        {/* Bouton d'action (MAX) - Style Texte simple cliquable */}
+        {actionButton && (
+          <button
+            type="button"
+            onClick={actionButton.onClick}
+            style={{
+              position: 'absolute',
+              right: '12px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              background: 'none',
+              border: 'none',
+              color: 'var(--primary-color, #0074e4)',
+              fontWeight: '700',
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              padding: '4px 8px',
+              zIndex: 10
+            }}
+          >
+            {actionButton.label}
+          </button>
+        )}
+      </div>
+      {helperText && (
+        <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '6px', marginLeft: '2px' }}>
+          {helperText}
+        </p>
       )}
     </div>
-    {helperText && (
-      <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '6px', marginLeft: '2px' }}>
-        {helperText}
-      </p>
-    )}
-  </div>
-);
+  );
+};
 
 /**
  * Button - Bouton standardisé (Hauteur garantie)

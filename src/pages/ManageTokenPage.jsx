@@ -2,18 +2,41 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSetAtom, useAtom } from 'jotai';
 import MobileLayout from '../components/Layout/MobileLayout';
-import BlockchainStatus from '../components/BlockchainStatus';
-import HistoryList from '../components/HistoryList';
+import BlockchainStatus from '../components/eCash/BlockchainStatus';
+import HistoryList from '../components/eCash/TokenActions/HistoryList';
 import { useEcashWallet } from '../hooks/useEcashWallet';
 import { useAdmin } from '../hooks/useAdmin';
 import { useProfiles } from '../hooks/useProfiles';
 import { useXecPrice } from '../hooks/useXecPrice';
 import { notificationAtom, currencyAtom } from '../atoms';
-import { Card, CardContent, Button, PageLayout, Stack, PageHeader } from '../components/UI';
-import ImportTokenModal from '../components/ImportTokenModal';
+import { Card, CardContent, Button, PageLayout, Stack, PageHeader, Tabs } from '../components/UI';
+import ImportTokenModal from '../components/Creators/ImportTokenModal';
 import { getGlobalHistory } from '../services/historyService';
 import { NetworkFeesAvail, AddressHistory, TokenCard } from '../components/TokenPage';
-import AddressBook from '../components/AddressBook';
+import AddressBook from '../components/AddressBook/AddressBook';
+
+/**
+ * ManageTokenPage - Gestionnaire de jetons pour créateurs
+ * 
+ * Fonctionnalités principales:
+ * - Liste des tokens avec MintBaton (tokens gérables par le créateur)
+ * - Filtres admin: actifs, inactifs, supprimés, tous
+ * - Import de tokens existants
+ * - Historique des actions créateur et transactions XEC
+ * - Gestion des profils et vérification
+ * 
+ * Architecture:
+ * - États centralisés avec commentaires explicatifs
+ * - Fonctions utilitaires extraites pour meilleure lisibilité
+ * - Chargement optimisé avec Promise.all pour paralléliser
+ * - Logique de filtrage simplifiée dans getFilteredTokens()
+ * 
+ * Optimisations:
+ * - Suppression des états inutilisés (allProfileTokens, showXecHistory)
+ * - Extraction de fonctions utilitaires (loadMyProfile, buildJlnWalletTokenIds, etc.)
+ * - Réduction des logs de debug en production
+ * - Simplification de la logique de filtrage avec switch/case
+ */
 
 const ManageTokenPage = () => {
   const navigate = useNavigate();
@@ -24,26 +47,220 @@ const ManageTokenPage = () => {
   const [currency] = useAtom(currencyAtom);
   const setNotification = useSetAtom(notificationAtom);
 
+  // ============================================
+  // ÉTATS PRINCIPAUX
+  // ============================================
+  
+  // Tokens avec MintBaton (tokens gérables)
   const [tokens, setTokens] = useState([]);
-  const [allJlnTokens, setAllJlnTokens] = useState([]); // Pour l'admin: tous les tokens JLN-Wallet
-  const [allProfileTokens, setAllProfileTokens] = useState([]); // Pour l'admin: tous les tokens des profiles
+  
+  // Tokens JLN-Wallet (pour admin: tous les tokens de Supabase)
+  const [allJlnTokens, setAllJlnTokens] = useState([]);
+  
+  // États de chargement
   const [loadingTokens, setLoadingTokens] = useState(true);
-  const [xecBalance, setXecBalance] = useState(0);
-  const [activeFilter, setActiveFilter] = useState('active'); // 'active', 'inactive', 'pending', 'all'
-  const [myProfile, setMyProfile] = useState(null);
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [globalHistory, setGlobalHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  
+  // Profil de l'utilisateur connecté
+  const [myProfile, setMyProfile] = useState(null);
+  
+  // Solde XEC du wallet
+  const [xecBalance, setXecBalance] = useState(0);
+  
+  // Filtres admin: 'active' | 'inactive' | 'deleted' | 'all'
+  const [activeFilter, setActiveFilter] = useState('active');
+  
+  // Historique des actions créateur
+  const [globalHistory, setGlobalHistory] = useState([]);
+  
+  // Onglet historique actif: 'creator' | 'xec'
+  const [activeHistoryTab, setActiveHistoryTab] = useState('creator');
+  
+  // Nombre de demandes de vérification en attente (admin)
   const [pendingCount, setPendingCount] = useState(0);
-  const [showXecHistory, setShowXecHistory] = useState(false);
-  const [showGlobalAddressBook, setShowGlobalAddressBook] = useState(false); // Carnet d'adresses global
+  
+  // États d'affichage des modales/sections
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [showGlobalAddressBook, setShowGlobalAddressBook] = useState(false);
 
-  // Debug: tracker les changements du modal
-  useEffect(() => {
-    console.log('🔍 showImportModal changé:', showImportModal);
-  }, [showImportModal]);
+  // ============================================
+  // FONCTIONS UTILITAIRES
+  // ============================================
 
-  // Load mint batons with enriched metadata
+  /**
+   * Charge le profil de l'utilisateur depuis Supabase
+   * @returns {Promise<Object|null>} Profil ou null si non trouvé
+   */
+  const loadMyProfile = async () => {
+    if (!address) return null;
+    
+    try {
+      const { supabase } = await import('../services/supabaseClient');
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('owner_address', address)
+        .maybeSingle();
+      
+      if (error && error.code !== 'PGRST116') {
+        console.error('❌ Erreur chargement profil:', error);
+        return null;
+      }
+      
+      console.log('🏠 Profil chargé:', data?.name || 'Aucun');
+      return data || null;
+    } catch (err) {
+      console.error('❌ Erreur chargement profil:', err);
+      return null;
+    }
+  };
+
+  /**
+   * Charge le nombre de demandes de vérification en attente (admin uniquement)
+   * @returns {Promise<number>} Nombre de demandes
+   */
+  const loadPendingCount = async () => {
+    if (!isAdmin) return 0;
+    
+    try {
+      const { default: ProfilService } = await import('../services/profilService');
+      const pendingProfiles = await ProfilService.getPendingProfils();
+      const count = pendingProfiles?.length || 0;
+      console.log('🔔 Demandes en attente:', count);
+      return count;
+    } catch (err) {
+      console.error('❌ Erreur chargement demandes:', err);
+      return 0;
+    }
+  };
+
+  /**
+   * Construit un Set des tokenIds référencés dans Supabase
+   * @param {Object} myProfile - Profil de l'utilisateur
+   * @param {Array} profiles - Liste des profils publics
+   * @returns {Set<string>} Set des tokenIds JLN-Wallet
+   */
+  const buildJlnWalletTokenIds = (myProfile, profiles) => {
+    const tokenIds = new Set();
+    
+    // Inclure les tokens de mon profil
+    if (myProfile && Array.isArray(myProfile.tokens)) {
+      myProfile.tokens.forEach(t => tokenIds.add(t.tokenId));
+    }
+    
+    // Inclure les tokens des profils publics
+    profiles.forEach(profile => {
+      if (Array.isArray(profile.tokens)) {
+        profile.tokens.forEach(t => tokenIds.add(t.tokenId));
+      }
+    });
+    
+    return tokenIds;
+  };
+
+  /**
+   * Copie un tokenId dans le presse-papier
+   */
+  const handleCopyTokenId = (tokenId, e) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(tokenId).then(
+      () => setNotification({ type: 'success', message: 'ID du jeton copié !' }),
+      (err) => {
+        console.error('❌ Échec copie:', err);
+        setNotification({ type: 'error', message: 'Échec de la copie' });
+      }
+    );
+  };
+
+  /**
+   * Formate un solde avec décimales
+   * @param {string|BigInt} balance - Solde brut
+   * @param {number} decimals - Nombre de décimales
+   * @returns {string} Solde formaté
+   */
+  const formatBalance = (balance, decimals = 0) => {
+    if (!balance || balance === '0') return '0';
+    try {
+      const balanceNum = typeof balance === 'string' ? BigInt(balance) : BigInt(balance.toString());
+      const divisor = BigInt(Math.pow(10, decimals));
+      const wholePart = balanceNum / divisor;
+      const remainder = balanceNum % divisor;
+      
+      if (remainder === 0n) return wholePart.toString();
+      
+      const decimalPart = remainder.toString().padStart(decimals, '0');
+      return `${wholePart}.${decimalPart}`.replace(/\.?0+$/, '');
+    } catch (err) {
+      console.warn('⚠️ Erreur formatage:', err);
+      return balance.toString();
+    }
+  };
+
+  /**
+   * Navigate vers la page de détails du token
+   */
+  const handleViewToken = (token) => navigate(`/manage-token/${token.tokenId}`);
+
+  /**
+   * Callback après import de token réussi
+   */
+  const handleImportSuccess = () => window.location.reload();
+
+  /**
+   * Filtre les tokens selon le filtre actif (admin uniquement pour certains filtres)
+   * @returns {Array} Liste des tokens filtrés
+   */
+  const getFilteredTokens = () => {
+    let displayTokens = [];
+    
+    switch (activeFilter) {
+      case 'active':
+        // En circulation: offre > 0 ET JLN-Wallet uniquement
+        displayTokens = tokens.filter(t => t.isActive && !t.isDeleted && t.isFromJlnWallet);
+        break;
+        
+      case 'inactive':
+        // Inactifs: offre = 0 ET JLN-Wallet uniquement
+        displayTokens = tokens.filter(t => !t.isActive && !t.isDeleted && t.isFromJlnWallet);
+        break;
+        
+      case 'deleted':
+        // Supprimés: admin uniquement
+        if (isAdmin) {
+          displayTokens = tokens.filter(t => t.isDeleted && t.isFromJlnWallet);
+        }
+        break;
+        
+      case 'all':
+        // Tous: admin uniquement
+        if (isAdmin) {
+          const supabaseTokenIds = new Set(allJlnTokens.map(t => t.tokenId));
+          const walletOnlyTokens = tokens.filter(t => 
+            t.isFromJlnWallet && !supabaseTokenIds.has(t.tokenId)
+          );
+          displayTokens = [...allJlnTokens, ...walletOnlyTokens]
+            .filter(t => t.isFromJlnWallet);
+        }
+        break;
+        
+      default:
+        // Par défaut: tous les tokens JLN-Wallet
+        displayTokens = tokens.filter(t => t.isFromJlnWallet);
+    }
+    
+    // Trier: Actifs en premier
+    return displayTokens.sort((a, b) => {
+      if (a.isActive && !b.isActive) return -1;
+      if (!a.isActive && b.isActive) return 1;
+      return 0;
+    });
+  };
+
+  // ============================================
+  // CHARGEMENT DES DONNÉES
+  // ============================================
+
+  // Charger les tokens avec MintBaton + métadonnées enrichies
   useEffect(() => {
     const loadData = async () => {
       if (!wallet) {
@@ -54,162 +271,46 @@ const ManageTokenPage = () => {
       try {
         setLoadingTokens(true);
         
-        // Charger Mon Profil directement depuis Supabase (sans filtre de visibilité)
-        // IMPORTANT: En tant que créateur, je dois voir mon profil même si tous mes tokens sont masqués
-        if (address) {
-          try {
-            const { supabase } = await import('../services/supabaseClient');
-            const { data: myProfileData, error } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('owner_address', address)
-              .maybeSingle(); // maybeSingle() ne lance pas d'erreur si aucun résultat
-            
-            if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
-              console.error('❌ Erreur chargement ma ferme:', error);
-            } else {
-              setMyProfile(myProfileData || null);
-              console.log('🏠 Ma ferme (chargement direct):', myProfileData);
-            }
-          } catch (err) {
-            console.error('❌ Erreur chargement ma ferme:', err);
-          }
-        }
+        // Charger le profil utilisateur et les stats admin en parallèle
+        const [myProfileData, pendingCountData] = await Promise.all([
+          loadMyProfile(),
+          loadPendingCount()
+        ]);
         
-        // Si admin: charger le nombre de demandes en attente
-        if (isAdmin) {
-          try {
-            const { default: ProfilService } = await import('../services/profilService');
-            const pendingProfiles = await ProfilService.getPendingProfils();
-            setPendingCount(pendingProfiles?.length || 0);
-            console.log('🔔 Demandes en attente:', pendingProfiles?.length || 0);
-          } catch (err) {
-            console.error('❌ Erreur chargement demandes admin:', err);
-          }
-        }
+        setMyProfile(myProfileData);
+        setPendingCount(pendingCountData);
         
         // Charger le solde XEC
         const xecBalanceData = await wallet.getBalance();
         setXecBalance(xecBalanceData.balance || 0);
         
         const batons = await wallet.getMintBatons();
-        if (import.meta.env.DEV) console.log('🔑 Mint Batons chargés:', batons);
+        console.log('🔑 Mint Batons:', batons.length);
         
-        // Construire le Set des tokenIds JlnWallet AVANT tout (admin ET creator)
-        // IMPORTANT: Inclure Mon profil (myProfile) même si non visible + les profiles publiques
-        const jlnWalletTokenIds = new Set();
+        // Construire le Set des tokenIds référencés dans Supabase (JLN-Wallet)
+        const jlnWalletTokenIds = buildJlnWalletTokenIds(myProfileData, profiles);
+        console.log('📋 Tokens JLN-Wallet:', jlnWalletTokenIds.size);
+        
+        // Extraire les métadonnées des tokens depuis les profils
         const allTokensFromProfiles = [];
-        
-        // Créer une liste complète : Mon profil + profiles publiques (sans doublons)
-        const allProfilesToProcess = [];
-        if (myProfile) {
-          allProfilesToProcess.push(myProfile); // Mon profil en premier (même si tokens masqués)
-        }
-        // Ajouter les autres profiles (venant du hook useProfiles filtré pour l'annuaire)
-        profiles.forEach(profile => {
-          if (!myProfile || profile.id !== myProfile.id) { // Éviter les doublons
-            allProfilesToProcess.push(profile);
-          }
-        });
-        
-        if (import.meta.env.DEV) {
-          console.log('🔍 Analyse profiles pour extraire tokens:', allProfilesToProcess.length, 'profiles (mon profil + publiques)');
-        }
-        
-        allProfilesToProcess.forEach(profile => {
-          if (import.meta.env.DEV) {
-            console.log('🔍 Profile:', profile.name, '| tokens:', profile.tokens, '| isArray:', Array.isArray(profile.tokens));
-          }
-          if (Array.isArray(profile.tokens)) {
-            profile.tokens.forEach(tokenEntry => {
-              if (import.meta.env.DEV) {
-                console.log('  ➕ Ajout token:', tokenEntry.tokenId, '| visible:', tokenEntry.isVisible);
-              }
-              jlnWalletTokenIds.add(tokenEntry.tokenId);
-              allTokensFromProfiles.push({
-                ...tokenEntry,
-                profileName: profile.name,
-                profileVerified: profile.verified,
-                profileStatus: profile.verification_status,
-                isMyToken: myProfile && profile.id === myProfile.id // Marquer mes tokens
+        [myProfileData, ...profiles]
+          .filter(Boolean)
+          .filter((p, i, arr) => arr.findIndex(x => x?.id === p?.id) === i) // Dédupliquer
+          .forEach(profile => {
+            if (Array.isArray(profile.tokens)) {
+              profile.tokens.forEach(tokenEntry => {
+                allTokensFromProfiles.push({
+                  ...tokenEntry,
+                  profileName: profile.name,
+                  profileVerified: profile.verified,
+                  profileStatus: profile.verification_status,
+                  isMyToken: myProfileData && profile.id === myProfileData.id
+                });
               });
-            });
-          }
-        });
-        
-        console.log('📋 TokenIds JlnWallet dans Supabase:', Array.from(jlnWalletTokenIds));
-        console.log('📊 Tokens extraits des profiles:', allTokensFromProfiles.length);
-        if (myProfile) {
-          console.log('✅ Mon profil inclus:', myProfile.name, '| Mes tokens:', allTokensFromProfiles.filter(t => t.isMyToken).length);
-        }
-        
-        // Si admin: charger TOUS les tokens JlnWallet (même sans mintBaton)
-        let allProfileTokensData = [];
-        if (isAdmin) {
-          console.log('👑 Mode ADMIN activé');
-          console.log('📋 Profiles dans Supabase:', profiles.length);
-          console.log('🔑 Batons possédés:', batons.map(b => b.tokenId.substring(0, 8)));
-          
-          allProfileTokensData = await Promise.all(allTokensFromProfiles.map(async (tokenEntry) => {
-            // Vérifier si l'admin possède le baton
-            const hasBaton = batons.some(b => b.tokenId === tokenEntry.tokenId);
-            
-            // Info Blockchain
-            let info = { genesisInfo: {} };
-            try {
-              info = await wallet.getTokenInfo(tokenEntry.tokenId);
-            } catch (e) {
-              console.warn(`⚠️ Erreur info ${tokenEntry.tokenId}:`, e);
             }
-            
-            // Solde
-            let balance = '0';
-            try {
-              const balanceData = await wallet.getTokenBalance(tokenEntry.tokenId);
-              balance = balanceData.balance || '0';
-            } catch (e) {
-              console.warn(`⚠️ Erreur solde ${tokenEntry.tokenId}:`, e);
-            }
-            
-            // Supply
-            const circulatingSupply = info.genesisInfo?.circulatingSupply || '0';
-            const isActive = BigInt(circulatingSupply) > 0n;
-            
-            // Détection JlnWallet via Supabase
-            // Si le tokenId existe dans profile.tokens[], c'est un token JlnWallet
-            const isFromJlnWallet = jlnWalletTokenIds.has(tokenEntry.tokenId);
-            
-            return {
-              tokenId: tokenEntry.tokenId,
-              name: info.genesisInfo?.tokenName || tokenEntry.profileName || 'Inconnu',
-              ticker: info.genesisInfo?.tokenTicker || tokenEntry.ticker || 'UNK',
-              decimals: info.genesisInfo?.decimals || 0,
-              image: tokenEntry.image || info.genesisInfo?.url || 'data:image/svg+xml,%3Csvg xmlns=\"http://www.w3.org/2000/svg\" width=\"400\" height=\"400\"%3E%3Crect fill=\"%23ddd\" width=\"400\" height=\"400\"/%3E%3Ctext fill=\"%23999\" font-size=\"48\" x=\"50%25\" y=\"50%25\" text-anchor=\"middle\" dy=\".3em\"%3EToken%3C/text%3E%3C/svg%3E',
-              protocol: 'ALP',
-              website: '',
-              profileName: tokenEntry.profileName || null, // Nom du profil associé
-              balance: balance,
-              isReferenced: true,
-              isFromJlnWallet: isFromJlnWallet,
-              isActive: isActive,
-              verified: tokenEntry.profileVerified || false,
-              verificationStatus: tokenEntry.profileStatus || 'none',
-              hasMintBaton: hasBaton,
-              isFixed: !hasBaton
-            };
-          }));
-          
-          setAllProfileTokens(allProfileTokensData);
-          console.log(`✅ Admin: ${allProfileTokensData.length} tokens chargés`);
-          console.log('📋 Tokens admin détaillés:', allProfileTokensData.map(t => ({
-            name: t.name,
-            ticker: t.ticker,
-            balance: t.balance,
-            decimals: t.decimals,
-            hasBaton: t.hasMintBaton,
-            isJlnWallet: t.isFromJlnWallet
-          })));
-        }
+          });
+        
+        console.log('📊 Tokens des profils:', allTokensFromProfiles.length);
         
         // Enrichir chaque baton avec les métadonnées blockchain et annuaire
         const enriched = await Promise.all(batons.map(async (b) => {
@@ -296,7 +397,7 @@ const ManageTokenPage = () => {
             image: tokenDetails?.image || profileInfo?.image || info.genesisInfo?.url || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Crect fill='%23ddd' width='400' height='400'/%3E%3Ctext fill='%23999' font-size='48' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3EToken%3C/text%3E%3C/svg%3E",
             protocol: profileInfo?.protocol || "ALP",
             website: profileInfo?.website || "",
-            profileName: profileInfo?.name || null, // Nom de la ferme (différent du nom du token)
+            profileName: profileInfo?.name || null, // Nom de mon profil (différent du nom du token)
             purpose: tokenDetails?.purpose || '',
             counterpart: tokenDetails?.counterpart || '',
             isFixed: false, // Si on a le baton, c'est variable
@@ -309,7 +410,7 @@ const ManageTokenPage = () => {
             verified: profileInfo?.verified || false,
             verificationStatus: profileInfo?.verificationStatus || (profileInfo?.verified ? 'verified' : 'unverified'),
             hasMintBaton: true, // Puisqu'on itère sur les batons
-            // Ajouter isLinked et isVisible depuis tokenDetails (MA ferme)
+            // Ajouter isLinked et isVisible depuis tokenDetails (Mon profil)
             isVisible: tokenDetails?.isVisible !== false, // Par défaut true si non défini
             isLinked: tokenDetails?.isLinked !== false // Par défaut true si non défini
           };
@@ -354,10 +455,11 @@ const ManageTokenPage = () => {
             const circulatingSupply = info.genesisInfo?.circulatingSupply || '0';
             const isActive = BigInt(circulatingSupply) > 0n;
             
-            // Info annuaire
-            const profileInfo = allProfilesToProcess.find(f => f.tokenId === tokenEntry.tokenId);
+            // Info annuaire - utiliser la liste des profils (mon profil + profils publics)
+            const allProfiles = [myProfileData, ...profiles].filter(Boolean);
+            const profileInfo = allProfiles.find(f => f.tokenId === tokenEntry.tokenId);
             let tokenDetails = null;
-            for (const profile of allProfilesToProcess) {
+            for (const profile of allProfiles) {
               if (Array.isArray(profile.tokens)) {
                 const foundToken = profile.tokens.find(t => t.tokenId === tokenEntry.tokenId);
                 if (foundToken) {
@@ -391,7 +493,7 @@ const ManageTokenPage = () => {
               verificationStatus: profileInfo?.verificationStatus || (profileInfo?.verified ? 'verified' : 'none'),
               hasMintBaton: false, // Pas de baton
               isCreator: true, // Mais je suis créateur
-              // Ajouter isLinked et isVisible depuis tokenDetails (MA ferme)
+              // Ajouter isLinked et isVisible depuis tokenDetails (Mon profil)
               isVisible: tokenDetails?.isVisible !== false,
               isLinked: tokenDetails?.isLinked !== false
             });
@@ -432,9 +534,9 @@ const ManageTokenPage = () => {
     };
 
     loadData();
-  }, [wallet, profiles, isAdmin, address, setNotification]); // Dependencies: recharger si wallet/profiles/admin/address change
+  }, [wallet, profiles, isAdmin, address, setNotification]);
 
-  // Charger l'historique global
+  // Charger l'historique des actions créateur
   useEffect(() => {
     const loadGlobalHistory = async () => {
       if (!address) return;
@@ -443,165 +545,242 @@ const ManageTokenPage = () => {
       try {
         const historyData = await getGlobalHistory(address);
         setGlobalHistory(historyData);
-        console.log(`📜 Historique Créateur chargé: ${historyData.length} entrées`);
+        console.log(`📜 Historique: ${historyData.length} entrées`);
       } catch (err) {
-        console.error('❌ Erreur chargement historique créateur:', err);
+        console.error('❌ Erreur historique:', err);
       } finally {
         setLoadingHistory(false);
       }
     };
     
-    // Charger uniquement au montage (pas de polling automatique)
     loadGlobalHistory();
   }, [address]);
 
-  // Callback après import réussi pour recharger les données
-  const handleImportSuccess = () => {
-    // Recharger les profiles (cela déclenchera useEffect)
-    window.location.reload(); // Solution simple, ou implémenter un rechargement plus élégant
-  };
-
-  // Copier l'ID du jeton dans le presse-papier
-  const handleCopyTokenId = (tokenId, e) => {
-    e.stopPropagation(); // Empêcher la navigation
-    navigator.clipboard.writeText(tokenId).then(
-      () => {
-        setNotification({ 
-          type: 'success', 
-          message: 'ID du jeton copié !' 
-        });
-      },
-      (err) => {
-        console.error('❌ Échec de la copie:', err);
-        setNotification({ 
-          type: 'error', 
-          message: 'Échec de la copie' 
-        });
-      }
-    );
-  };
-
-  // Formater le solde avec décimales
-  const formatBalance = (balance, decimals = 0) => {
-    if (!balance || balance === '0') return '0';
-    try {
-      const balanceNum = typeof balance === 'string' ? BigInt(balance) : BigInt(balance.toString());
-      const divisor = BigInt(Math.pow(10, decimals));
-      const wholePart = balanceNum / divisor;
-      const remainder = balanceNum % divisor;
-      
-      if (remainder === 0n) {
-        return wholePart.toString();
-      }
-      
-      const decimalPart = remainder.toString().padStart(decimals, '0');
-      return `${wholePart}.${decimalPart}`.replace(/\.?0+$/, '');
-    } catch (err) {
-      console.warn('⚠️ Erreur formatage balance:', err);
-      return balance.toString();
-    }
-  };
-
-  // Naviguer vers la page de détails du jeton
-  const handleViewToken = (token) => {
-    navigate(`/manage-token/${token.tokenId}`);
-  };
+  // ============================================
+  // RENDU DU COMPOSANT
+  // ============================================
 
   return (
     <MobileLayout title="Gestionnaire de Jetons">
       <PageLayout hasBottomNav className="max-w-2xl">
         <Stack spacing="md">
-        {/* En-tête avec statut profile */}
-        {myProfile && (
-          <Card>
-            <CardContent style={{ padding: '16px' }}>
-              <div className="section-header">
-                <span className="section-icon">🏡</span>
-                <div className="section-header-content">
-                  <h2 className="section-title">
-                    {myProfile.name}
-                  </h2>
-                  <p className="section-subtitle">
-                    Créez, Importez & Gérez vos jetons à offre variable ou fixe.
-                  </p>
-                </div>
-              </div>
-              {myProfile.verification_status === 'verified' && (
-                <div style={{ padding: '8px 12px', backgroundColor: '#10b981', color: '#fff', borderRadius: '8px', fontSize: '0.875rem', fontWeight: '600', textAlign: 'center' }}>
-                  ✅ Profil vérifié
-                </div>
-              )}
-              {myProfile.verification_status === 'pending' && (
-                <div style={{ padding: '8px 12px', backgroundColor: '#f59e0b', color: '#fff', borderRadius: '8px', fontSize: '0.875rem', fontWeight: '600', textAlign: 'center' }}>
-                  ⏳ Validation en cours
-                </div>
-              )}
-              {myProfile.verification_status === 'none' && (
-                <div style={{ padding: '8px 12px', backgroundColor: '#6b7280', color: '#fff', borderRadius: '8px', fontSize: '0.875rem', fontWeight: '600', textAlign: 'center' }}>
-                  ⚠️ Profil non vérifié
-                </div>
-              )}
-              {myProfile.verification_status === 'rejected' && myProfile.status !== 'banned' && myProfile.status !== 'deleted' && (
-                <button
-                  onClick={() => navigate('/manage-profile')}
-                  style={{ 
-                    width: '100%',
-                    padding: '8px 12px', 
-                    backgroundColor: '#fee2e2', 
-                    color: '#991b1b', 
-                    borderRadius: '8px', 
-                    fontSize: '0.875rem', 
-                    fontWeight: '600', 
-                    textAlign: 'center', 
-                    border: '1px solid #f87171',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={(e) => e.target.style.backgroundColor = '#fecaca'}
-                  onMouseLeave={(e) => e.target.style.backgroundColor = '#fee2e2'}
-                >
-                  🚫 Refusé : {myProfile.admin_message?.substring(0, 40) || 'Voir détails'}{myProfile.admin_message?.length > 40 ? '...' : ''} - Profil masqué (Cliquez)
-                </button>
-              )}
-              {(myProfile.status === 'banned' || myProfile.status === 'deleted') && (
-                <div style={{ padding: '8px 12px', backgroundColor: '#450a0a', color: '#fff', borderRadius: '8px', fontSize: '0.875rem', fontWeight: '600', textAlign: 'center', border: '2px solid #ef4444' }}>
-                  🛑 {myProfile.status === 'banned' ? 'FERME BANNIE' : 'SUPPRESSION EN COURS'} - {myProfile.deletion_reason || myProfile.admin_message || 'Contactez l\'administrateur'}
-                </div>
-              )}
-              {myProfile.verification_status === 'info_requested' && (() => {
-                // Ne montrer le badge que si le dernier message est de l'admin
-                const history = myProfile.communication_history;
-                const hasAdminMessage = Array.isArray(history) && history.length > 0 && 
-                  history[history.length - 1].author === 'admin';
-                
-                if (!hasAdminMessage) return null;
-                
-                return (
+        {/* En-tête amélioré avec bouton profil et statuts */}
+        <Card>
+          <CardContent style={{ padding: '20px' }}>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              marginBottom: '12px'
+            }}>
+              {/* Bouton profil ou créer profil */}
+              <div style={{ flex: 1 }}>
+                {myProfile ? (
                   <button
-                    onClick={() => navigate('/manage-profile')}
-                    style={{ 
-                      width: '100%',
-                      padding: '8px 12px', 
-                      backgroundColor: '#f59e0b', 
-                      color: '#fff', 
-                      borderRadius: '8px', 
-                      fontSize: '0.875rem', 
-                      fontWeight: '600', 
-                      border: 'none',
+                    onClick={() => navigate('/manage-profile', { state: { activeTab: 'info' } })}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'flex-start',
+                      gap: '4px',
+                      padding: '12px 16px',
+                      backgroundColor: 'var(--surface-secondary, #f5f5f5)',
+                      borderRadius: '10px',
                       cursor: 'pointer',
+                      border: '1px solid var(--border-primary, #e5e7eb)',
+                      transition: 'all 0.2s',
+                      width: '100%',
+                      maxWidth: '300px'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'var(--surface-hover, #e5e7eb)';
+                      e.currentTarget.style.borderColor = 'var(--primary-color, #0074e4)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'var(--surface-secondary, #f5f5f5)';
+                      e.currentTarget.style.borderColor = 'var(--border-primary, #e5e7eb)';
+                    }}
+                  >
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '8px',
+                      width: '100%'
+                    }}>
+                      <span style={{ fontSize: '1.2rem' }}>🏡</span>
+                      <span style={{ 
+                        fontWeight: '600', 
+                        color: 'var(--text-primary)',
+                        fontSize: '1rem'
+                      }}>
+                        {myProfile.name}
+                      </span>
+                    </div>
+                    <span style={{ 
+                      fontSize: '0.75rem', 
+                      color: 'var(--text-secondary, #6b7280)',
+                      fontWeight: '500'
+                    }}>
+                      Gérer votre profil
+                    </span>
+                  </button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate('/manage-profile', { state: { activeTab: 'info' } })}
+                    style={{ 
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center',
                       gap: '8px'
                     }}
                   >
-                    🔔 Message admin - Cliquez ici
+                    <span style={{ fontSize: '1.2rem' }}>🌱</span>
+                    <span>Créer mon profil</span>
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Légende */}
+            <p style={{ 
+              fontSize: '0.875rem', 
+              color: 'var(--text-secondary, #6b7280)',
+              margin: '0 0 16px 0'
+            }}>
+              Créez, Importez & Gérez vos jetons à offre variable ou fixe.
+            </p>
+
+            {/* Étiquettes de statut */}
+            {myProfile && (
+              <div style={{ 
+                display: 'flex', 
+                flexWrap: 'wrap', 
+                gap: '8px',
+                marginTop: '12px'
+              }}>
+                {myProfile.verification_status === 'verified' && (
+                  <div style={{ 
+                    padding: '8px 16px', 
+                    backgroundColor: '#10b981', 
+                    color: '#fff', 
+                    borderRadius: '20px', 
+                    fontSize: '0.875rem', 
+                    fontWeight: '600',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}>
+                    ✅ Profil vérifié
+                  </div>
+                )}
+                {myProfile.verification_status === 'pending' && (
+                  <div style={{ 
+                    padding: '8px 16px', 
+                    backgroundColor: '#f59e0b', 
+                    color: '#fff', 
+                    borderRadius: '20px', 
+                    fontSize: '0.875rem', 
+                    fontWeight: '600',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}>
+                    ⏳ Validation en cours
+                  </div>
+                )}
+                {myProfile.verification_status === 'none' && (
+                  <>
+                    <div style={{ 
+                      padding: '8px 16px', 
+                      backgroundColor: '#6b7280', 
+                      color: '#fff', 
+                      borderRadius: '20px', 
+                      fontSize: '0.875rem', 
+                      fontWeight: '600',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}>
+                      ⚠️ Profil non vérifié
+                    </div>
+                    <button
+                      onClick={() => navigate('/manage-profile', { state: { activeTab: 'verification' } })}
+                      style={{ 
+                        padding: '8px 16px', 
+                        backgroundColor: '#10b981', 
+                        color: '#fff', 
+                        borderRadius: '20px', 
+                        fontSize: '0.875rem', 
+                        fontWeight: '600',
+                        border: 'none',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.2s',
+                        boxShadow: '0 2px 4px rgba(16, 185, 129, 0.2)'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#059669';
+                        e.currentTarget.style.transform = 'translateY(-1px)';
+                        e.currentTarget.style.boxShadow = '0 4px 8px rgba(16, 185, 129, 0.3)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#10b981';
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = '0 2px 4px rgba(16, 185, 129, 0.2)';
+                      }}
+                      title="Demander la vérification de votre établissement"
+                    >
+                      ✅ Vérifier mon profil
+                    </button>
+                  </>
+                )}
+                {myProfile.verification_status === 'rejected' && myProfile.status !== 'banned' && myProfile.status !== 'deleted' && (
+                  <button
+                    onClick={() => navigate('/manage-profile', { state: { activeTab: 'verification' } })}
+                    style={{ 
+                      padding: '8px 16px', 
+                      backgroundColor: '#fee2e2', 
+                      color: '#991b1b', 
+                      borderRadius: '20px', 
+                      fontSize: '0.875rem', 
+                      fontWeight: '600',
+                      border: '1px solid #f87171',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fecaca'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fee2e2'}
+                    title="Cliquez pour voir les détails et re-soumettre"
+                  >
+                    🚫 Refusé - Voir détails
                   </button>
-                );
-              })()}
-            </CardContent>
-          </Card>
-        )}
+                )}
+                {(myProfile.status === 'banned' || myProfile.status === 'deleted') && (
+                  <div style={{ 
+                    padding: '8px 16px', 
+                    backgroundColor: '#450a0a', 
+                    color: '#fff', 
+                    borderRadius: '20px', 
+                    fontSize: '0.875rem', 
+                    fontWeight: '600',
+                    border: '2px solid #ef4444',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}>
+                    🛑 {myProfile.status === 'banned' ? 'BANNI' : 'SUPPRESSION EN COURS'}
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Boutons d'action principaux - Grille 2 colonnes */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -641,120 +820,6 @@ const ManageTokenPage = () => {
             <span>Importer</span>
           </Button>
         </div>
-
-        {/* Actions contextuelles - Profil & Admin (affichage horizontal) */}
-        <Card>
-          <CardContent style={{ padding: '12px' }}>
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: (() => {
-                // Calculer le nombre de boutons à afficher
-                const hasVerifyButton = myProfile && myProfile.verification_status === 'none';
-                const hasManageButton = true; // Toujours affiché
-                const hasAdminButton = isAdmin;
-                
-                const count = (hasVerifyButton ? 1 : 0) + (hasManageButton ? 1 : 0) + (hasAdminButton ? 1 : 0);
-                return `repeat(${count}, 1fr)`;
-              })(),
-              gap: '8px'
-            }}>
-              {/* CTA Vérification si profil non vérifié */}
-              {myProfile && myProfile.verification_status === 'none' && (
-                <Button
-                  onClick={() => navigate('/manage-profile', { state: { activeTab: 'verification' } })}
-                  variant="primary"
-                  icon="✅"
-                  style={{ minHeight: '48px', fontSize: '0.875rem' }}
-                >
-                  Vérifier mon profil
-                </Button>
-              )}
-              
-              <Button
-                onClick={() => navigate('/manage-profile')}
-                variant="primary"
-                icon={myProfile ? "🏡" : "🌱"}
-                style={{
-                  minHeight: '48px',
-                  fontSize: '0.875rem',
-                  backgroundColor: (() => {
-                    // Orange si message admin non lu
-                    if (myProfile?.verification_status === 'info_requested') {
-                      const history = myProfile.communication_history;
-                      if (Array.isArray(history) && history.length > 0 && history[history.length - 1].author === 'admin') {
-                        return '#f97316';
-                      }
-                    }
-                    // Bleu par défaut
-                    return '#3b82f6';
-                  })(),
-                  borderColor: (() => {
-                    if (myProfile?.verification_status === 'info_requested') {
-                      const history = myProfile.communication_history;
-                      if (Array.isArray(history) && history.length > 0 && history[history.length - 1].author === 'admin') {
-                        return '#f97316';
-                      }
-                    }
-                    return '#3b82f6';
-                  })(),
-                  color: '#fff'
-                }}
-              >
-                {myProfile ? 'Gérer mon profil' : 'Créer mon profil'}
-              </Button>
-              
-              {isAdmin && (
-                <Button
-                  onClick={() => {
-                    console.log('🔘 Navigation vers /admin (AdminDashboard)');
-                    navigate('/admin');
-                  }}
-                  variant={pendingCount > 0 ? 'primary' : 'secondary'}
-                  style={{ 
-                    minHeight: '48px',
-                    fontSize: '0.875rem',
-                    backgroundColor: pendingCount > 0 ? '#ef4444' : '#6b7280', 
-                    borderColor: pendingCount > 0 ? '#ef4444' : '#6b7280', 
-                    color: '#fff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px'
-                  }}
-                >
-                  <span style={{ fontSize: '1rem' }}>🛡️</span>
-                  <span style={{ fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    Admin
-                  </span>
-                  {pendingCount > 0 && (
-                    <span style={{
-                      backgroundColor: '#fff',
-                      color: '#ef4444',
-                      padding: '2px 6px',
-                      borderRadius: '99px',
-                      fontSize: '0.75rem',
-                      fontWeight: 'bold'
-                    }}>
-                      {pendingCount}
-                    </span>
-                  )}
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Balance XEC et Valeur estimée */}
-        <NetworkFeesAvail 
-          compact={true} 
-          showActions={true} 
-          xecBalance={xecBalance}
-          fiatValue={price && typeof price.convert === 'function' 
-            ? price.convert(xecBalance, currency)?.toFixed(2) || '...'
-            : '...'
-          }
-          currency={currency}
-        />
 
         {/* État de chargement */}
         {loadingTokens ? (
@@ -893,70 +958,23 @@ const ManageTokenPage = () => {
               </>
             )}
             
-            {(() => {
-              // Logique de filtrage unifiée
-              let displayTokens = [];
+            {/* Liste des tokens filtrés */}
+            {getFilteredTokens().map((token) => {
+              const showToggles = !!myProfile && token.isFromjlnWallet === true;
               
-              if (activeFilter === 'active') {
-                // En circulation: offre > 0 ET JLN-Wallet uniquement
-                displayTokens = tokens.filter(t => t.isActive && !t.isDeleted && t.isFromJlnWallet);
-              } else if (activeFilter === 'inactive') {
-                // Inactifs: offre = 0 ET JLN-Wallet uniquement
-                displayTokens = tokens.filter(t => !t.isActive && !t.isDeleted && t.isFromJlnWallet);
-              } else if (activeFilter === 'deleted' && isAdmin) {
-                // Supprimés: tokens marqués comme supprimés (admin uniquement)
-                displayTokens = tokens.filter(t => t.isDeleted && t.isFromJlnWallet);
-              } else if (activeFilter === 'all' && isAdmin) {
-                // Tous: tous les tokens JLN-Wallet (créés ou importés)
-                const supabaseTokenIds = new Set(allJlnTokens.map(t => t.tokenId));
-                const walletOnlyJlnTokens = tokens.filter(t => 
-                  t.isFromJlnWallet && !supabaseTokenIds.has(t.tokenId)
-                );
-                
-                displayTokens = [...allJlnTokens, ...walletOnlyJlnTokens]
-                  .filter(t => t.isFromJlnWallet);
-              } else {
-                // Par défaut: afficher tous les tokens JLN-Wallet
-                displayTokens = tokens.filter(t => t.isFromJlnWallet);
-              }
-              
-              console.log('🎯 Filtrage tokens:', {
-                isAdmin,
-                activeFilter,
-                tokensCount: tokens.length,
-                allJlnTokensCount: allJlnTokens.length,
-                displayTokensCount: displayTokens?.length || 0
-              });
-
-              return (displayTokens || [])
-              .sort((a, b) => {
-                // Trier: Actifs en premier, puis par date de création (plus récent d'abord)
-                if (a.isActive && !b.isActive) return -1;
-                if (!a.isActive && b.isActive) return 1;
-                return 0;
-              })
-              .map((token) => {
-                const showToggles = !!myProfile && token.isFromjlnWallet === true;
-                console.log('🔍 Debug TokenCard:', {
-                  tokenId: token.tokenId.substring(0, 8),
-                  hasProfile: !!myProfile,
-                  isFromjlnWallet: token.isFromjlnWallet,
-                  showToggles
-                });
-                
-                return (
-                  <TokenCard
-                    key={token.tokenId}
-                    token={{
-                      ...token,
-                      balance: formatBalance(token.balance, token.decimals)
-                    }}
-                    profileId={myProfile?.id}
-                    showLinkedToggle={showToggles}
-                    showVisibleToggle={showToggles}
-                    onUpdate={async (updatedToken) => {
-                    // Recharger uniquement ma ferme depuis Supabase après mise à jour
-                    console.log('🔄 Token mis à jour, rechargement de ma ferme...', updatedToken);
+              return (
+                <TokenCard
+                  key={token.tokenId}
+                  token={{
+                    ...token,
+                    balance: formatBalance(token.balance, token.decimals)
+                  }}
+                  profileId={myProfile?.id}
+                  showLinkedToggle={showToggles}
+                  showVisibleToggle={showToggles}
+                  onUpdate={async (updatedToken) => {
+                    // Recharger le profil après mise à jour
+                    console.log('🔄 Rechargement profil après update');
                     try {
                       const { supabase } = await import('../services/supabaseClient');
                       const { data: freshProfile, error } = await supabase
@@ -989,17 +1007,27 @@ const ManageTokenPage = () => {
                         }));
                       }
                     } catch (err) {
-                      console.error('❌ Erreur rechargement ferme:', err);
+                      console.error('❌ Erreur rechargement profil:', err);
                     }
                   }}
                 />
               );
-            });
-            })()}
+            })}
           </>
         )}
-
-        {/* Section Carnet d'Adresses Global */}
+ 
+        {/* Balance XEC et Valeur estimée */}
+        <NetworkFeesAvail 
+          compact={true} 
+          showActions={true} 
+          xecBalance={xecBalance}
+          fiatValue={price && typeof price.convert === 'function' 
+            ? price.convert(xecBalance, currency)?.toFixed(2) || '...'
+            : '...'
+          }
+          currency={currency}
+        />
+        {/* Section Carnet d'Adresses */}
         {address && (
           <Card>
             <CardContent style={{ padding: '24px' }}>
@@ -1007,7 +1035,7 @@ const ManageTokenPage = () => {
                 <span className="section-icon">📇</span>
                 <div className="section-header-content">
                   <h2 className="section-title">
-                    Carnet d'Adresses Complet
+                    Carnet d'Adresses
                   </h2>
                   <p className="section-subtitle">
                     Gérez tous vos contacts eCash enregistrés.
@@ -1041,49 +1069,54 @@ const ManageTokenPage = () => {
           </Card>
         )}
 
-        {/* Section Historique Créateur */}
+        {/* Historique avec onglets: Actions créateurs + Transactions XEC */}
         {address && (
           <Card>
-            <CardContent style={{ padding: '24px' }}>
-              <div className="section-header">
-                <span className="section-icon">📜</span>
+            <CardContent style={{ padding: '20px' }}>
+              <div style={{ marginBottom: '16px' }}>
                 <div className="section-header-content">
-                  <h2 className="section-title">
-                    Historique Créateur
+                  <h2 className="section-title" style={{ fontSize: '1.125rem', marginBottom: '4px' }}>
+                    📊 Historique & Transactions
                   </h2>
-                  <p className="section-subtitle">
-                    Toutes vos actions sur les jetons gérés depuis ce portefeuille.
+                  <p className="section-subtitle" style={{ fontSize: '0.8rem' }}>
+                    Suivez vos actions créateur et transactions blockchain en temps réel.
                   </p>
                 </div>
-                <button
-                  onClick={async () => {
-                    setLoadingHistory(true);
-                    try {
-                      const historyData = await getGlobalHistory(address);
-                      setGlobalHistory(historyData);
-                      setNotification({ type: 'success', message: 'Historique actualisé !' });
-                    } catch (err) {
-                      setNotification({ type: 'error', message: 'Erreur lors de l\'actualisation' });
-                    } finally {
-                      setLoadingHistory(false);
-                    }
-                  }}
-                  disabled={loadingHistory}
-                  style={{
-                    padding: '8px 12px',
-                    backgroundColor: 'var(--bg-secondary)',
-                    border: '1px solid var(--border-primary)',
-                    borderRadius: '8px',
-                    cursor: loadingHistory ? 'not-allowed' : 'pointer',
-                    fontSize: '0.875rem',
-                    color: 'var(--text-primary)',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={(e) => !loadingHistory && (e.target.style.backgroundColor = 'var(--bg-tertiary)')}
-                  onMouseLeave={(e) => e.target.style.backgroundColor = 'var(--bg-secondary)'}
-                >
-                  🔄 {loadingHistory ? 'Chargement...' : 'Actualiser'}
-                </button>
+              </div>
+
+              {/* Onglets */}
+              <Tabs
+                tabs={[
+                  { id: 'creator', label: '🛠️ Actions Créateur' },
+                  { id: 'xec', label: '💸 Transactions XEC' }
+                ]}
+                activeTab={activeHistoryTab}
+                onChange={setActiveHistoryTab}
+              />
+
+              {/* Contenu onglet Actions Créateur */}
+              {activeHistoryTab === 'creator' && (
+                <div style={{ 
+                  backgroundColor: 'white',
+                  border: '1px solid #e5e7eb',
+                  borderTop: 'none',
+                  borderBottomLeftRadius: '12px',
+                  borderBottomRightRadius: '12px',
+                  padding: '24px'
+                }}>
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between',
+                    marginBottom: '16px'
+                  }}>
+                    <p style={{ 
+                      fontSize: '0.9rem', 
+                      color: 'var(--text-secondary)',
+                      margin: 0
+                    }}>
+                      Toutes vos actions sur les jetons gérés depuis ce portefeuille.
+                    </p>
               </div>
               
               {loadingHistory ? (
@@ -1093,34 +1126,26 @@ const ManageTokenPage = () => {
               ) : (
                 <HistoryList history={globalHistory} compact={false} />
               )}
-            </CardContent>
-          </Card>
-        )}
+                </div>
+              )}
 
-        {/* Section Dernières transactions XEC */}
-        {address && (
-          <Card>
-            <CardContent style={{ padding: '20px' }}>
-              <div 
-                onClick={() => setShowXecHistory(!showXecHistory)}
-                className="collapsible-header"
-              >
-                <span className="section-icon">💸</span>
-                <div className="section-header-content">
-                  <h2 className="section-title" style={{ fontSize: '1.125rem' }}>
-                    Dernières transactions XEC
-                  </h2>
-                  <p className="section-subtitle" style={{ fontSize: '0.8rem' }}>
+              {/* Contenu onglet Transactions XEC */}
+              {activeHistoryTab === 'xec' && (
+                <div style={{ 
+                  backgroundColor: 'white',
+                  border: '1px solid #e5e7eb',
+                  borderTop: 'none',
+                  borderBottomLeftRadius: '12px',
+                  borderBottomRightRadius: '12px',
+                  padding: '24px'
+                }}>
+                  <p style={{ 
+                    fontSize: '0.9rem', 
+                    color: 'var(--text-secondary)',
+                    marginBottom: '16px'
+                  }}>
                     Historique de vos transactions en temps réel depuis la blockchain.
                   </p>
-                </div>
-                <span className={`collapsible-arrow ${showXecHistory ? 'open' : ''}`}>
-                  ▼
-                </span>
-              </div>
-              
-              {showXecHistory && (
-                <div style={{ marginTop: '16px' }}>
                   <AddressHistory address={address} currency={currency} />
                 </div>
               )}

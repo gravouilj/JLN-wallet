@@ -8,6 +8,7 @@ import { useEcashWallet, useEcashBalance } from '../../hooks/useEcashWallet';
 import { useIsCreator } from '../../hooks/useIsCreator';
 import ThemeToggle from '../ThemeToggle';
 import LanguageToggle from '../LanguageToggle';
+import NotificationBell from '../NotificationBell';
 
 const TopBar = () => {
   const { t } = useTranslation();
@@ -99,24 +100,18 @@ const TopBar = () => {
     <div className="top-bar top-bar-solid">
       <div className="top-bar-content">
         {/* LEFT SECTION */}
-        {showFarmerLinkLeft ? (
-          <button
-            onClick={() => navigate('/farmer-info')}
-            className="farmer-text-link"
-          >
-            🌻 {t('topBar.iAmFarmer') || 'Je suis producteur'}
-          </button>
-        ) : showBackButton ? (
-          <button
-            onClick={handleBackClick}
-            className="back-button"
-            aria-label={t('common.back')}
-          >
-            ← {t('common.back')}
-          </button>
-        ) : (
-          <div className="top-bar-left-spacer"></div>
-        )}
+        <div className="top-bar-spacer">
+          {showBackButton && (
+            <button
+              onClick={handleBackClick}
+              className="back-button"
+              title={t('common.back') || 'Retour'}
+              aria-label={t('common.back') || 'Retour'}
+            >
+              ←
+            </button>
+          )}
+        </div>
 
         {/* CENTER SECTION - App Name */}
         <h1 className="page-title">{appName}</h1>
@@ -143,7 +138,10 @@ const TopBar = () => {
           >
             ❓
           </button>
+          {/* NotificationBell - Visible pour tout le monde (admin, créateur, client) */}
+          {walletConnected && <NotificationBell compact={true} />}
           
+          {/* 
           {/* Auth button - ALWAYS visible with primary background */}
           <button
             onClick={walletConnected ? handleLogoutClick : handleLogin}

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Card, CardContent, Button } from '../UI';
-import OnboardingModal from '../OnboardingModal';
-import BlockchainStatus from '../BlockchainStatus';
+import OnboardingModal from '../eCash/OnboardingModal';
+import BlockchainStatus from '../eCash/BlockchainStatus';
 import TopBar from './TopBar';
 
 const DisconnectedView = () => {

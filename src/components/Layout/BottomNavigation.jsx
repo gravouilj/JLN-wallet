@@ -9,23 +9,17 @@ const BottomNavigation = () => {
   const currentPath = location.pathname;
 
   const navItems = [
-    { 
-      path: '/', 
-      icon: '🧑‍🌾',
-      label: t('navigation.directory'), 
-      ariaLabel: t('navigation.directory') + ' page' 
-    },
-    { 
+      { 
       path: '/wallet', 
       icon: '🤝',
       label: t('navigation.wallet'), 
       ariaLabel: t('navigation.wallet') + ' page' 
     },
     { 
-      path: '/favorites', 
-      icon: '⭐',
-      label: t('navigation.favorites'), 
-      ariaLabel: t('navigation.favorites') + ' farms' 
+      path: '/', 
+      icon: '🧑‍🌾',
+      label: t('navigation.directory'), 
+      ariaLabel: t('navigation.directory') + ' page' 
     },
     { 
       path: '/settings', 

@@ -2,11 +2,12 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAtom, useSetAtom } from 'jotai';
 import MobileLayout from '../components/Layout/MobileLayout';
-import BlockchainStatus from '../components/BlockchainStatus';
-import HistoryList from '../components/HistoryList';
-import NetworkFeesAvail from '../components/NetworkFeesAvail';
+import BlockchainStatus from '../components/eCash/BlockchainStatus';
+import HistoryList from '../components/eCash/TokenActions/HistoryList';
+import NetworkFeesAvail from '../components/eCash/NetworkFeesAvail';
 import NotificationBell from '../components/NotificationBell';
 import { Card, CardContent, Button, PageLayout, Badge, Tabs, BalanceCard, Stack, Input, Modal, Switch, VisibilityToggle } from '../components/UI';
+import Faq from '../components/Faq';
 import { useEcashWallet } from '../hooks/useEcashWallet';
 import { useProfiles } from '../hooks/useProfiles';
 import { useXecPrice } from '../hooks/useXecPrice';
@@ -16,11 +17,11 @@ import { profilService } from '../services/profilService';
 import { addEntry, getHistoryByToken, ACTION_TYPES } from '../services/historyService';
 
 // Import des composants d'actions
-import Send from '../components/TokenPage/TokenActions/Send';
-import Airdrop from '../components/TokenPage/TokenActions/Airdrop';
-import Mint from '../components/TokenPage/TokenActions/Mint';
-import Burn from '../components/TokenPage/TokenActions/Burn';
-import Message from '../components/TokenPage/TokenActions/Message';
+import Send from '../components/eCash/TokenActions/Send';
+import Airdrop from '../components/eCash/TokenActions/Airdrop';
+import Mint from '../components/eCash/TokenActions/Mint';
+import Burn from '../components/eCash/TokenActions/Burn';
+import Message from '../components/eCash/TokenActions/Message';
 import ClientTicketForm from '../components/Client/ClientTicketForm';
 
 // Import des composants TokenPage
@@ -92,6 +93,9 @@ const TokenPage = () => {
   
   // États pour contacter le créateur
   const [showContactForm, setShowContactForm] = useState(false);
+  
+  // État pour la FAQ créateur
+  const [showCreatorFaq, setShowCreatorFaq] = useState(false);
   
   
   // Hooks pour le prix et la devise
@@ -178,7 +182,7 @@ const TokenPage = () => {
             (p.tokenId === tokenId || (Array.isArray(p.tokens) && p.tokens.some(t => t.tokenId === tokenId)))
           );
         } 
-        // Règle B (Fixe/Importé): Propriétaire de la ferme qui contient le token
+        // Règle B (Fixe/Importé): Propriétaire de mon profil qui contient le token
         else {
           // Chercher MON profile qui contient ce token
           myProfile = profiles.find(p => 
@@ -718,6 +722,42 @@ const TokenPage = () => {
                     </Button>
                   )}
                 </div>
+                
+                {/* COLONNE DROITE - Solde du jeton */}
+                <div style={{
+                  textAlign: 'right',
+                  padding: '12px 16px',
+                  backgroundColor: 'var(--bg-secondary, #f5f5f5)',
+                  borderRadius: '12px',
+                  border: '1px solid var(--border-color, #e5e7eb)'
+                }}>
+                  <div style={{
+                    fontSize: '0.75rem',
+                    color: 'var(--text-secondary, #6b7280)',
+                    fontWeight: '600',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    marginBottom: '4px'
+                  }}>
+                    Mon solde
+                  </div>
+                  <div style={{
+                    fontSize: '1.5rem',
+                    fontWeight: '700',
+                    color: 'var(--primary-color, #0074e4)',
+                    fontFamily: 'monospace'
+                  }}>
+                    {formatAmount(myBalance, decimals)}
+                  </div>
+                  <div style={{
+                    fontSize: '0.85rem',
+                    color: 'var(--text-secondary, #6b7280)',
+                    fontWeight: '600',
+                    marginTop: '2px'
+                  }}>
+                    {ticker}
+                  </div>
+                </div>
               </div>
 
               <div className="flex items-center gap-4 mb-4" style={{ marginTop: '1.5rem' }}>
@@ -781,126 +821,109 @@ const TokenPage = () => {
               </div>
             </div>
 
-            {/* Token ID Compact */}
-            <div style={{ marginTop: '1rem' }}>
-              <TokenIDCompact tokenId={tokenId} onCopy={handleCopyTokenId} />
-            </div>
-           
-            {/* OBJECTIF ET CONTREPARTIE DU JETON (GRID 2 COLONNES) */}
-            {isCreator && profileInfo && (
-              <div style={{ marginTop: '1.5rem' }}>
-                <ObjectivesCounterparts
-                  tokenDetails={tokenDetails}
-                  editingPurpose={editingPurpose}
-                  editingCounterpart={editingCounterpart}
-                  editPurpose={editPurpose}
-                  editCounterpart={editCounterpart}
-                  savingPurpose={savingPurpose}
-                  savingCounterpart={savingCounterpart}
-                  setEditingPurpose={setEditingPurpose}
-                  setEditingCounterpart={setEditingCounterpart}
-                  setEditPurpose={setEditPurpose}
-                  setEditCounterpart={setEditCounterpart}
-                  handleSavePurpose={handleSavePurpose}
-                  handleSaveCounterpart={handleSaveCounterpart}
-                  maxLength={500}
-                  purposeSuggestions={[
-                    '💳 Paiements',
-                    '🎁 Récompenses',
-                    '🗳️ Gouvernance',
-                    '🎯 Fidélité',
-                    '🎮 Gaming',
-                    '🖼️ NFT / Collection',
-                    '🔒 Utilitaire'
-                  ]}
-                  counterpartSuggestions={[
-                    '🎁 Réductions / Offres',
-                    '🛍️ Produits / Services',
-                    '📚 Accès exclusif',
-                    '🎯 Points de fidélité',
-                    '🎪 Événements',
-                    '🏆 Avantages VIP',
-                    '💰 Cashback'
-                  ]}
-                />
-              </div>
-            )}
-         
-            {/* FAQ CREATEUR */}
-              <div className="d-flex gap-2 mt-4">
-                  <Button
+            {/* Token ID Compact - Amélioré */}
+            <TokenIDCompact tokenId={tokenId} onCopy={handleCopyTokenId} />
+            
+            {/* FAQ CREATEUR - Toggle avec Faq.jsx */}
+            {isCreator && (
+              <div style={{ marginTop: '16px' }}>
+                <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => window.open('https://docs.e.cash/tokens', '_blank')}
-                  className="flex-1"
+                  onClick={() => setShowCreatorFaq(!showCreatorFaq)}
+                  fullWidth
+                  style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    gap: '8px' 
+                  }}
                 >
-                  📖 FAQ Créateurs
+                  📖 {showCreatorFaq ? 'Masquer' : 'Afficher'} la FAQ Créateur
                 </Button>
+                
+                {showCreatorFaq && (
+                  <div style={{ 
+                    marginTop: '16px',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                    gap: '16px'
+                  }}>
+                    {/* Colonne 1: Fonctions créateur */}
+                    <div>
+                      <h4 style={{ 
+                        fontSize: '0.95rem', 
+                        fontWeight: '600', 
+                        color: 'var(--text-primary)', 
+                        marginBottom: '12px' 
+                      }}>
+                        🛠️ Fonctions Créateur
+                      </h4>
+                      <Faq 
+                        items={[
+                          {
+                            question: "Comment émettre des jetons ?",
+                            answer: "Si votre jeton a une offre variable (mint baton), utilisez l'onglet 'Émettre' pour créer de nouveaux jetons. Entrez la quantité souhaitée et confirmez la transaction."
+                          },
+                          {
+                            question: "Comment détruire des jetons ?",
+                            answer: "Allez dans l'onglet 'Détruire' pour brûler définitivement des jetons. Cette action est irréversible. Si vous brûlez tous vos jetons avec le mint baton, vous ne pourrez plus en créer."
+                          },
+                          {
+                            question: "Comment distribuer des XEC (Airdrop) ?",
+                            answer: "Utilisez l'onglet 'Distribuer' pour envoyer des XEC à tous les détenteurs. Vous pouvez choisir une distribution égalitaire ou proportionnelle au nombre de jetons détenus."
+                          },
+                          {
+                            question: "Comment envoyer un message on-chain ?",
+                            answer: "L'onglet 'Message' permet d'enregistrer un message permanent dans la blockchain. Vous pouvez le crypter avec un mot de passe (220 caractères max)."
+                          }
+                        ]}
+                        defaultOpenIndex={null}
+                        allowMultiple={false}
+                      />
+                    </div>
+                    
+                    {/* Colonne 2: Options et paramétrages */}
+                    <div>
+                      <h4 style={{ 
+                        fontSize: '0.95rem', 
+                        fontWeight: '600', 
+                        color: 'var(--text-primary)', 
+                        marginBottom: '12px' 
+                      }}>
+                        ⚙️ Options & Paramétrages
+                      </h4>
+                      <Faq 
+                        items={[
+                          {
+                            question: "Qu'est-ce que l'objectif et la contrepartie ?",
+                            answer: "L'objectif décrit l'usage du jeton (ex: fidélité, cashback). La contrepartie définit sa valeur (ex: 1 jeton = 1€, réduction de 10%). Ces infos aident les utilisateurs à comprendre votre token."
+                          },
+                          {
+                            question: "Comment gérer la visibilité du jeton ?",
+                            answer: "Le switch 'Visible dans l'annuaire' contrôle si votre jeton apparaît dans la liste publique. Désactivez-le pour un token privé ou en test."
+                          },
+                          {
+                            question: "À quoi sert le carnet d'adresses ?",
+                            answer: "Enregistrez les adresses fréquentes de vos clients/partenaires pour faciliter les envois. Chaque jeton a son propre carnet d'adresses."
+                          },
+                          {
+                            question: "Comment gérer les frais réseau ?",
+                            answer: "Les frais sont de 546 satoshis minimum (dust limit eCash). Les frais accumulés dans 'Frais Réseau Disponibles' peuvent être retirés vers votre wallet XEC."
+                          }
+                        ]}
+                        defaultOpenIndex={null}
+                        allowMultiple={false}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
+            )}
+          </CardContent>
+        </Card>
 
-            </CardContent>
-          </Card>
-
-          {/* Statistiques du token */}
-          <Statistics
-            genesisInfo={genesisInfo}
-            myBalance={myBalance}
-            decimals={decimals}
-            tokenInfo={tokenInfo}
-            holdersCount={holdersCount}
-            loadingHolders={loadingHolders}
-            formatAmount={formatAmount}
-            formatDate={formatDate}
-            compact={false}
-          />
-
-          {/* Switch 🔗 isLinked et  👁️ isVisible */}
-          {isCreator && profileInfo && (
-            <Card>
-              <CardContent style={{ padding: '1rem' }}>
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
-                  gap: '1rem',
-                  alignItems: 'center'
-                }}>
-                  {/* Switch Visible dans l'annuaire */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    <label style={{ 
-                      fontSize: '0.9rem', 
-                      fontWeight: '600',
-                      color: 'var(--text-primary)'
-                    }}>
-                      👁️ Visible dans l'annuaire
-                    </label>
-                    <TokenVisible
-                      tokenId={tokenId}
-                      isVisible={tokenDetails?.isVisible ?? true}
-                      disabled={togglingVisibility}
-                    />
-                  </div>
-
-                  {/* Switch Lié au profil */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    <label style={{ 
-                      fontSize: '0.9rem', 
-                      fontWeight: '600',
-                      color: 'var(--text-primary)'
-                    }}>
-                      🔗 Lié au profil
-                    </label>
-                    <TokenLinked
-                      tokenId={tokenId}
-                      isLinked={tokenDetails?.isLinked ?? false}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-  
-
-{/* ACTIONS UTILISATEUR */}
+          {/* ACTIONS UTILISATEUR */}
           <Tabs
             tabs={[
               { id: 'send', label: '📤 Envoyer' },
@@ -1040,6 +1063,73 @@ const TokenPage = () => {
               </CardContent>
             </Card>
           )}
+
+          {/* OBJECTIF ET CONTREPARTIE DU JETON (GRID 2 COLONNES) */}
+          {isCreator && profileInfo && (
+            <ObjectivesCounterparts
+              isCreator={isCreator}
+              profileInfo={profileInfo}
+              tokenDetails={tokenDetails}
+              editingPurpose={editingPurpose}
+              editingCounterpart={editingCounterpart}
+              editPurpose={editPurpose}
+              editCounterpart={editCounterpart}
+              savingPurpose={savingPurpose}
+              savingCounterpart={savingCounterpart}
+              setEditingPurpose={setEditingPurpose}
+              setEditingCounterpart={setEditingCounterpart}
+              setEditPurpose={setEditPurpose}
+              setEditCounterpart={setEditCounterpart}
+              handleSavePurpose={handleSavePurpose}
+              handleSaveCounterpart={handleSaveCounterpart}
+            />
+          )}
+
+          {/* Switch 🔗 isLinked et  👁️ isVisible */}
+          {isCreator && profileInfo && (
+            <Card>
+              <CardContent style={{ padding: '1rem' }}>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '1rem',
+                  alignItems: 'center'
+                }}>
+                  {/* Switch Visible dans l'annuaire */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          
+                    <TokenVisible
+                      tokenId={tokenId}
+                      isVisible={tokenDetails?.isVisible ?? true}
+                      disabled={togglingVisibility}
+                    />
+                  </div>
+
+                  {/* Switch Lié au profil */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+ 
+                   <TokenLinked
+                      tokenId={tokenId}
+                      isLinked={tokenDetails?.isLinked ?? false}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+  
+          {/* Statistiques du token */}
+          <Statistics
+            genesisInfo={genesisInfo}
+            myBalance={myBalance}
+            decimals={decimals}
+            tokenInfo={tokenInfo}
+            holdersCount={holdersCount}
+            loadingHolders={loadingHolders}
+            formatAmount={formatAmount}
+            formatDate={formatDate}
+            compact={true}
+          />
 
           {/* Footer */}
           <BlockchainStatus />

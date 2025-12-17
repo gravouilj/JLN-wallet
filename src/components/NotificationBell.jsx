@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAtom } from 'jotai';
-import { notificationAtom } from '../atoms';
+import { notificationAtom, selectedProfileAtom } from '../atoms';
 import { supabase } from '../services/supabaseClient';
 import { useEcashWallet } from '../hooks/useEcashWallet';
 
@@ -23,11 +23,13 @@ const NotificationBell = ({ compact = false }) => {
   const navigate = useNavigate();
   const { address } = useEcashWallet();
   const [, setNotification] = useAtom(notificationAtom);
+  const [selectedProfile] = useAtom(selectedProfileAtom);
   
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isCreator, setIsCreator] = useState(false);
 
   // Charger les notifications
   const loadNotifications = async () => {
@@ -45,11 +47,13 @@ const NotificationBell = ({ compact = false }) => {
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('id')
-        .eq('wallet_address', address)
+        .eq('owner_address', address)
         .single();
-
+      
       if (profileError && profileError.code !== 'PGRST116') throw profileError;
       const profilId = profileData?.id;
+      const hasProfile = !!profilId;
+      setIsCreator(hasProfile);
       
       // 1. Charger les tickets non lus pour ce créateur
       // Inclure : tickets créateur→admin (sans token_id) et signalements de profil
@@ -78,6 +82,30 @@ const NotificationBell = ({ compact = false }) => {
         .limit(5);
 
       if (farmsError) throw farmsError;
+
+      // 3. Charger les transactions récentes depuis activity_history (7 derniers jours)
+      let activityData = null;
+      if (profilId) {
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+        try {
+          const { data, error: activityError } = await supabase
+            .from('activity_history')
+            .select('id, action_type, amount, token_ticker, created_at, details, token_id')
+            .eq('farm_id', profilId)
+            .gte('created_at', sevenDaysAgo.toISOString())
+            .order('created_at', { ascending: false })
+            .limit(10);
+
+          if (!activityError) {
+            activityData = data;
+          }
+        } catch (err) {
+          // Table peut ne pas exister, on continue
+          console.warn('⚠️ activity_history non disponible:', err);
+        }
+      }
 
       // Construire la liste des notifications
       const allNotifications = [];
@@ -118,6 +146,31 @@ const NotificationBell = ({ compact = false }) => {
         });
       }
 
+      // Ajouter les transactions récentes
+      if (activityData) {
+        activityData.forEach(activity => {
+          const actionIcons = {
+            SEND: '📤',
+            AIRDROP: '🎁',
+            MINT: '🏭',
+            BURN: '🔥',
+            CREATE: '🔨',
+            IMPORT: '📥'
+          };
+          const icon = actionIcons[activity.action_type] || '📋';
+          
+          allNotifications.push({
+            id: `activity-${activity.id}`,
+            type: 'transaction',
+            title: `${icon} ${activity.action_type} - ${activity.token_ticker}`,
+            subtitle: `Montant: ${activity.amount}`,
+            timestamp: new Date(activity.created_at),
+            data: activity,
+            isRead: false
+          });
+        });
+      }
+
       // Trier par date décroissante
       allNotifications.sort((a, b) => b.timestamp - a.timestamp);
 
@@ -135,7 +188,7 @@ const NotificationBell = ({ compact = false }) => {
     loadNotifications();
     const interval = setInterval(loadNotifications, 30000);
     return () => clearInterval(interval);
-  }, [address]);
+  }, [address]); // IMPORTANT: Recharger quand l'adresse change
 
   // Marquer une notification comme lue
   const markAsRead = async (notif) => {
@@ -153,9 +206,14 @@ const NotificationBell = ({ compact = false }) => {
       
       // Naviguer vers la page appropriée
       if (notif.type === 'ticket') {
-        navigate('/admin'); // Vers le système de tickets
+        navigate('/support', { state: { ticketId: notif.data.id } });
       } else if (notif.type === 'verification') {
-        navigate('/manage-farm'); // Vers la gestion du profil
+        navigate('/manage-profile', { state: { activeTab: 'verification' } });
+      } else if (notif.type === 'transaction') {
+        // Naviguer vers la page du token ou l'historique
+        if (notif.data.token_id) {
+          navigate(`/token/${notif.data.token_id}`);
+        }
       }
       
       setIsOpen(false);
@@ -221,8 +279,8 @@ const NotificationBell = ({ compact = false }) => {
       case 'ticket':
         return '🎫';
       case 'verification':
-        return '✅';
-      case 'airdrop':
+        return '✅';      case 'transaction':
+        return '💸';      case 'airdrop':
         return '🎁';
       case 'admin':
         return '📢';
@@ -347,6 +405,51 @@ const NotificationBell = ({ compact = false }) => {
                   </button>
                 )}
               </div>
+
+              {/* Lien vers Support (créateurs uniquement) */}
+              {isCreator && (
+                <div
+                  style={{
+                    padding: '12px 16px',
+                    backgroundColor: 'var(--info-light)',
+                    borderBottom: '1px solid var(--border-info)'
+                  }}
+                >
+                  <button
+                    onClick={() => {
+                      navigate('/support');
+                      setIsOpen(false);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      backgroundColor: 'var(--accent-primary)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontSize: '0.875rem',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      transition: 'transform 0.2s, opacity 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.opacity = '0.9';
+                      e.target.style.transform = 'scale(1.02)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.opacity = '1';
+                      e.target.style.transform = 'scale(1)';
+                    }}
+                  >
+                    <span style={{ fontSize: '1.1rem' }}>💬</span>
+                    <span>Accéder au Support</span>
+                  </button>
+                </div>
+              )}
 
               {/* Liste des notifications */}
               <div
@@ -560,6 +663,51 @@ const NotificationBell = ({ compact = false }) => {
                 </button>
               )}
             </div>
+
+            {/* Lien vers Support (créateurs uniquement) */}
+            {isCreator && (
+              <div
+                style={{
+                  padding: '12px 16px',
+                  backgroundColor: 'var(--info-light)',
+                  borderBottom: '1px solid var(--border-info)'
+                }}
+              >
+                <button
+                  onClick={() => {
+                    navigate('/support');
+                    setIsOpen(false);
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    backgroundColor: 'var(--accent-primary)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '0.875rem',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    transition: 'transform 0.2s, opacity 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.opacity = '0.9';
+                    e.target.style.transform = 'scale(1.02)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.opacity = '1';
+                    e.target.style.transform = 'scale(1)';
+                  }}
+                >
+                  <span style={{ fontSize: '1.1rem' }}>💬</span>
+                  <span>Accéder au Support</span>
+                </button>
+              </div>
+            )}
 
             <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
               {loading ? (

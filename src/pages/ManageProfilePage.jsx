@@ -7,16 +7,15 @@ import { useEcashWallet } from '../hooks/useEcashWallet';
 import { useProfiles } from '../hooks/useProfiles';
 import { notificationAtom } from '../atoms';
 import { ProfilService } from '../services/profilService';
-import { CommunicationSection, ReportsSection } from '../components/Communication';
-import InfosTab from '../components/Creators/InfosTab';
-import LocationTab from '../components/Creators/LocationTab';
-import ContactTab from '../components/Creators/ContactTab';
-import VerificationTab from '../components/Creators/VerificationTab';
-import CertificationsTab from '../components/Creators/CertificationsTab';
-import TokensListTab from '../components/Creators/TokensListTab';
-import SecurityTab from '../components/Creators/SecurityTab';
-import SupportTab from '../components/Creators/SupportTab';
-// CreatorTicketForm maintenant utilisé inline dans SupportTab
+import { supabase } from '../services/supabaseClient';
+import { CommunicationSection, ReportsSection } from '../components/Admin';
+import InfosTab from '../components/Creators/ManageProfile/InfosTab';
+import LocationTab from '../components/Creators/ManageProfile/LocationTab';
+import ContactTab from '../components/Creators/ManageProfile/ContactTab';
+import VerificationTab from '../components/Creators/ManageProfile/VerificationTab';
+import CertificationsTab from '../components/Creators/ManageProfile/CertificationsTab';
+import TokensListTab from '../components/Creators/ManageProfile/TokensListTab';
+import SecurityTab from '../components/Creators/ManageProfile/SecurityTab';
 
 const ManageProfilePage = () => {
   const { tokenId } = useParams();
@@ -73,7 +72,24 @@ const ManageProfilePage = () => {
   const [expandedDescriptions, setExpandedDescriptions] = useState({});
   
   // Onglets - Initialiser depuis la navigation si disponible
-  const [activeTab, setActiveTab] = useState(location.state?.activeTab || 'profile');
+  // Mapper les anciens noms d'onglets pour compatibilité
+  const getInitialTab = () => {
+    const stateTab = location.state?.activeTab;
+    if (!stateTab) return 'profile';
+    
+    // Mapping pour compatibilité
+    const tabMapping = {
+      'info': 'profile',
+      'verification': 'verification',
+      'tokens': 'tokens',
+      'security': 'security',
+      'support': 'security', // Rediriger support vers security
+    };
+    
+    return tabMapping[stateTab] || 'profile';
+  };
+  
+  const [activeTab, setActiveTab] = useState(getInitialTab());
   
   // States pour Onglet Support
   // (formulaire affiché inline dans SupportTab)
@@ -563,9 +579,16 @@ const ManageProfilePage = () => {
     
     try {
       setLoadingReports(true);
-      // En tant que créateur, ne charger que les signalements visibles
-      const reports = await ProfilService.getMyProfileReports(profileId, 'creator');
-      setProfileReports(reports || []);
+      // Charger les signalements directement depuis Supabase
+      const { data, error } = await supabase
+        .from('profile_reports')
+        .select('*')
+        .eq('profile_id', profileId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setProfileReports(data || []);
     } catch (err) {
       console.error('❌ Erreur chargement signalements:', err);
     } finally {
@@ -1104,9 +1127,9 @@ const ManageProfilePage = () => {
                   <Tabs
                     tabs={[
                       { id: 'profile', label: '🏡 Profil' },
+                      { id: 'verification', label: '✅ Vérification' },
                       { id: 'tokens', label: '🪙 Mes Jetons' },
                       { id: 'security', label: '🔒 Sécurité' },
-                      { id: 'support', label: '💬 Support' },
                     ]}
                     activeTab={activeTab}
                     onChange={setActiveTab}
@@ -1160,33 +1183,6 @@ const ManageProfilePage = () => {
                       openLink={openLink}
                       getSocialIcon={getSocialIcon}
                     />
-                    <VerificationTab
-                      formData={formData}
-                      handleChange={handleChange}
-                      existingProfile={existingProfile}
-                      sensitiveFieldsChanged={sensitiveFieldsChanged}
-                      privacy={privacy}
-                      handlePrivacyChange={handlePrivacyChange}
-                      handleUrlBlur={handleUrlBlur}
-                      openLink={openLink}
-                      onRequestVerification={async (e) => {
-                        e?.preventDefault();
-                        // Vérifier d'abord les champs sensibles
-                        const sensitiveChanges = checkSensitiveFields(true);
-                        if (sensitiveChanges.length > 0) {
-                          // Afficher modal d'avertissement
-                          setPendingSaveAction({ 
-                            event: e, 
-                            requestVerification: true,
-                            sensitiveChanges 
-                          });
-                          setShowWarningModal(true);
-                        } else {
-                          // Sauvegarder directement avec demande de vérification
-                          await performSave(e, true);
-                        }
-                      }}
-                    />
                   </Stack>
                 </div>
               )}
@@ -1217,7 +1213,38 @@ const ManageProfilePage = () => {
                 </Card>
               )}
 
-              {/* ONGLET 2: MES JETONS LIÉS */}
+              {/* ONGLET 2: VÉRIFICATION - Onglet principal dédié */}
+              {activeTab === 'verification' && (
+                <VerificationTab
+                  formData={formData}
+                  handleChange={handleChange}
+                  existingProfiles={existingProfile}
+                  sensitiveFieldsChanged={sensitiveFieldsChanged}
+                  privacy={privacy}
+                  handlePrivacyChange={handlePrivacyChange}
+                  handleUrlBlur={handleUrlBlur}
+                  openLink={openLink}
+                  onRequestVerification={async (e) => {
+                    if (e) e.preventDefault();
+                    
+                    const sensitiveChanges = checkSensitiveFieldsChanged();
+                    if (sensitiveChanges.length > 0 && existingProfile?.verified) {
+                      // Avertir l'utilisateur que la vérification sera perdue
+                      setPendingSaveAction({ 
+                        event: e, 
+                        requestVerification: true,
+                        sensitiveChanges 
+                      });
+                      setShowWarningModal(true);
+                    } else {
+                      // Sauvegarder directement avec demande de vérification
+                      await performSave(e, true);
+                    }
+                  }}
+                />
+              )}
+
+              {/* ONGLET 3: MES JETONS LIÉS */}
               {activeTab === 'tokens' && (
                 <TokensListTab
                   tokensWithStats={tokensWithStats}
@@ -1227,7 +1254,7 @@ const ManageProfilePage = () => {
                 />
               )}
 
-              {/* ONGLET 3: SÉCURITÉ & CONFIDENTIALITÉ */}
+              {/* ONGLET 4: SÉCURITÉ & CONFIDENTIALITÉ */}
               {activeTab === 'security' && (
                 <SecurityTab
                   existingProfile={existingProfile}
@@ -1270,16 +1297,6 @@ const ManageProfilePage = () => {
                     }
                   }}
                   onDeleteProfile={() => setShowDeleteModal(true)}
-                />
-              )}
-
-              {/* ONGLET 4: SUPPORT & COMMUNICATION */}
-              {activeTab === 'support' && (
-                <SupportTab
-                  profilId={existingProfile?.id}
-                  existingProfiles={existingProfile}
-                  onCreateTicket={() => setShowNewTicketModal(true)}
-                  setNotification={setNotification}
                 />
               )}
 

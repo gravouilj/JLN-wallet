@@ -15,6 +15,7 @@ import CreateTokenPage from './pages/CreateTokenPage';
 import CompleteTokenImportPage from './pages/CompleteTokenImportPage';
 import ManageTokenPage from './pages/ManageTokenPage';
 import ManageProfilePage from './pages/ManageProfilePage';
+import SupportPage from './pages/SupportPage';
 import AdminVerificationPage from './pages/AdminVerificationPage';
 import AdminDashboard from './pages/AdminDashboard';
 import TokenPage from './pages/TokenPage';
@@ -22,11 +23,12 @@ import RequestListingPage from './pages/VerificationRequestPage';
 
 // Layout & Components
 import ProtectedRoute from './components/ProtectedRoute';
-import AdminGateRoute from './components/AdminGateRoute';
+import AdminGateRoute from './components/Admin/AdminGateRoute';
 import ThemeProvider from './components/ThemeProvider';
 import Notification from './components/Notification';
 import LoadingScreen from './components/LoadingScreen';
 import ErrorBoundary from './components/ErrorBoundary';
+import FloatingAdminButton from './components/Admin/FloatingAdminButton';
 
 // Hooks
 import { useEcashWallet } from './hooks/useEcashWallet';
@@ -79,6 +81,7 @@ function App() {
         <ErrorBoundary>
           <div className="app-container">
             <Notification />
+            <FloatingAdminButton />
             <Routes>
               {/* ========================================
                   ROUTES PUBLIQUES (Sans wallet requis)
@@ -219,6 +222,19 @@ function App() {
                   </ProtectedRoute>
                 } 
               />
+              
+              {/* Page de support pour les créateurs */}
+              <Route 
+                path="/support" 
+                element={
+                  <ProtectedRoute requireProfile={false}>
+                    <ErrorBoundary>
+                      <SupportPage />
+                    </ErrorBoundary>
+                  </ProtectedRoute>
+                } 
+              />
+              
               {/* Page d'administration - Vérification des profils */}
               <Route 
                 path="/admin/verification" 

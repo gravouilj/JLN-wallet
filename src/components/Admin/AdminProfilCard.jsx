@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, Badge, StatusBadge, Button } from '../UI';
-import { AdminChatSection } from '../Communication';
+import { AdminChatSection } from '.';
 
 /**
  * AdminProfilCard - Carte de profil de ferme pour l'administration

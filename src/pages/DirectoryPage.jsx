@@ -5,13 +5,15 @@ import { selectedProfileAtom, favoriteProfilesAtom, toggleProfileFavoriteAtom, w
 import { useProfiles } from '../hooks';
 import { useTranslation } from '../hooks/useTranslation';
 import { useEcashWallet, useEcashToken } from '../hooks/useEcashWallet';
+import { useAdmin } from '../hooks/useAdmin';
 import TopBar from '../components/Layout/TopBar';
 import BottomNavigation from '../components/Layout/BottomNavigation';
-import OnboardingModal from '../components/OnboardingModal';
+import OnboardingModal from '../components/eCash/OnboardingModal';
 import SearchFilters from '../components/SearchFilters';
-import { CreatorProfileCard, CreatorProfileModal } from '../components/CreatorProfile';
+import { CreatorProfileCard, CreatorProfileModal } from '../components/Creators/CreatorProfile';
 import { Button } from '../components/UI';
-import { CTACard, useCTAInjection } from '../components/CTA';
+import { CTACard, useCTAInjection } from '../components/Admin/CTA';
+import FloatingAdminButton from '../components/Admin/FloatingAdminButton';
 
 /**
  * Directory Page - Creator selection interface
@@ -21,6 +23,7 @@ const DirectoryPage = () => {
   const { t } = useTranslation();
   const { profiles, loading, error } = useProfiles();
   const { wallet } = useEcashWallet();
+  const { isAdmin } = useAdmin();
   const [, setSelectedProfile] = useAtom(selectedProfileAtom);
   const [favoriteProfileIds] = useAtom(favoriteProfilesAtom);
   const [, toggleFavorite] = useAtom(toggleProfileFavoriteAtom);
@@ -144,7 +147,7 @@ const DirectoryPage = () => {
   // Vérifier si l'utilisateur est créateur de profil
   const userProfiles = useMemo(() => {
     if (!walletConnected || !wallet?.address) return [];
-    return profiles.filter(profile => profile.wallet_address === wallet.address);
+    return profiles.filter(profile => profile.owner_address === wallet.address);
   }, [profiles, walletConnected, wallet]);
 
   const isCreator = userProfiles.length > 0;
@@ -550,6 +553,9 @@ const DirectoryPage = () => {
         onClose={() => setIsWalletModalOpen(false)}
         onConnected={() => setIsWalletModalOpen(false)}
       />
+      
+      {/* Floating Admin Button - Only visible for admins */}
+      <FloatingAdminButton />
       
       {/* Bottom Navigation - show if wallet is connected */}
       {walletConnected && (

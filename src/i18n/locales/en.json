@@ -27,7 +27,10 @@
     "help": "Need help?",
     "loadingWallet": "Loading wallet...",
     "logout": "Logout",
-    "logoutSuccess": "Successfully logged out"
+    "logoutSuccess": "Successfully logged out",
+    "yes": "Yes",
+    "no": "No",
+    "locale": "en-US"
   },
   "navigation": {
     "home": "Home",
@@ -41,6 +44,46 @@
   "send": {
     "selectToken": "Select a token",
     "current": "Current"
+  },
+  "history": {
+    "justNow": "just now",
+    "minutesAgo": "{{count}} min ago",
+    "hoursAgo": "{{count}}h ago",
+    "daysAgo": "{{count}}d ago",
+    "noFees": "Free",
+    "viewOnExplorer": "View on explorer.e.cash",
+    "message": "Message",
+    "recipients": "recipient",
+    "recipients_other": "recipients",
+    "mode": "Mode",
+    "ignoreCreator": "Creator ignored",
+    "from": "From",
+    "to": "To",
+    "internal": "Internal",
+    "creatorAction": "Creator Action",
+    "receivedFrom": "Received from {{address}}",
+    "sentTo": "Sent to {{address}}",
+    "actions": {
+      "send": "Sent {{amount}} {{ticker}}",
+      "airdrop": "Airdrop of {{amount}} to {{count}} recipients",
+      "mint": "Minted {{amount}} {{ticker}}",
+      "burn": "Burned {{amount}} {{ticker}}",
+      "create": "Created token {{ticker}}",
+      "import": "Imported token {{ticker}}",
+      "message": "On-chain message"
+    },
+    "badges": {
+      "send": "Send",
+      "airdrop": "Airdrop",
+      "mint": "Mint",
+      "burn": "Burn",
+      "create": "Create",
+      "import": "Import",
+      "message": "Message",
+      "received": "Received",
+      "sent": "Sent",
+      "internal": "Internal"
+    }
   },
   "farm_selector": {
     "title": "Select a farm",
@@ -140,8 +183,8 @@
     "connecting": "Connecting to eCash blockchain infrastructure via Chronik.",
     "connectingInfo": "This may take a few moments on first load.",
     "farmSelected": "selected",
-    "addressCopied": "Address copied!",
-    "copyFailed": "Copy failed",
+    "addressCopied": "Address copied to clipboard!",
+    "copyFailed": "Failed to copy address.",
     "errorLoading": "Error loading wallet library",
     "checkFile": "Please check that minimal-xec-wallet.min.js is available in the public folder.",
     "loadingLibrary": "Loading eCash wallet library...",
@@ -150,8 +193,6 @@
     "address": "Address",
     "balance": "Balance",
     "clickQrToCopy": "Click QR to copy address",
-    "addressCopied": "Address copied to clipboard!",
-    "copyFailed": "Failed to copy address.",
     "securityWarning": "Never share your mnemonic or private key. Write it down on paper and store it safely.",
     "wordsCount": "{{count}} words",
     "howItWorks": "How does it work?",
@@ -163,7 +204,6 @@
     "selectFarmHint": "Select a farm from the directory to see your tokens",
     "selectFarm": "🌾 Select a farm",
     "addFavorite": "Choose a favorite farm",
-    "farmSelected": "selected",
     "noFarmSelected": "Select a farm",
     "receive": "Receive",
     "ecashAvailable": "eCash(XEC) available",

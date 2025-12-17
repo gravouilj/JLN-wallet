@@ -13,7 +13,7 @@ import { ProfilService } from '../services/profilService';
 import { syncTokenData } from '../utils/tokenSync';
 import { supabase } from '../services/supabaseClient';
 import { ProfilStatusActions, ReportActions } from '../components/Admin/ProfilStatusActions';
-import { AdminChatSection, AdminReportMessaging } from '../components/Communication';
+import { AdminChatSection, AdminReportMessaging } from '../components/Admin';
 
 const AdminVerificationPage = ({ embedded = false }) => {
   const navigate = useNavigate();

@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, Badge, StatusBadge, Button } from '../UI';
-import { AdminReportMessaging } from '../Communication';
+import { AdminReportMessaging } from '.';
 
 /**
  * AdminReportCard - Carte de ferme signalée pour l'administration

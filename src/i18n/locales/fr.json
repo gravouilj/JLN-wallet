@@ -41,6 +41,46 @@
     "selectToken": "Sélectionner un jeton",
     "current": "Actuel"
   },
+  "history": {
+    "justNow": "à l'instant",
+    "minutesAgo": "il y a {{count}} min",
+    "hoursAgo": "il y a {{count}}h",
+    "daysAgo": "il y a {{count}}j",
+    "noFees": "Gratuit",
+    "viewOnExplorer": "Voir sur explorer.e.cash",
+    "message": "Message",
+    "recipients": "destinataire",
+    "recipients_other": "destinataires",
+    "mode": "Mode",
+    "ignoreCreator": "Créateur ignoré",
+    "from": "De",
+    "to": "À",
+    "internal": "Interne",
+    "creatorAction": "Action Créateur",
+    "receivedFrom": "Reçu de {{address}}",
+    "sentTo": "Envoyé à {{address}}",
+    "actions": {
+      "send": "Envoi de {{amount}} {{ticker}}",
+      "airdrop": "Distribution de {{amount}} à {{count}} bénéficiaires",
+      "mint": "Émission de {{amount}} {{ticker}}",
+      "burn": "Destruction de {{amount}} {{ticker}}",
+      "create": "Création du token {{ticker}}",
+      "import": "Import du token {{ticker}}",
+      "message": "Message on-chain"
+    },
+    "badges": {
+      "send": "Envoi",
+      "airdrop": "Distribution",
+      "mint": "Émission",
+      "burn": "Destruction",
+      "create": "Création",
+      "import": "Import",
+      "message": "Message",
+      "received": "Reçu",
+      "sent": "Envoyé",
+      "internal": "Interne"
+    }
+  },
   "farm_selector": {
     "title": "Sélectionner une ferme",
     "placeholder": "🌾 Sélectionner une ferme",
