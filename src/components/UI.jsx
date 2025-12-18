@@ -546,7 +546,7 @@ export const StatusBadge = ({ status, type = 'verification', className = '' }) =
   };
   
   const styles = type === 'verification' ? verificationStyles : 
-                 type === 'farm' ? farmStatusStyles : reportStatusStyles;
+                 type === 'profil' ? profilStatusStyles : reportStatusStyles;
   
   const style = styles[status] || { bg: '#f3f4f6', text: '#6b7280', label: status };
   

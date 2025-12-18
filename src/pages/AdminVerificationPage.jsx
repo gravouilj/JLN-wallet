@@ -13,7 +13,7 @@ import { ProfilService } from '../services/profilService';
 import { syncTokenData } from '../utils/tokenSync';
 import { supabase } from '../services/supabaseClient';
 import { ProfilStatusActions, ReportActions } from '../components/Admin/ProfilStatusActions';
-import { AdminChatSection, AdminReportMessaging } from '../components/Admin';
+import { AdminChatSection, AdminReportMessaging, BlockedProfileManagement } from '../components/Admin';
 
 const AdminVerificationPage = ({ embedded = false }) => {
   const navigate = useNavigate();
@@ -33,6 +33,7 @@ const AdminVerificationPage = ({ embedded = false }) => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tokensInfo, setTokensInfo] = useState({});
+  const [blockedProfiles, setBlockedProfiles] = useState([]);
   
   // Chat
   const [replyMessage, setReplyMessage] = useState('');
@@ -58,6 +59,7 @@ const AdminVerificationPage = ({ embedded = false }) => {
     try {
       // Récupérer toutes les fermes
       const allProfils = await ProfilService.getPendingProfils();
+      // Charger les profils signalés
       const reported = await ProfilService.getReportedProfils();
       
       const hasUnreadMessage = (profil) => {
@@ -85,13 +87,19 @@ const AdminVerificationPage = ({ embedded = false }) => {
   const loadRequests = async () => {
     setLoading(true);
     try {
-      // 1. Récupérer les données
+      // 1. Charger les profils bloqués (temporairement désactivé)
+      // await loadBlockedProfiles();
+      
+      // 2. Récupérer les données selon l'onglet actif
       let filtered = [];
       
       if (activeTab === 'pending') {
         // Demandes en attente de badge (pending + info_requested)
         const allProfils = await ProfilService.getPendingProfils();
         filtered = allProfils.filter(f => ['pending', 'info_requested'].includes(f.verification_status));
+      } else if (activeTab === 'blocked') {
+        // Profils bloqués (déjà chargés via loadBlockedProfiles)
+        filtered = blockedProfiles;
       } else if (activeTab === 'reported') {
         // Fermes signalées
         const reported = await ProfilService.getReportedProfils();
@@ -165,7 +173,7 @@ const AdminVerificationPage = ({ embedded = false }) => {
   if (!isAdmin) return <MobileLayout><div className="p-8 text-center">Accès refusé</div></MobileLayout>;
 
   // Filtrer les requêtes selon la recherche
-  const filteredRequests = requests.filter(item => {
+  const filteredRequests = (activeTab === 'blocked' ? blockedProfiles : requests).filter(item => {
     const profil = activeTab === 'reported' ? item.profil : item;
     if (!profil) return false;
     
@@ -222,6 +230,10 @@ const AdminVerificationPage = ({ embedded = false }) => {
                 label: `🚨 Signalés (${activeTab === 'reported' ? requests.length : unreadCounts.reported}) ${unreadCounts.reported > 0 ? '🔴' : ''}` 
               },
               { 
+                id: 'blocked', 
+                label: `🚫 Bloqués (${activeTab === 'blocked' ? blockedProfiles.length : blockedProfiles.length})` 
+              },
+              { 
                 id: 'all', 
                 label: `📊 Tous les profils (${activeTab === 'all' ? requests.length : unreadCounts.all}) ${unreadCounts.all > 0 ? '🔴' : ''}` 
               }
@@ -232,6 +244,13 @@ const AdminVerificationPage = ({ embedded = false }) => {
 
           {loading ? (
             <div className="text-center p-8 text-gray-500">Chargement...</div>
+          ) : activeTab === 'blocked' ? (
+            <BlockedProfileManagement 
+              blockedProfiles={filteredRequests.length > 0 ? filteredRequests : blockedProfiles}
+              onUnblock={loadRequests}
+              onNotification={setNotification}
+              adminAddress={wallet?.address}
+            />
           ) : filteredRequests.length === 0 ? (
             <Card><CardContent className="text-center p-8"><div className="text-4xl mb-2">✅</div><p>{searchQuery ? 'Aucun résultat pour cette recherche.' : 'Aucune demande à traiter.'}</p></CardContent></Card>
           ) : (

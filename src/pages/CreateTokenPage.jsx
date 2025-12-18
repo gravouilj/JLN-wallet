@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAtom, useSetAtom } from 'jotai';
 import { useNavigate } from 'react-router-dom';
 import MobileLayout from '../components/Layout/MobileLayout';
@@ -9,6 +9,7 @@ import { useAdmin } from '../hooks/useAdmin';
 import { walletConnectedAtom, walletAtom, notificationAtom, walletModalOpenAtom } from '../atoms';
 import { profilService } from '../services/profilService';
 import { addEntry, ACTION_TYPES } from '../services/historyService';
+import { checkCreatorBlocked } from '../services/antifraudService';
 
 const CreateTokenPage = () => {
   const { t } = useTranslation();
@@ -43,6 +44,41 @@ const CreateTokenPage = () => {
   const [creating, setCreating] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  
+  // Anti-fraud state
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [blockReason, setBlockReason] = useState(null);
+  const [checkingBlock, setCheckingBlock] = useState(true);
+  
+  // Vérifier le blocage au montage
+  useEffect(() => {
+    const checkBlock = async () => {
+      if (!address) {
+        setCheckingBlock(false);
+        return;
+      }
+      
+      try {
+        const blockStatus = await checkCreatorBlocked(address);
+        setIsBlocked(blockStatus.isBlocked);
+        setBlockReason(blockStatus.reason);
+        
+        if (blockStatus.isBlocked) {
+          setNotification({
+            type: 'error',
+            message: `🚫 Création bloquée : ${blockStatus.reason}`,
+            duration: 8000
+          });
+        }
+      } catch (error) {
+        console.error('❌ Erreur vérification blocage:', error);
+      } finally {
+        setCheckingBlock(false);
+      }
+    };
+    
+    checkBlock();
+  }, [address, setNotification]);
 
   // Form handlers
   const handleInputChange = (field, value) => {
@@ -115,6 +151,16 @@ const CreateTokenPage = () => {
 
   const handleCreateToken = async (e) => {
     e.preventDefault();
+    
+    // Vérification anti-fraude
+    if (isBlocked) {
+      setNotification({
+        type: 'error',
+        message: `🚫 Action bloquée : ${blockReason || 'Signalements actifs'}. Veuillez résoudre vos tickets d'abord.`,
+        duration: 8000
+      });
+      return;
+    }
     
     // Validation
     if (!formData.name.trim()) {
@@ -386,6 +432,35 @@ const CreateTokenPage = () => {
     <MobileLayout title={t('createToken.title')}>
       <div className="settings-page-content">
         <h1 className="page-header-title">🛠️ {t('createToken.title')}</h1>
+        
+        {/* Bandeau de blocage anti-fraude */}
+        {isBlocked && (
+          <div style={{
+            padding: '16px',
+            marginBottom: '24px',
+            backgroundColor: '#fef2f2',
+            border: '2px solid #ef4444',
+            borderRadius: '10px',
+            fontSize: '0.9rem',
+            color: '#991b1b',
+            lineHeight: '1.6'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+              <div style={{ fontSize: '1.5rem' }}>🚫</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: '700', marginBottom: '8px' }}>
+                  Création de jetons bloquée
+                </div>
+                <div style={{ fontSize: '0.85rem', marginBottom: '8px' }}>
+                  <strong>Raison :</strong> {blockReason}
+                </div>
+                <div style={{ fontSize: '0.8rem', color: '#7f1d1d' }}>
+                  💡 Pour débloquer : Résolvez vos tickets en attente dans la section Support.
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         
         <form onSubmit={handleCreateToken}>
           {/* Info Balance & Cost */}

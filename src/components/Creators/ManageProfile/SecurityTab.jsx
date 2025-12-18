@@ -1,4 +1,5 @@
 import { Card, CardContent, Button, InfoBox, Switch, Stack } from '../../UI';
+import ActiveProfile from './ActiveProfile';
 
 /**
  * SecurityTab - Gestion de la sécurité et confidentialité du profil
@@ -17,6 +18,7 @@ import { Card, CardContent, Button, InfoBox, Switch, Stack } from '../../UI';
  * @param {Object} props.privacy - États de confidentialité par champ
  * @param {Function} props.onPrivacyChange - Callback changement confidentialité
  * @param {Function} props.onDeleteProfile - Callback suppression profil
+ * @param {Object} props.formData - Données du formulaire pour validation des champs obligatoires
  */
 const SecurityTab = ({
   existingProfiles,
@@ -24,54 +26,18 @@ const SecurityTab = ({
   onToggleProfileStatus,
   privacy = {},
   onPrivacyChange,
-  onDeleteProfile
+  onDeleteProfile,
+  formData = {}
 }) => {
-  const isActive = existingProfiles?.status === 'active';
-
   return (
     <Stack spacing="md">
       {/* Visibilité globale du profil */}
-      <Card>
-        <CardContent className="p-6">
-          <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--text-primary)' }}>
-            🌐 Visibilité du profil
-          </h2>
-
-          <div className="d-flex justify-between align-center p-4" style={{
-            backgroundColor: 'var(--bg-secondary)',
-            borderRadius: '8px',
-            border: '1px solid var(--border-primary)'
-          }}>
-            <div>
-              <div className="d-flex align-center gap-2 mb-1">
-                <span style={{ fontSize: '1.25rem' }}>
-                  {isActive ? '✅' : '📝'}
-                </span>
-                <strong style={{ color: 'var(--text-primary)' }}>
-                  {isActive ? 'Profil public' : 'Brouillon'}
-                </strong>
-              </div>
-              <p className="text-sm text-secondary mb-0">
-                {isActive 
-                  ? 'Votre profil est visible publiquement sur la plateforme'
-                  : 'Votre profil est en brouillon et n\'est pas visible publiquement'
-                }
-              </p>
-            </div>
-            <Switch
-              checked={isActive}
-              onChange={onToggleProfileStatus}
-              disabled={togglingProfileStatus}
-            />
-          </div>
-
-          <InfoBox type="info" icon="💡" className="mt-3">
-            <strong>Activation du profil :</strong> Pour être visible dans l'annuaire public 
-            et permettre aux clients de vous découvrir, activez votre profil. Vous pourrez 
-            le désactiver temporairement à tout moment.
-          </InfoBox>
-        </CardContent>
-      </Card>
+      <ActiveProfile
+        existingProfiles={existingProfiles}
+        togglingProfileStatus={togglingProfileStatus}
+        onToggleProfileStatus={onToggleProfileStatus}
+        formData={formData}
+      />
 
       {/* Confidentialité des champs */}
       <Card>

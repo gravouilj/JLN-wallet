@@ -1,0 +1,367 @@
+import { useState, useEffect } from 'react';
+import { Card, CardContent, Button, Input, Textarea, Select, InfoBox, Stack } from '../UI';
+import { createTicket } from '../../services/ticketService';
+import { useTranslation } from '../../hooks';
+
+/**
+ * ClientTicketForm - Formulaire de création de ticket pour les clients (REFACTORISÉ)
+ * 
+ * Nouvelles fonctionnalités Phase 2:
+ * - autoContext: Détection automatique du contexte (tokenId, profileId)
+ * - allowTypeSelection: Permet de choisir entre Admin/Créateur
+ * - allowTokenSelection: Permet de choisir un token parmi availableTokens
+ * - Catégories contextuelles selon le type
+ * - FAQ intégrée par catégorie
+ * 
+ * @param {Object} props
+ * @param {Object} [props.autoContext] - Contexte auto-détecté { tokenId, creatorProfileId, tokenInfo }
+ * @param {boolean} [props.allowTypeSelection=false] - Permet de choisir Admin ou Créateur
+ * @param {boolean} [props.allowTokenSelection=false] - Permet de choisir un token
+ * @param {Array} [props.availableTokens=[]] - Liste des tokens pour sélection
+ * @param {String} props.walletAddress - Adresse du wallet client
+ * @param {Function} props.onSubmit - Callback après soumission réussie
+ * @param {Function} props.onCancel - Callback pour annuler
+ */
+const ClientTicketForm = ({ 
+  autoContext = null,
+  allowTypeSelection = false,
+  allowTokenSelection = false,
+  availableTokens = [],
+  walletAddress,
+  onSubmit,
+  onCancel,
+  setNotification
+}) => {
+  const { t } = useTranslation();
+  // Détecter le type initial selon autoContext
+  const initialType = autoContext?.creatorProfileId ? 'creator' : 'admin';
+  
+  const [ticketType, setTicketType] = useState(initialType);
+  const [selectedTokenId, setSelectedTokenId] = useState(autoContext?.tokenId || null);
+  const [selectedProfileId, setSelectedProfileId] = useState(autoContext?.creatorProfileId || null);
+  
+  const [formData, setFormData] = useState({
+    subject: '',
+    category: 'question',
+    priority: 'normal',
+    description: ''
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  // Update context when autoContext changes
+  useEffect(() => {
+    if (autoContext) {
+      if (autoContext.tokenId) setSelectedTokenId(autoContext.tokenId);
+      if (autoContext.creatorProfileId) setSelectedProfileId(autoContext.creatorProfileId);
+      if (autoContext.creatorProfileId && !allowTypeSelection) {
+        setTicketType('creator');
+      }
+    }
+  }, [autoContext, allowTypeSelection]);
+
+  // Catégories selon le type (contextuelles)
+  const categories = ticketType === 'admin' 
+    ? [
+        { value: 'question', label: '❓ Question générale' },
+        { value: 'bug', label: '🐛 Signaler un bug' },
+        { value: 'feature', label: '✨ Demande de fonctionnalité' },
+        { value: 'payment', label: '💳 Problème de paiement' },
+        { value: 'account', label: '👤 Problème de compte' },
+      ]
+    : [
+        { value: 'question', label: '❓ Question sur le token' },
+        { value: 'support', label: '🆘 Demande de support' },
+        { value: 'order', label: '📦 Commande / Livraison' },
+        { value: 'report', label: '⚠️ Signaler un problème' },
+        { value: 'partnership', label: '🤝 Proposition de partenariat' },
+      ];
+
+  const priorities = [
+    { value: 'low', label: '🟢 Basse' },
+    { value: 'normal', label: '🟡 Normale' },
+    { value: 'high', label: '🟠 Haute' },
+    { value: 'urgent', label: '🔴 Urgente' },
+  ];
+
+  const handleChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    setError('');
+  };icketType === 'creator' && !selectedTokenId && !selectedProfileId) {
+      setError('Vous devez sélectionner un token ou un créateur');
+      return false;
+    }
+    if (!walletAddress) {
+      setError('Adresse wallet manquante
+  const validateForm = () => {
+    if (!formData.subject.trim()) {
+      setError('Le sujet est requis');
+      return false;
+    }
+    if (formData.subject.trim().length < 5) {
+      setError('Le sujet doit contenir au moins 5 caractères');
+      return false;
+    }
+    if (!formData.description.trim()) {
+      setError('La description est requise');
+      return false;
+    }
+    if (formData.description.trim().length < 20) {
+      setError('La description doit contenir au moins 20 caractères');
+      return false;
+    }
+    if (type === 'creator' && !tokenId) {
+      setError('Token ID manquant');
+      return false;
+    }
+    return true;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!validateForm()) return;
+
+    setSubéterminer le type de ticket selon le nouveau schéma
+      const ticketTypeEnum = ticketType === 'admin' ? 'admin_client' : 'creator_client';
+
+      // Métadonnées avec contexte enrichi
+      const metadata = {};
+      if (autoContext?.tokenInfo) {
+        metadata.tokenInfo = autoContext.tokenInfo;
+      }
+
+      // Données du ticket selon le nouveau schéma tickets_refactoring.sql
+      const ticketData = {
+        subject: formData.subject.trim(),
+        description: formData.description.trim(),
+        type: ticketTypeEnum,
+        category: formData.category,
+        priority: formData.priority,
+        created_by_address: walletAddress,
+        created_by_role: 'client',
+        token_id: selectedTokenId,
+        creator_profile_id: selectedProfileId,
+        client_address: walletAddress,
+        metadata
+      };
+
+      // Créer le ticket via service
+      const ticket = await createTicket(ticketData);
+
+      // Notification de succès
+      if (setNotification) {
+        setNotification({
+          type: 'success',
+          message: ticketType === 'creator' 
+            ? '✅ Message envoyé au créateur avec succès !' 
+            : '✅ Ticket créé avec succès ! Notre équipe vous répondra bientôt.'
+        });
+      }
+
+      // Réinitialiser le formulaire
+      setFormData({
+        subject: '',
+        category: 'question',
+        priority: 'normal',
+        description: ''
+      });
+
+      // Ne reset pas les sélections si autoContext fourni
+      if (!autoContext) {
+        setSelectedTokenId(null);
+        setSelectedProfileId(null);
+      }
+
+      // Callback de succès
+      if (onSubmit) {
+        onSubmit(ticket);
+      }
+
+    } catch (err) {
+      console.error('❌ Erreur création ticket:', err);
+      const errorMessage = err.message || 'Erreur lors de la création du ticket';
+      setError(errorMessage);
+      
+      if (setNotification) {
+        setNotification({
+          type: 'error',
+          message: `❌ ${errorMessage}`
+      if (setNotification) {
+        setNotification({
+          type: 'error',
+          message: errorMessage
+        });
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardContent className="p-6">
+        <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--text-primary)' }}>
+          {ticketType === 'admin' ? '📧 Contacter le support' : '💬 Contacter le créateur'}
+        </h2>
+
+        {/* Sélecteur de type (Admin ou Créateur) */}
+        {allowTypeSelection && (
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '0.9rem',
+              fontWeight: '600',
+              marginBottom: '8px',
+              color: 'var(--text-primary)'
+            }}>
+              🎯 Destinataire
+            </label>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <Button
+                variant={ticketType === 'admin' ? 'primary' : 'outline'}
+                onClick={() => setTicketType('admin')}
+                style={{ flex: 1 }}
+              >
+                👨‍💼 Admin
+              </Button>
+              <Button
+                variant={ticketType === 'creator' ? 'primary' : 'outline'}
+                onClick={() => setTicketType('creator')}
+                style={{ flex: 1 }}
+              >
+                🌾 Créateur
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Sélecteur de token */}
+        {allowTokenSelection && ticketType === 'creator' && availableTokens.length > 0 && (
+          <Select
+            label="🎫 Token concerné"
+            value={selectedTokenId || ''}
+            onChange={(e) => {
+              const tokenId = e.target.value;
+              setSelectedTokenId(tokenId);
+              // Trouver le profil du créateur
+              const token = availableTokens.find(t => t.tokenId === tokenId);
+              if (token?.creatorProfileId) {
+                setSelectedProfileId(token.creatorProfileId);
+              }
+            }}
+            options={[
+              { value: '', label: '-- Sélectionner un token --' },
+              ...availableTokens.map(token => ({
+                value: token.tokenId,
+                label: `${token.ticker} - ${token.name}`
+              }))
+            ]}
+          />
+        )}
+
+        {/* Info contextuelle */}
+        {ticketType === 'creator' && autoContext?.tokenInfo && (
+          <InfoBox type="info" icon="💡" className="mb-4">
+            Votre message concerne <strong>{autoContext.tokenInfo.ticker}</strong> et sera envoyé directement au créateur.
+          </InfoBox>
+        )}
+
+        {ticketType === 'creator' && !autoContext && (
+          <InfoBox type="info" icon="💡" className="mb-4">
+            Votre message sera envoyé directement au créateur du token sélectionné. 
+            Il recevra une notification et pourra vous répondre rapidement.
+          </InfoBox>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          <Stack spacing="md">
+            {/* Sujet */}
+            <Input
+              label="📝 Sujet"
+              value={formData.subject}
+              onChange={(e) => handleChange('subject', e.target.value)}
+              placeholder="Résumez votre demande en quelques mots"
+              required
+              maxLength={100}
+            />
+
+            {/* Catégorie */}
+            <Select
+              label="📂 Catégorie"
+              value={formData.category}
+              onChange={(e) => handleChange('category', e.target.value)}
+              options={categories}
+            />
+
+            {/* Priorité */}
+            <Select
+              label="⚡ Priorité"
+              value={formData.priority}
+              onChange={(e) => handleChange('priority', e.target.value)}
+              options={priorities}
+            />
+
+            {/* Description */}
+            <Textarea
+              label="📄 Description détaillée"
+              value={formData.description}
+              onChange={(e) => handleChange('description', e.target.value)}
+              placeholder="Décrivez votre demande en détail..."
+              rows={6}
+              required
+              maxLength={2000}
+            />
+
+            <div className="text-sm text-secondary">
+              {formData.description.length}/2000 caractères
+            </div>
+
+            {/* Erreur */}
+            {error && (
+              <InfoBox type="error" icon="❌">
+                {error}
+              </InfoBox>
+            )}
+
+            {/* Info temps de réponse */}
+            <InfoBox type="info" icon="⏱️">
+              <strong>Temps de réponse estimé :</strong>
+              <ul className="mb-0 mt-1" style={{ paddingLeft: '1.5rem' }}>
+                <li>Urgente : sous 4 heures</li>
+                <li>Haute : sous 24 heures</li>
+                <li>Normale : 1-2 jours ouvrés</li>
+                <li>Basse : 3-5 jours ouvrés</li>
+              </ul>
+            </InfoBox>
+
+            {/* Boutons */}
+            <div className="d-flex gap-2">
+              {onCancel && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={onCancel}
+                  className="flex-1"
+                  disabled={submitting}
+                >
+                  Annuler
+                </Button>
+              )}
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={submitting || !formData.subject.trim() || !formData.description.trim()}
+                className="flex-1"
+              >
+                {submitting ? 'Envoi...' : '📤 Envoyer'}
+              </Button>
+            </div>
+          </Stack>
+        </form>
+      </CardContent>
+    </Card>
+  );
+};
+
+export default ClientTicketForm;

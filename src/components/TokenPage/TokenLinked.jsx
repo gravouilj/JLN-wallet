@@ -4,6 +4,8 @@ import { profilService } from '../../services/profilService';
 import { updateTokenLinkedStatus, checkActiveTicketsForToken } from '../../services/tokenLinkedService';
 import { useEcashWallet } from '../../hooks/useEcashWallet';
 import { notificationAtom } from '../../atoms';
+import antifraudService from '../../services/antifraudService';
+import { ActiveReportsWarningModal, ActiveHoldersWarningModal } from '../Creators/AntifraudModals';
 import { Switch, Modal, Button } from '../UI';
 
 /**
@@ -24,12 +26,17 @@ import { Switch, Modal, Button } from '../UI';
 
 */
 const TokenLinked = ({ tokenId, profileId, isLinked: initialIsLinked = true, onUpdate }) => {
-  const { address } = useEcashWallet();
+  const { address, wallet } = useEcashWallet();
   const setNotification = useSetAtom(notificationAtom);
   const [isLinked, setIsLinked] = useState(initialIsLinked);
   const [loading, setLoading] = useState(false);
   const [showWarningModal, setShowWarningModal] = useState(false);
   const [activeTicketsInfo, setActiveTicketsInfo] = useState(null);
+  
+  // États pour les modals anti-arnaque
+  const [showReportsModal, setShowReportsModal] = useState(false);
+  const [showHoldersModal, setShowHoldersModal] = useState(false);
+  const [validationData, setValidationData] = useState(null);
 
   // Synchroniser avec les changements de props
   useEffect(() => {
@@ -37,17 +44,18 @@ const TokenLinked = ({ tokenId, profileId, isLinked: initialIsLinked = true, onU
   }, [initialIsLinked]);
 
   const handleToggle = async () => {
-    if (!address) {
+    if (!address || !profileId) {
       setNotification({
         type: 'error',
-        message: 'Erreur : Aucune adresse wallet'
+        message: 'Erreur : Aucune adresse wallet ou profil'
       });
       return;
     }
 
+    setLoading(true);
+
     // Si on essaie de délier (true → false), vérifier les tickets actifs
     if (isLinked === true) {
-      setLoading(true);
       try {
         const ticketCheck = await checkActiveTicketsForToken(tokenId, profileId);
         
@@ -57,6 +65,31 @@ const TokenLinked = ({ tokenId, profileId, isLinked: initialIsLinked = true, onU
           setLoading(false);
           return;
         }
+
+        // Valider avec le système anti-arnaque
+        const validation = await antifraudService.validateTokenToggle(profileId, wallet, tokenId);
+        setValidationData(validation);
+
+        // Cas 1: Signalements actifs + détenteurs → BLOQUER
+        if (!validation.canToggle && validation.blockReason === 'signalements_actifs') {
+          // Bloquer automatiquement le créateur
+          await antifraudService.blockCreator(
+            profileId, 
+            `Tentative de modification isLinked avec ${validation.activeReports} signalement(s) actif(s)`
+          );
+          
+          setShowReportsModal(true);
+          setLoading(false);
+          return;
+        }
+
+        // Cas 2: Détenteurs actifs mais pas de signalements → AVERTIR
+        if (validation.showWarning && validation.activeHolders > 0) {
+          setShowHoldersModal(true);
+          setLoading(false);
+          return;
+        }
+
       } catch (err) {
         console.error('Erreur vérification tickets:', err);
         setNotification({
@@ -104,6 +137,7 @@ const TokenLinked = ({ tokenId, profileId, isLinked: initialIsLinked = true, onU
       setIsLinked(isLinked);
     } finally {
       setLoading(false);
+      setShowHoldersModal(false);
     }
   };
 
@@ -200,6 +234,30 @@ const TokenLinked = ({ tokenId, profileId, isLinked: initialIsLinked = true, onU
           </Button>
         </Modal.Footer>
       </Modal>
+
+      {/* Modal signalements actifs */}
+      {showReportsModal && validationData && (
+        <ActiveReportsWarningModal
+          isOpen={showReportsModal}
+          onClose={() => setShowReportsModal(false)}
+          activeReportsCount={validationData.activeReports}
+        />
+      )}
+
+      {/* Modal détenteurs actifs */}
+      {showHoldersModal && validationData && (
+        <ActiveHoldersWarningModal
+          isOpen={showHoldersModal}
+          onClose={() => {
+            setShowHoldersModal(false);
+            setLoading(false);
+          }}
+          onConfirm={performToggle}
+          activeHoldersCount={validationData.activeHolders}
+          actionType="linked"
+          newValue={!isLinked}
+        />
+      )}
     </>
   );
 };

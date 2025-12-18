@@ -1,8 +1,14 @@
 import { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useSetAtom } from 'jotai';
 import { Card, CardContent, Button, Badge, InfoBox, VisibilityToggle, Stack } from '../../UI';
 import CreateTokenModal from '../CreateTokenModal';
 import ImportTokenModal from '../ImportTokenModal';
+import TokenOffer from '../../TokenPage/TokenOffer';
+import HoldersDetails from '../../eCash/TokenActions/HoldersDetails';
+import { useEcashWallet } from '../../../hooks/useEcashWallet';
+import { notificationAtom } from '../../../atoms';
 
 /**
  * TokensListTab - Liste des jetons associés au profil
@@ -25,11 +31,48 @@ const TokensListTab = ({
   onRefresh
 }) => {
   const navigate = useNavigate();
+  const { wallet } = useEcashWallet();
+  const setNotification = useSetAtom(notificationAtom);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [expandedTokenId, setExpandedTokenId] = useState(null);
+  const [loadingHolders, setLoadingHolders] = useState(false);
+  const [holdersData, setHoldersData] = useState({});
 
   // Filtrer pour afficher uniquement les tokens liés (isLinked !== false)
   const linkedTokens = tokensWithStats.filter(token => token.isLinked !== false);
+
+  // Fonction pour charger les détenteurs d'un token
+  const loadTokenHolders = async (tokenId) => {
+    if (expandedTokenId === tokenId) {
+      // Si déjà ouvert, fermer
+      setExpandedTokenId(null);
+      return;
+    }
+
+    setLoadingHolders(true);
+    setExpandedTokenId(tokenId);
+
+    try {
+      const airdropData = await wallet.calculateAirdropHolders(tokenId, 0);
+      setHoldersData({
+        ...holdersData,
+        [tokenId]: {
+          holdersCount: airdropData.count,
+          calculatedHolders: airdropData.holders
+        }
+      });
+    } catch (err) {
+      console.error('Erreur chargement détenteurs:', err);
+      setNotification({
+        type: 'error',
+        message: 'Impossible de charger les détenteurs'
+      });
+      setExpandedTokenId(null);
+    } finally {
+      setLoadingHolders(false);
+    }
+  };
 
   // Formater l'offre avec décimales
   const formatSupply = (supply, decimals = 0) => {
@@ -113,7 +156,7 @@ const TokensListTab = ({
                       fontWeight: '600',
                       color: 'var(--text-secondary)'
                     }}>
-                      Détenteurs
+                      Détenteurs 👆
                     </th>
                     <th style={{ 
                       padding: '12px', 
@@ -151,15 +194,15 @@ const TokensListTab = ({
                 </thead>
                 <tbody>
                   {linkedTokens.map((token, index) => (
-                    <tr 
-                      key={token.tokenId}
-                      style={{ 
-                        borderBottom: index < linkedTokens.length - 1 ? '1px solid var(--border-primary)' : 'none',
-                        transition: 'background-color 0.2s'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                    >
+                    <React.Fragment key={token.tokenId}>
+                      <tr 
+                        style={{ 
+                          borderBottom: index < linkedTokens.length - 1 || expandedTokenId === token.tokenId ? '1px solid var(--border-primary)' : 'none',
+                          transition: 'background-color 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
                       <td style={{ padding: '12px' }}>
                         <div className="d-flex align-center gap-2">
                           <img
@@ -199,14 +242,32 @@ const TokensListTab = ({
                         textAlign: 'right',
                         fontFamily: 'monospace',
                         color: 'var(--text-primary)',
-                        fontWeight: '600'
-                      }}>
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                      onClick={() => loadTokenHolders(token.tokenId)}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#e0f2fe';
+                        e.currentTarget.style.borderRadius = '8px';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }}
+                      title="Cliquez pour voir les détails des détenteurs"
+                      >
                         👥 {token.holdersCount || 0}
+                        {expandedTokenId === token.tokenId && (
+                          <span style={{ marginLeft: '4px' }}>
+                            {loadingHolders ? '⏳' : '👇'}
+                          </span>
+                        )}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'center' }}>
-                        <Badge variant={token.isVariable ? 'success' : 'secondary'}>
-                          {token.isVariable ? '🔄 Variable' : '🔒 Fixe'}
-                        </Badge>
+                        <TokenOffer 
+                          tokenId={token.tokenId}
+                          isCreator={true}
+                        />
                       </td>
                       <td style={{ padding: '12px', textAlign: 'center' }}>
                         <VisibilityToggle
@@ -236,6 +297,22 @@ const TokensListTab = ({
                         </Button>
                       </td>
                     </tr>
+                    
+                    {/* Ligne détails des détenteurs */}
+                    {expandedTokenId === token.tokenId && holdersData[token.tokenId] && (
+                      <tr>
+                        <td colSpan="7" style={{ padding: '16px', backgroundColor: '#f8fafc' }}>
+                          <HoldersDetails
+                            holdersCount={holdersData[token.tokenId].holdersCount}
+                            calculatedHolders={holdersData[token.tokenId].calculatedHolders}
+                            tokenId={token.tokenId}
+                            setNotification={setNotification}
+                            onHoldersUpdate={() => loadTokenHolders(token.tokenId)}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>

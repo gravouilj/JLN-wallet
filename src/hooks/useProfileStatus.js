@@ -141,6 +141,57 @@ export const useProfileStatus = () => {
       
       await ProfilService.updateProfile(profile.owner_address, updateData);
 
+      // Si c'est un message de type 'report', créer aussi un ticket pour que le créateur puisse voir dans SupportTab
+      if (messageType === 'report' || messageType === 'general') {
+        try {
+          const { createTicket } = await import('../services/ticketService');
+          
+          // Chercher si un ticket admin_creator existe déjà pour ce profil
+          const { supabase } = await import('../services/supabaseClient');
+          const { data: existingTickets } = await supabase
+            .from('tickets')
+            .select('id')
+            .eq('profile_id', profile.id)
+            .eq('type', 'admin_creator')
+            .eq('status', 'open')
+            .limit(1);
+          
+          if (existingTickets && existingTickets.length > 0) {
+            // Ajouter le message au ticket existant
+            const { addMessageToTicket } = await import('../services/ticketService');
+            await addMessageToTicket(
+              existingTickets[0].id,
+              'admin',
+              'admin@system',
+              messageText,
+              []
+            );
+          } else {
+            // Créer un nouveau ticket
+            await createTicket({
+              subject: messageType === 'report' ? `Signalement - ${profile.name}` : `Message admin - ${profile.name}`,
+              description: messageText,
+              type: 'admin_creator',
+              category: messageType === 'report' ? 'moderation' : 'general',
+              priority: messageType === 'report' ? 'high' : 'normal',
+              created_by_address: 'admin@system',
+              created_by_role: 'admin',
+              profile_id: profile.id,
+              metadata: {
+                profileInfo: {
+                  name: profile.name,
+                  owner_address: profile.owner_address
+                },
+                source: 'admin_report_message'
+              }
+            });
+          }
+        } catch (ticketErr) {
+          console.warn('⚠️ Erreur création ticket pour message report:', ticketErr);
+          // Ne pas bloquer l'envoi du message si la création du ticket échoue
+        }
+      }
+
       setNotification({ 
         type: 'success', 
         message: 'Message envoyé !' 

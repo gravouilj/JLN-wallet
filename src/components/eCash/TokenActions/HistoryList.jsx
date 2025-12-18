@@ -36,7 +36,7 @@ function formatRelativeTime(date) {
  */
 function getActionIcon(actionType) {
   const icons = {
-    SEND: '�',
+    SEND: '📤​',
     AIRDROP: '🎁',
     MINT: '🏭',
     BURN: '🔥',

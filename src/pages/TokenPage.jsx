@@ -742,7 +742,7 @@ const TokenPage = () => {
                     Mon solde
                   </div>
                   <div style={{
-                    fontSize: '1.5rem',
+                    fontSize: '1rem',
                     fontWeight: '700',
                     color: 'var(--primary-color, #0074e4)',
                     fontFamily: 'monospace'
@@ -750,7 +750,7 @@ const TokenPage = () => {
                     {formatAmount(myBalance, decimals)}
                   </div>
                   <div style={{
-                    fontSize: '0.85rem',
+                    fontSize: '0.75rem',
                     color: 'var(--text-secondary, #6b7280)',
                     fontWeight: '600',
                     marginTop: '2px'
@@ -811,12 +811,30 @@ const TokenPage = () => {
                 </div>
                 
                 {/* Token Badges */}
-                <div style={{ marginTop: '0.75rem' }}>
+                <div style={{ marginTop: '0.75rem', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
                   <TokenBadge 
+                    tokenId={tokenId}
                     protocol={protocol} 
                     isCreator={isCreator} 
                     genesisInfo={genesisInfo} 
                   />
+                  
+                  {/* Étiquette ActiveProfile si jeton lié et profil public */}
+                  {tokenDetails?.isLinked && profileInfo?.status === 'active' && (
+                    <div style={{
+                      padding: '6px 12px',
+                      backgroundColor: '#3b82f6',
+                      color: '#fff',
+                      borderRadius: '20px',
+                      fontSize: '0.75rem',
+                      fontWeight: '600',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}>
+                      🌐 Profil public
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -824,7 +842,7 @@ const TokenPage = () => {
             {/* Token ID Compact - Amélioré */}
             <TokenIDCompact tokenId={tokenId} onCopy={handleCopyTokenId} />
             
-            {/* FAQ CREATEUR - Toggle avec Faq.jsx */}
+            {/*  CREATEUR - Toggle avec Faq.jsx */}
             {isCreator && (
               <div style={{ marginTop: '16px' }}>
                 <Button
@@ -1064,51 +1082,78 @@ const TokenPage = () => {
             </Card>
           )}
 
-          {/* OBJECTIF ET CONTREPARTIE DU JETON (GRID 2 COLONNES) */}
-          {isCreator && profileInfo && (
-            <ObjectivesCounterparts
-              isCreator={isCreator}
-              profileInfo={profileInfo}
-              tokenDetails={tokenDetails}
-              editingPurpose={editingPurpose}
-              editingCounterpart={editingCounterpart}
-              editPurpose={editPurpose}
-              editCounterpart={editCounterpart}
-              savingPurpose={savingPurpose}
-              savingCounterpart={savingCounterpart}
-              setEditingPurpose={setEditingPurpose}
-              setEditingCounterpart={setEditingCounterpart}
-              setEditPurpose={setEditPurpose}
-              setEditCounterpart={setEditCounterpart}
-              handleSavePurpose={handleSavePurpose}
-              handleSaveCounterpart={handleSaveCounterpart}
-            />
-          )}
-
-          {/* Switch 🔗 isLinked et  👁️ isVisible */}
+          {/* Section Gestion du jeton (Créateur uniquement) - Collapsible */}
           {isCreator && profileInfo && (
             <Card>
-              <CardContent style={{ padding: '1rem' }}>
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
-                  gap: '1rem',
-                  alignItems: 'center'
-                }}>
-                  {/* Switch Visible dans l'annuaire */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          
+              <CardContent className="p-4">
+                <div 
+                  onClick={() => {
+                    const section = document.getElementById('token-management-section');
+                    const icon = document.getElementById('token-management-icon');
+                    if (section.style.display === 'none') {
+                      section.style.display = 'block';
+                      icon.textContent = '🔽';
+                    } else {
+                      section.style.display = 'none';
+                      icon.textContent = '▶️';
+                    }
+                  }}
+                  style={{
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px',
+                    borderRadius: '8px',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <span id="token-management-icon" style={{ fontSize: '1.2rem' }}>▶️</span>
+                  <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)', margin: 0 }}>
+                    ⚙️ Gestion du jeton
+                  </h3>
+                </div>
+
+                <div id="token-management-section" style={{ display: 'none', marginTop: '16px' }}>
+                  {/* Objectifs et Contreparties */}
+                  <ObjectivesCounterparts
+                    isCreator={isCreator}
+                    profileInfo={profileInfo}
+                    tokenDetails={tokenDetails}
+                    editingPurpose={editingPurpose}
+                    editingCounterpart={editingCounterpart}
+                    editPurpose={editPurpose}
+                    editCounterpart={editCounterpart}
+                    savingPurpose={savingPurpose}
+                    savingCounterpart={savingCounterpart}
+                    setEditingPurpose={setEditingPurpose}
+                    setEditingCounterpart={setEditingCounterpart}
+                    setEditPurpose={setEditPurpose}
+                    setEditCounterpart={setEditCounterpart}
+                    handleSavePurpose={handleSavePurpose}
+                    handleSaveCounterpart={handleSaveCounterpart}
+                  />
+
+                  {/* Toggle Visibilité & Lié au profil */}
+                  <div style={{
+                    marginTop: '16px',
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: '1rem',
+                    padding: '16px',
+                    backgroundColor: 'var(--bg-secondary)',
+                    borderRadius: '12px',
+                    border: '1px solid var(--border-primary)'
+                  }}>
                     <TokenVisible
                       tokenId={tokenId}
                       isVisible={tokenDetails?.isVisible ?? true}
                       disabled={togglingVisibility}
                     />
-                  </div>
 
-                  {/* Switch Lié au profil */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
- 
-                   <TokenLinked
+                    <TokenLinked
                       tokenId={tokenId}
                       isLinked={tokenDetails?.isLinked ?? false}
                     />

@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSetAtom } from 'jotai';
 import { notificationAtom } from '../../atoms';
 import { Card, CardContent, Button } from '../UI';
 import { useEcashWallet } from '../../hooks/useEcashWallet';
 import { addEntry, ACTION_TYPES } from '../../services/historyService';
+import { checkCreatorBlocked } from '../../services/antifraudService';
 
 const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
   const navigate = useNavigate();
@@ -19,6 +20,35 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
   const [quickCounterpart, setQuickCounterpart] = useState(''); // Contrepartie pour l'import rapide
   const [hasExistingFarm, setHasExistingFarm] = useState(false);
   const [showQuickImport, setShowQuickImport] = useState(false); // Toggle pour afficher/masquer l'import rapide
+  
+  // Anti-fraud state
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [blockReason, setBlockReason] = useState(null);
+  
+  // Vérifier le blocage quand la modal s'ouvre
+  useEffect(() => {
+    const checkBlock = async () => {
+      if (!isOpen || !address) return;
+      
+      try {
+        const blockStatus = await checkCreatorBlocked(address);
+        setIsBlocked(blockStatus.isBlocked);
+        setBlockReason(blockStatus.reason);
+        
+        if (blockStatus.isBlocked) {
+          setNotification({
+            type: 'error',
+            message: `🚫 Importation bloquée : ${blockStatus.reason}`,
+            duration: 8000
+          });
+        }
+      } catch (error) {
+        console.error('❌ Erreur vérification blocage:', error);
+      }
+    };
+    
+    checkBlock();
+  }, [isOpen, address, setNotification]);
 
   console.log('🎯 ImportTokenModal render - isOpen:', isOpen, 'wallet:', wallet ? 'Connecté' : 'Non connecté');
 
@@ -175,6 +205,16 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
   };
 
   const handleQuickImport = async () => {
+    // Vérification anti-fraude
+    if (isBlocked) {
+      setNotification({
+        type: 'error',
+        message: `🚫 Importation bloquée : ${blockReason || 'Signalements actifs'}. Veuillez résoudre vos tickets d'abord.`,
+        duration: 8000
+      });
+      return;
+    }
+    
     // Scénario 2: Import rapide (profil existant ou non)
     if (!quickPurpose.trim()) {
       setNotification({
@@ -631,6 +671,42 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
                           lineHeight: '1.5'
                         }}>
                           Ce jeton a une offre fixe (pas de MintBaton). Vous ne pourrez pas émettre de nouveaux jetons, uniquement les envoyer ou les détruire.
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Bandeau de blocage anti-fraude */}
+              {isBlocked && (
+                <Card style={{ marginBottom: '16px', border: '2px solid #ef4444', backgroundColor: '#fef2f2' }}>
+                  <CardContent style={{ padding: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'start', gap: '12px' }}>
+                      <span style={{ fontSize: '24px' }}>🚫</span>
+                      <div>
+                        <h4 style={{ 
+                          fontSize: '0.95rem',
+                          fontWeight: 'bold',
+                          color: '#991b1b',
+                          margin: '0 0 8px 0'
+                        }}>
+                          Importation bloquée
+                        </h4>
+                        <p style={{ 
+                          fontSize: '0.85rem',
+                          color: '#7f1d1d',
+                          margin: '0 0 8px 0',
+                          lineHeight: '1.5'
+                        }}>
+                          <strong>Raison :</strong> {blockReason}
+                        </p>
+                        <p style={{ 
+                          fontSize: '0.75rem',
+                          color: '#7f1d1d',
+                          margin: 0
+                        }}>
+                          💡 Pour débloquer : Résolvez vos tickets en attente dans la section Support.
                         </p>
                       </div>
                     </div>

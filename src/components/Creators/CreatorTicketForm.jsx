@@ -93,7 +93,7 @@ const CreatorTicketForm = ({
           description: formData.description.trim(),
           status: 'open',
           created_by: walletAddress || 'unknown',
-          farm_id: profilId
+          profile_id: profilId
         })
         .select()
         .single();

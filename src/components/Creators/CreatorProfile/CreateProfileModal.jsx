@@ -5,11 +5,11 @@ import { useSetAtom } from 'jotai';
 import { notificationAtom } from '../../../atoms';
 
 /**
- * CreateProfileModal - Wizard de création de profil ferme (5 étapes)
+ * CreateProfileModal - Wizard de création de profil Créateur (5 étapes)
  * 
  * Conforme au STYLING_GUIDE.md
  * 
- * Guide pédagogique pour créer un profil de ferme.
+ * Guide pédagogique pour créer un profil de créateur.
  * Explique chaque champ et aide le créateur à renseigner ses informations.
  * 
  * @param {Object} props
@@ -105,7 +105,7 @@ const CreateProfileModal = ({ isOpen, onClose, tokenId, onSuccess }) => {
       
       // Validation finale
       if (!formData.name) {
-        throw new Error('Nom de la ferme requis');
+        throw new Error('Nom du créateur requis');
       }
       
       if (!formData.address || !formData.city) {
@@ -218,7 +218,7 @@ const CreateProfileModal = ({ isOpen, onClose, tokenId, onSuccess }) => {
               <div className="d-flex align-center gap-2 mb-2">
                 <span className="text-xl">💡</span>
                 <span className="font-semibold" style={{ color: 'var(--text-info)' }}>
-                  Identité de votre ferme
+                  Identité du créateur
                 </span>
               </div>
               <p className="text-sm mb-0" style={{ color: 'var(--text-info)', lineHeight: '1.5' }}>
@@ -228,12 +228,12 @@ const CreateProfileModal = ({ isOpen, onClose, tokenId, onSuccess }) => {
             </div>
 
             <Input
-              label="Nom de la ferme"
+              label="Nom du créateur"
               value={formData.name}
               onChange={(e) => updateField('name', e.target.value)}
               placeholder="Ex: Ferme du Soleil Levant"
               maxLength={100}
-              helperText="Nom officiel ou commercial de votre exploitation"
+              helperText="Nom officiel ou commercial"
               required
             />
 
@@ -254,7 +254,7 @@ const CreateProfileModal = ({ isOpen, onClose, tokenId, onSuccess }) => {
               }}
             >
               <p className="text-xs mb-0" style={{ color: 'var(--success-dark)', lineHeight: '1.4' }}>
-                ✅ Ces informations seront visibles sur votre profil public et dans le hub des fermes.
+                ✅ Ces informations seront visibles sur votre profil et dans l'annuaire si votre profil est public.
               </p>
             </div>
           </div>
@@ -278,7 +278,7 @@ const CreateProfileModal = ({ isOpen, onClose, tokenId, onSuccess }) => {
               </div>
               <p className="text-sm mb-0" style={{ color: 'var(--text-info)', lineHeight: '1.5' }}>
                 L'<strong>adresse</strong> permet aux clients de vous trouver facilement. 
-                Elle sera visible sur votre profil et sur la carte des fermes.
+                Elle sera visible sur votre profil et l'annuaire.
               </p>
             </div>
 
@@ -396,7 +396,7 @@ const CreateProfileModal = ({ isOpen, onClose, tokenId, onSuccess }) => {
               type="email"
               value={formData.email}
               onChange={(e) => updateField('email', e.target.value)}
-              placeholder="Ex: contact@maferme.fr"
+              placeholder="Ex: contact@mon-etablissement.fr"
               maxLength={100}
               helperText="Adresse email professionnelle"
             />
@@ -406,7 +406,7 @@ const CreateProfileModal = ({ isOpen, onClose, tokenId, onSuccess }) => {
               type="url"
               value={formData.website}
               onChange={(e) => updateField('website', e.target.value)}
-              placeholder="Ex: https://www.maferme.fr"
+              placeholder="Ex: https://www.mon-etablissement.fr"
               maxLength={200}
               helperText="URL complète de votre site"
             />
@@ -443,13 +443,13 @@ const CreateProfileModal = ({ isOpen, onClose, tokenId, onSuccess }) => {
                 </span>
               </div>
               <p className="text-sm mb-0" style={{ color: 'var(--text-info)', lineHeight: '1.5' }}>
-                Racontez votre histoire et décrivez vos produits pour attirer les clients.
+                Racontez votre histoire, décrivez vos produits, votre projet pour attirer les clients.
               </p>
             </div>
 
             <div>
               <label className="d-block text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
-                📝 Description de la ferme (optionnel)
+                📝 Description du créateur (optionnel)
               </label>
               <Textarea
                 value={formData.description}
@@ -525,7 +525,7 @@ const CreateProfileModal = ({ isOpen, onClose, tokenId, onSuccess }) => {
             >
               <div className="d-flex flex-column gap-3">
                 <div>
-                  <div className="text-xs text-secondary mb-1">Ferme:</div>
+                  <div className="text-xs text-secondary mb-1">Etablissement:</div>
                   <div className="font-bold">{formData.name}</div>
                   {formData.slogan && (
                     <div className="text-sm text-secondary mt-1">"{formData.slogan}"</div>
@@ -581,7 +581,7 @@ const CreateProfileModal = ({ isOpen, onClose, tokenId, onSuccess }) => {
                   <div className="flex-1">
                     <div className="font-semibold text-sm mb-1">🌍 Public</div>
                     <div className="text-xs text-secondary">
-                      Visible dans le hub des fermes et les recherches
+                      Visible dans l'annuaire public et les recherches
                     </div>
                   </div>
                 </div>

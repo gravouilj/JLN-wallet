@@ -80,22 +80,6 @@ const Statistics = ({
           }}>
             📊 Statistiques
           </h3>
-          <button
-            onClick={() => setIsCompact(!isCompact)}
-            style={{
-              padding: '6px 12px',
-              fontSize: '0.85rem',
-              backgroundColor: 'transparent',
-              color: 'var(--primary-color, #0074e4)',
-              border: '1px solid var(--primary-color, #0074e4)',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              transition: 'all 0.2s'
-            }}
-            title={isCompact ? 'Mode normal' : 'Mode compact'}
-          >
-            {isCompact ? '📖' : '📋'}
-          </button>
         </div>
         
         <div style={{

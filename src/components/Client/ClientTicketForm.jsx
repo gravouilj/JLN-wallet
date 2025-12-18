@@ -1,33 +1,45 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, Button, Input, Textarea, Select, InfoBox, Stack } from '../UI';
-import { supabase } from '../../services/supabaseClient';
+import { createTicket } from '../../services/ticketService';
+import { useTranslation } from '../../hooks';
 
 /**
- * ClientTicketForm - Formulaire de création de ticket pour les clients
+ * ClientTicketForm - Formulaire de création de ticket pour les clients (REFACTORISÉ)
  * 
- * Conforme au STYLING_GUIDE.md
- * 
- * Permet aux clients de :
- * - Envoyer un ticket à l'admin global
- * - Envoyer un ticket au créateur d'un token spécifique
+ * Nouvelles fonctionnalités Phase 2:
+ * - autoContext: Détection automatique du contexte (tokenId, profileId)
+ * - allowTypeSelection: Permet de choisir entre Admin/Créateur
+ * - allowTokenSelection: Permet de choisir un token parmi availableTokens
+ * - Catégories contextuelles selon le type
  * 
  * @param {Object} props
- * @param {String} props.type - Type de destinataire: 'admin' ou 'creator'
- * @param {String} props.tokenId - ID du token (requis si type='creator')
- * @param {String} props.profilId - ID du profil (optionnel si type='creator')
+ * @param {Object} [props.autoContext] - Contexte auto-détecté { tokenId, creatorProfileId, tokenInfo }
+ * @param {boolean} [props.allowTypeSelection=false] - Permet de choisir Admin ou Créateur
+ * @param {boolean} [props.allowTokenSelection=false] - Permet de choisir un token
+ * @param {Array} [props.availableTokens=[]] - Liste des tokens pour sélection
  * @param {String} props.walletAddress - Adresse du wallet client
  * @param {Function} props.onSubmit - Callback après soumission réussie
  * @param {Function} props.onCancel - Callback pour annuler
  */
 const ClientTicketForm = ({ 
-  type = 'admin', 
-  tokenId = null,
-  profilId = null,
+  autoContext = null,
+  allowTypeSelection = false,
+  allowTokenSelection = false,
+  availableTokens = [],
   walletAddress,
   onSubmit,
   onCancel,
   setNotification
 }) => {
+  const { t } = useTranslation();
+  
+  // Détecter le type initial selon autoContext
+  const initialType = autoContext?.creatorProfileId ? 'creator' : 'admin';
+  
+  const [ticketType, setTicketType] = useState(initialType);
+  const [selectedTokenId, setSelectedTokenId] = useState(autoContext?.tokenId || null);
+  const [selectedProfileId, setSelectedProfileId] = useState(autoContext?.creatorProfileId || null);
+  
   const [formData, setFormData] = useState({
     subject: '',
     category: 'question',
@@ -37,8 +49,19 @@ const ClientTicketForm = ({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  // Catégories selon le type
-  const categories = type === 'admin' 
+  // Update context when autoContext changes
+  useEffect(() => {
+    if (autoContext) {
+      if (autoContext.tokenId) setSelectedTokenId(autoContext.tokenId);
+      if (autoContext.creatorProfileId) setSelectedProfileId(autoContext.creatorProfileId);
+      if (autoContext.creatorProfileId && !allowTypeSelection) {
+        setTicketType('creator');
+      }
+    }
+  }, [autoContext, allowTypeSelection]);
+
+  // Catégories selon le type (contextuelles)
+  const categories = ticketType === 'admin' 
     ? [
         { value: 'question', label: '❓ Question générale' },
         { value: 'bug', label: '🐛 Signaler un bug' },
@@ -49,6 +72,7 @@ const ClientTicketForm = ({
     : [
         { value: 'question', label: '❓ Question sur le token' },
         { value: 'support', label: '🆘 Demande de support' },
+        { value: 'order', label: '📦 Commande / Livraison' },
         { value: 'report', label: '⚠️ Signaler un problème' },
         { value: 'partnership', label: '🤝 Proposition de partenariat' },
       ];
@@ -82,8 +106,12 @@ const ClientTicketForm = ({
       setError('La description doit contenir au moins 20 caractères');
       return false;
     }
-    if (type === 'creator' && !tokenId) {
-      setError('Token ID manquant');
+    if (ticketType === 'creator' && !selectedTokenId && !selectedProfileId) {
+      setError('Vous devez sélectionner un token ou un créateur');
+      return false;
+    }
+    if (!walletAddress) {
+      setError('Adresse wallet manquante');
       return false;
     }
     return true;
@@ -98,39 +126,40 @@ const ClientTicketForm = ({
     setError('');
 
     try {
-      // Données du ticket selon le schéma SQL
-      const ticketData = {
-        type: type === 'creator' ? 'creator' : 'client', // 'creator' pour client→créateur avec token_id
-        subject: formData.subject.trim(),
-        category: formData.category,
-        priority: formData.priority,
-        description: formData.description.trim(),
-        status: 'open',
-        created_by: walletAddress || 'anonymous',
-      };
+      // Déterminer le type de ticket selon le nouveau schéma
+      const ticketTypeEnum = ticketType === 'admin' ? 'admin_client' : 'creator_client';
 
-      // Ajouter les identifiants selon le type
-      if (type === 'creator') {
-        ticketData.token_id = tokenId; // Token concerné par le ticket
-        ticketData.farm_id = profilId; // Profil du créateur
+      // Métadonnées avec contexte enrichi
+      const metadata = {};
+      if (autoContext?.tokenInfo) {
+        metadata.tokenInfo = autoContext.tokenInfo;
       }
 
-      // Créer le ticket
-      const { data: ticket, error: ticketError } = await supabase
-        .from('tickets')
-        .insert(ticketData)
-        .select()
-        .single();
+      // Données du ticket selon le nouveau schéma tickets_refactoring.sql
+      const ticketData = {
+        subject: formData.subject.trim(),
+        description: formData.description.trim(),
+        type: ticketTypeEnum,
+        category: formData.category,
+        priority: formData.priority,
+        created_by_address: walletAddress,
+        created_by_role: 'client',
+        token_id: selectedTokenId,
+        profile_id: selectedProfileId,
+        client_address: walletAddress,
+        metadata
+      };
 
-      if (ticketError) throw ticketError;
+      // Créer le ticket via service
+      const ticket = await createTicket(ticketData);
 
       // Notification de succès
       if (setNotification) {
         setNotification({
           type: 'success',
-          message: type === 'creator' 
-            ? 'Message envoyé au créateur avec succès !' 
-            : 'Ticket créé avec succès ! Notre équipe vous répondra bientôt.'
+          message: ticketType === 'creator' 
+            ? '✅ Message envoyé au créateur avec succès !' 
+            : '✅ Ticket créé avec succès ! Notre équipe vous répondra bientôt.'
         });
       }
 
@@ -142,20 +171,26 @@ const ClientTicketForm = ({
         description: ''
       });
 
+      // Ne reset pas les sélections si autoContext fourni
+      if (!autoContext) {
+        setSelectedTokenId(null);
+        setSelectedProfileId(null);
+      }
+
       // Callback de succès
       if (onSubmit) {
         onSubmit(ticket);
       }
 
     } catch (err) {
-      console.error('Erreur création ticket:', err);
+      console.error('❌ Erreur création ticket:', err);
       const errorMessage = err.message || 'Erreur lors de la création du ticket';
       setError(errorMessage);
       
       if (setNotification) {
         setNotification({
           type: 'error',
-          message: errorMessage
+          message: `❌ ${errorMessage}`
         });
       }
     } finally {
@@ -167,12 +202,74 @@ const ClientTicketForm = ({
     <Card>
       <CardContent className="p-6">
         <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--text-primary)' }}>
-          {type === 'admin' ? '📧 Contacter le support' : '💬 Contacter le créateur'}
+          {ticketType === 'admin' ? '📧 Contacter le support' : '💬 Contacter le créateur'}
         </h2>
 
-        {type === 'creator' && (
+        {/* Sélecteur de type (Admin ou Créateur) */}
+        {allowTypeSelection && (
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '0.9rem',
+              fontWeight: '600',
+              marginBottom: '8px',
+              color: 'var(--text-primary)'
+            }}>
+              🎯 Destinataire
+            </label>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <Button
+                variant={ticketType === 'admin' ? 'primary' : 'outline'}
+                onClick={() => setTicketType('admin')}
+                style={{ flex: 1 }}
+              >
+                👨‍💼 Admin
+              </Button>
+              <Button
+                variant={ticketType === 'creator' ? 'primary' : 'outline'}
+                onClick={() => setTicketType('creator')}
+                style={{ flex: 1 }}
+              >
+                🌾 Créateur
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Sélecteur de token */}
+        {allowTokenSelection && ticketType === 'creator' && availableTokens.length > 0 && (
+          <Select
+            label="🎫 Token concerné"
+            value={selectedTokenId || ''}
+            onChange={(e) => {
+              const tokenId = e.target.value;
+              setSelectedTokenId(tokenId);
+              // Trouver le profil du créateur
+              const token = availableTokens.find(t => t.tokenId === tokenId);
+              if (token?.creatorProfileId) {
+                setSelectedProfileId(token.creatorProfileId);
+              }
+            }}
+            options={[
+              { value: '', label: '-- Sélectionner un token --' },
+              ...availableTokens.map(token => ({
+                value: token.tokenId,
+                label: `${token.ticker} - ${token.name}`
+              }))
+            ]}
+          />
+        )}
+
+        {/* Info contextuelle */}
+        {ticketType === 'creator' && autoContext?.tokenInfo && (
           <InfoBox type="info" icon="💡" className="mb-4">
-            Votre message sera envoyé directement au créateur de ce token. 
+            Votre message concerne <strong>{autoContext.tokenInfo.ticker}</strong> et sera envoyé directement au créateur.
+          </InfoBox>
+        )}
+
+        {ticketType === 'creator' && !autoContext && (
+          <InfoBox type="info" icon="💡" className="mb-4">
+            Votre message sera envoyé directement au créateur du token sélectionné. 
             Il recevra une notification et pourra vous répondre rapidement.
           </InfoBox>
         )}

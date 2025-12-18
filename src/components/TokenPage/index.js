@@ -2,6 +2,7 @@
 export { default as TokenLinked } from './TokenLinked';
 export { default as TokenVisible } from './TokenVisible';
 export { default as TokenCard } from './TokenCard';
+export { default as TokenOffer } from './TokenOffer';
 
 // Composants déplacés vers eCash
 export { default as NetworkFeesAvail } from '../eCash/NetworkFeesAvail';

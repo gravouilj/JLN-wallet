@@ -478,5 +478,53 @@
     "whyKycAnswer": "Cela garantit aux utilisateurs que la ferme existe réellement et qu'elle est toujours en activité. Cette vérification est renouvelée chaque année.",
     "ctaText": "Prêt à commencer ?",
     "ctaButton": "Découvrir les fermes"
+  },
+  "ticket": {
+    "noTokenLinked": "Aucun jeton associé à ce ticket",
+    "noProfileLinked": "Aucun profil associé à ce ticket",
+    "profileNotFound": "Profil introuvable",
+    "noMessages": "Aucun message dans cette conversation",
+    "context": "Contexte du ticket",
+    "conversation": "Conversation",
+    "reply": "Répondre",
+    "replyPlaceholder": "Écrivez votre réponse...",
+    "sendReply": "Envoyer la réponse",
+    "errorSendingReply": "Erreur lors de l'envoi de la réponse",
+    "noContextAvailable": "Aucun contexte disponible",
+    "status": {
+      "open": "Ouvert",
+      "awaiting_reply": "En attente",
+      "in_progress": "En cours",
+      "resolved": "Résolu",
+      "closed": "Clôturé"
+    },
+    "priority": {
+      "normal": "Normal",
+      "high": "Élevée",
+      "urgent": "Urgente"
+    },
+    "type": {
+      "admin_creator": "Admin → Créateur",
+      "admin_client": "Admin → Client",
+      "creator_client": "Créateur → Client",
+      "report": "Signalement"
+    },
+    "actions": {
+      "resolve": "Résoudre",
+      "reopen": "Réouvrir",
+      "close": "Clôturer",
+      "escalate": "Escalader vers Admin"
+    }
+  },
+  "time": {
+    "justNow": "À l'instant",
+    "minutesAgo": "il y a {{count}} min",
+    "hoursAgo": "il y a {{count}}h",
+    "daysAgo": "il y a {{count}}j"
+  },
+  "role": {
+    "admin": "Admin",
+    "creator": "Créateur",
+    "client": "Client"
   }
 }

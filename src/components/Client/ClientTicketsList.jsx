@@ -204,7 +204,7 @@ const ClientTicketsList = ({ walletAddress, onTicketClick }) => {
                   <span>📅 {formatDate(ticket.created_at)}</span>
                   <span>•</span>
                   <span>
-                    {ticket.type === 'client' && !ticket.farm_id ? '👨‍💼 Support' : '🌾 Créateur'}
+                    {ticket.type === 'client' && !ticket.profile_id ? '👨‍💼 Support' : '🌾 Créateur'}
                   </span>
                   {getMessageCount(ticket) > 0 && (
                     <>

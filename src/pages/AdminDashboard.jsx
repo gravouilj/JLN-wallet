@@ -7,6 +7,7 @@ import AdminTicketSystem from '../components/Admin/AdminTicketSystem';
 import AdminVerificationPage from './AdminVerificationPage';
 import AdminSettings from '../components/Admin/AdminSettings';
 import AdminStats from '../components/Admin/AdminStats';
+import { AdminManagement } from '../components/Admin';
 import { useAdmin } from '../hooks/useAdmin';
 import { notificationAtom } from '../atoms';
 import { supabase } from '../services/supabaseClient';
@@ -99,6 +100,10 @@ const AdminDashboard = () => {
                 label: `🎫 Support${unreadTicketsCount > 0 ? ` (${unreadTicketsCount}) 🔴` : ''}` 
               },
               { 
+                id: 'admins', 
+                label: '👥 Admins' 
+              },
+              { 
                 id: 'settings', 
                 label: '⚙️ Paramètres' 
               },
@@ -121,6 +126,12 @@ const AdminDashboard = () => {
               <AdminTicketSystem 
                 onNotification={setNotification}
                 onTicketsChange={loadUnreadTicketsCount}
+              />
+            )}
+
+            {activeTab === 'admins' && (
+              <AdminManagement 
+                onNotification={setNotification}
               />
             )}
 

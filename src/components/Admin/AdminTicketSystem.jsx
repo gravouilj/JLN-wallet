@@ -1,67 +1,66 @@
 import { useState, useEffect } from 'react';
-import { Tabs, Button, Card, CardContent } from '../UI';
-import AdminTicket from './AdminTicket';
-import SearchFilters from '../SearchFilters';
-import { supabase } from '../../services/supabaseClient';
+import { Button, Card, CardContent, Input } from '../UI';
+import { TicketDetailModal } from '../TicketSystem';
+import { getTickets, addMessageToTicket, markMessagesAsRead, resolveTicket, reopenTicket, closeTicket } from '../../services/ticketService';
+import { filterAdminTickets, searchTickets, sortTickets, getUnreadCount } from '../../utils/smartFilters';
+import { useTranslation } from '../../hooks';
 
 /**
- * AdminTicketSystem - Système complet de gestion des tickets
+ * AdminTicketSystem - Système complet de gestion des tickets (REFACTORISÉ Phase 2)
  * 
- * Conforme au STYLING_GUIDE.md
- * 
- * Gère 3 types de tickets :
- * - Tickets Créateurs : Support agriculteurs
- * - Tickets Clients : Support utilisateurs
- * - Signalements : Reports de fermes/tokens
+ * Nouvelles fonctionnalités:
+ * - Smart filters: À traiter, En cours, Résolus 7j, Archivés
+ * - TicketDetailModal avec conversation complète
+ * - Utilise ticketService au lieu de requêtes Supabase directes
+ * - Support nouveau schéma: admin_creator, admin_client, creator_client, report
  * 
  * @param {Object} props
  * @param {Function} props.onNotification - Callback pour afficher des notifications
+ * @param {Function} props.onTicketsChange - Callback après changement tickets
  */
 const AdminTicketSystem = ({ onNotification, onTicketsChange }) => {
-  const [activeTab, setActiveTab] = useState('all');
+  const { t } = useTranslation();
+  
+  // États
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState(null);
+  const [activeFilter, setActiveFilter] = useState('actionable');
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [filterPriority, setFilterPriority] = useState('all');
-  const [filterType, setFilterType] = useState('all');
+  const [sortBy, setSortBy] = useState('date');
+  const [sortOrder, setSortOrder] = useState('desc');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedTicket, setSelectedTicket] = useState(null);
 
-  // Charger les tickets
+  // Chargement initial
   useEffect(() => {
     loadTickets();
-  }, [activeTab]);
+  }, []);
+
+  // Debug: tracer les changements d'état
+  useEffect(() => {
+    console.log('🔄 AdminTicketSystem state changed:', {
+      modalOpen,
+      hasSelectedTicket: !!selectedTicket,
+      selectedTicketId: selectedTicket?.id,
+      ticketsCount: tickets.length
+    });
+  }, [modalOpen, selectedTicket, tickets.length]);
 
   const loadTickets = async () => {
-    setLoading(true);
     try {
-      let query = supabase
-        .from('tickets')
-        .select(`
-          *,
-          messages:ticket_messages(*)
-        `)
-        .order('created_at', { ascending: false });
-
-      // Filtrer par onglet
-      if (activeTab === 'creators') {
-        // Tickets créateur→admin uniquement (sans token_id)
-        query = query.eq('type', 'creator').is('token_id', null);
-      } else if (activeTab === 'clients') {
-        query = query.eq('type', 'client');
-      } else if (activeTab === 'reports') {
-        query = query.eq('type', 'report');
-      } else {
-        // Vue "all" : exclure les tickets client→créateur
-        query = query.or('type.neq.creator,and(type.eq.creator,token_id.is.null)');
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
+      setLoading(true);
+      const data = await getTickets({ role: 'admin' });
+      console.log('📥 AdminTicketSystem tickets loaded:', {
+        count: data?.length || 0,
+        sample: data?.[0] ? {
+          id: data[0].id,
+          subject: data[0].subject,
+          hasConversation: Array.isArray(data[0].conversation),
+          conversationLength: data[0].conversation?.length || 0
+        } : null
+      });
       setTickets(data || []);
       
-      // Notifier le parent du changement
       if (onTicketsChange) {
         onTicketsChange();
       }
@@ -76,292 +75,308 @@ const AdminTicketSystem = ({ onNotification, onTicketsChange }) => {
     }
   };
 
-  // Répondre à un ticket
-  const handleReply = async (ticketId, content) => {
-    setProcessing(ticketId);
+  // Handlers modal
+  const handleSendMessage = async (content, attachments) => {
+    if (!selectedTicket) return;
+    
     try {
-      // Ajouter le message
-      const { error } = await supabase
-        .from('ticket_messages')
-        .insert({
-          ticket_id: ticketId,
-          author: 'admin',
-          author_address: 'admin', // À remplacer par l'adresse admin
-          content,
-          visible_to: ['admin', 'creator', 'client']
-        });
+      await addMessageToTicket(
+        selectedTicket.id,
+        'admin',
+        'admin@system',
+        content,
+        attachments
+      );
 
-      if (error) throw error;
-
-      // Mettre à jour le statut si c'était "open"
-      const ticket = tickets.find(t => t.id === ticketId);
-      if (ticket?.status === 'open') {
-        await handleUpdateStatus(ticketId, 'in_progress');
-      }
-
-      onNotification?.({ 
-        type: 'success', 
-        message: 'Réponse envoyée avec succès' 
-      });
+      onNotification?.({ type: 'success', message: '✅ Réponse envoyée' });
+      await loadTickets();
       
+      const updated = await getTickets({ role: 'admin' });
+      setSelectedTicket(updated.find(t => t.id === selectedTicket.id));
+    } catch (err) {
+      console.error('❌ Erreur envoi message:', err);
+      throw err;
+    }
+  };
+
+  const handleMarkAsRead = async (role) => {
+    if (!selectedTicket) return;
+    try {
+      await markMessagesAsRead(selectedTicket.id, role);
       await loadTickets();
     } catch (err) {
-      console.error('Erreur envoi réponse:', err);
-      onNotification?.({ 
-        type: 'error', 
-        message: 'Erreur lors de l\'envoi de la réponse' 
-      });
-    } finally {
-      setProcessing(null);
+      console.error('❌ Erreur marquage:', err);
     }
   };
 
-  // Fermer un ticket
-  const handleClose = async (ticketId) => {
-    setProcessing(ticketId);
+  const handleResolve = async () => {
+    if (!selectedTicket) return;
     try {
-      const { error } = await supabase
-        .from('tickets')
-        .update({ 
-          status: 'closed',
-          closed_at: new Date().toISOString()
-        })
-        .eq('id', ticketId);
-
-      if (error) throw error;
-
-      onNotification?.({ 
-        type: 'success', 
-        message: 'Ticket fermé' 
-      });
-      
+      await resolveTicket(selectedTicket.id);
+      onNotification?.({ type: 'success', message: '✅ Ticket résolu' });
+      setModalOpen(false);
       await loadTickets();
     } catch (err) {
-      console.error('Erreur fermeture ticket:', err);
-      onNotification?.({ 
-        type: 'error', 
-        message: 'Erreur lors de la fermeture' 
-      });
-    } finally {
-      setProcessing(null);
+      console.error('❌ Erreur résolution:', err);
+      onNotification?.({ type: 'error', message: 'Erreur résolution' });
     }
   };
 
-  // Escalader la priorité
-  const handleEscalate = async (ticketId) => {
-    setProcessing(ticketId);
+  const handleReopen = async () => {
+    if (!selectedTicket) return;
     try {
-      const ticket = tickets.find(t => t.id === ticketId);
-      const priorities = ['low', 'normal', 'high', 'urgent'];
-      const currentIndex = priorities.indexOf(ticket.priority);
-      const newPriority = priorities[Math.min(currentIndex + 1, priorities.length - 1)];
-
-      const { error } = await supabase
-        .from('tickets')
-        .update({ priority: newPriority })
-        .eq('id', ticketId);
-
-      if (error) throw error;
-
-      onNotification?.({ 
-        type: 'success', 
-        message: `Priorité escaladée à ${newPriority}` 
-      });
+      await reopenTicket(selectedTicket.id);
+      onNotification?.({ type: 'success', message: '✅ Ticket réouvert' });
       
+      const updated = await getTickets({ role: 'admin' });
+      setSelectedTicket(updated.find(t => t.id === selectedTicket.id));
       await loadTickets();
     } catch (err) {
-      console.error('Erreur escalade priorité:', err);
-      onNotification?.({ 
-        type: 'error', 
-        message: 'Erreur lors de l\'escalade' 
-      });
-    } finally {
-      setProcessing(null);
+      console.error('❌ Erreur réouverture:', err);
+      onNotification?.({ type: 'error', message: 'Erreur réouverture' });
     }
   };
 
-  // Changer le statut
-  const handleUpdateStatus = async (ticketId, newStatus) => {
-    setProcessing(ticketId);
+  const handleCloseTicket = async () => {
+    if (!selectedTicket) return;
+    if (!window.confirm('Clôturer définitivement ce ticket ?')) return;
+    
     try {
-      const { error } = await supabase
-        .from('tickets')
-        .update({ status: newStatus })
-        .eq('id', ticketId);
-
-      if (error) throw error;
-
-      onNotification?.({ 
-        type: 'success', 
-        message: `Statut changé : ${newStatus}` 
-      });
-      
+      await closeTicket(selectedTicket.id);
+      onNotification?.({ type: 'success', message: '✅ Ticket clôturé' });
+      setModalOpen(false);
       await loadTickets();
     } catch (err) {
-      console.error('Erreur changement statut:', err);
-      onNotification?.({ 
-        type: 'error', 
-        message: 'Erreur lors du changement de statut' 
-      });
-    } finally {
-      setProcessing(null);
+      console.error('❌ Erreur clôture:', err);
+      onNotification?.({ type: 'error', message: 'Erreur clôture' });
     }
   };
 
-  // Filtrer les tickets
-  const filteredTickets = tickets.filter(ticket => {
-    // Recherche textuelle
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      const matchSubject = ticket.subject?.toLowerCase().includes(query);
-      const matchId = ticket.id?.toLowerCase().includes(query);
-      const matchCreator = ticket.created_by?.toLowerCase().includes(query);
-      if (!matchSubject && !matchId && !matchCreator) return false;
-    }
+  // Filtrage et tri
+  const filtered = filterAdminTickets(tickets, activeFilter);
+  const searched = searchTickets(filtered, searchQuery);
+  const sorted = sortTickets(searched, sortBy, sortOrder);
 
-    // Filtre statut
-    if (filterStatus !== 'all' && ticket.status !== filterStatus) return false;
-
-    // Filtre priorité
-    if (filterPriority !== 'all' && ticket.priority !== filterPriority) return false;
-
-    // Filtre type
-    if (filterType !== 'all' && ticket.type !== filterType) return false;
-
-    return true;
-  });
-
-  // Compter les tickets par onglet
-  const ticketCounts = {
-    all: tickets.length,
-    creators: tickets.filter(t => t.type === 'creator').length,
-    clients: tickets.filter(t => t.type === 'client').length,
-    reports: tickets.filter(t => t.type === 'report').length
+  // Compteurs
+  const counts = {
+    actionable: filterAdminTickets(tickets, 'actionable').length,
+    in_progress: filterAdminTickets(tickets, 'in_progress').length,
+    resolved_recent: filterAdminTickets(tickets, 'resolved_recent').length,
+    archived: filterAdminTickets(tickets, 'archived').length,
+    all: tickets.length
   };
 
-  // Compter les tickets non traités (ni fermés ni résolus)
-  const unreadCounts = {
-    all: tickets.filter(t => t.status !== 'closed' && t.status !== 'resolved').length,
-    creators: tickets.filter(t => t.type === 'creator' && t.status !== 'closed' && t.status !== 'resolved').length,
-    clients: tickets.filter(t => t.type === 'client' && t.status !== 'closed' && t.status !== 'resolved').length,
-    reports: tickets.filter(t => t.type === 'report' && t.status !== 'closed' && t.status !== 'resolved').length
+  const unreadCount = getUnreadCount(tickets, 'admin');
+
+  const getStatusBadge = (status) => {
+    const styles = {
+      open: { bg: '#dbeafe', color: '#1e40af', label: 'Ouvert' },
+      awaiting_reply: { bg: '#fef3c7', color: '#92400e', label: 'En attente' },
+      in_progress: { bg: '#e0e7ff', color: '#4338ca', label: 'En cours' },
+      resolved: { bg: '#d1fae5', color: '#065f46', label: 'Résolu' },
+      closed: { bg: '#f3f4f6', color: '#374151', label: 'Clôturé' }
+    };
+    const style = styles[status] || styles.open;
+    return (
+      <span style={{
+        padding: '2px 8px',
+        borderRadius: '10px',
+        backgroundColor: style.bg,
+        color: style.color,
+        fontSize: '0.7rem',
+        fontWeight: '700',
+        textTransform: 'uppercase'
+      }}>
+        {style.label}
+      </span>
+    );
+  };
+
+  const getPriorityIcon = (priority) => {
+    const icons = { low: '🟢', normal: '🟡', high: '🟠', urgent: '🔴' };
+    return icons[priority] || '🟡';
   };
 
   return (
-    <div className="admin-ticket-system">
-      {/* Onglets */}
-      <Tabs
-        tabs={[
-          { 
-            id: 'all', 
-            label: `📋 Tous (${ticketCounts.all}) ${unreadCounts.all > 0 ? '🔴' : ''}` 
-          },
-          { 
-            id: 'creators', 
-            label: `🌾 Créateurs (${ticketCounts.creators}) ${unreadCounts.creators > 0 ? '🔴' : ''}` 
-          },
-          { 
-            id: 'clients', 
-            label: `👤 Clients (${ticketCounts.clients}) ${unreadCounts.clients > 0 ? '🔴' : ''}` 
-          },
-          { 
-            id: 'reports', 
-            label: `🚨 Signalements (${ticketCounts.reports}) ${unreadCounts.reports > 0 ? '🔴' : ''}` 
-          }
-        ]}
-        activeTab={activeTab}
-        onChange={setActiveTab}
-      />
-
-      {/* Filtres */}
-      <div className="mt-4 mb-5">
-        <SearchFilters
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          searchPlaceholder="Rechercher un ticket par sujet, ID, ou créateur..."
-          filters={[
-            {
-              id: 'status',
-              label: 'Tous les statuts',
-              icon: '📊',
-              value: filterStatus,
-              options: [
-                { value: 'open', label: 'Ouverts' },
-                { value: 'in_progress', label: 'En cours' },
-                { value: 'resolved', label: 'Résolus' },
-                { value: 'closed', label: 'Fermés' }
-              ],
-              onChange: setFilterStatus
-            },
-            {
-              id: 'priority',
-              label: 'Toutes les priorités',
-              icon: '⚡',
-              value: filterPriority,
-              options: [
-                { value: 'low', label: 'Basse' },
-                { value: 'normal', label: 'Normale' },
-                { value: 'high', label: 'Haute' },
-                { value: 'urgent', label: 'Urgente' }
-              ],
-              onChange: setFilterPriority
-            },
-            {
-              id: 'type',
-              label: 'Tous les types',
-              icon: '🏷️',
-              value: filterType,
-              options: [
-                { value: 'creator', label: 'Créateur' },
-                { value: 'client', label: 'Client' },
-                { value: 'report', label: 'Signalement' }
-              ],
-              onChange: setFilterType
-            }
-          ]}
-          hasActiveFilters={
-            searchQuery || 
-            filterStatus !== 'all' || 
-            filterPriority !== 'all' ||
-            filterType !== 'all'
-          }
-          onClearAll={() => {
-            setSearchQuery('');
-            setFilterStatus('all');
-            setFilterPriority('all');
-            setFilterType('all');
-          }}
-        />
+    <div style={{ padding: '20px' }}>
+      {/* Header */}
+      <div style={{ marginBottom: '24px' }}>
+        <h1 style={{ fontSize: '1.75rem', fontWeight: '700', marginBottom: '8px' }}>
+          🎫 Gestion des tickets
+          {unreadCount > 0 && (
+            <span style={{
+              marginLeft: '12px',
+              padding: '4px 12px',
+              backgroundColor: 'var(--primary)',
+              color: 'white',
+              borderRadius: '12px',
+              fontSize: '0.875rem'
+            }}>
+              {unreadCount} non lus
+            </span>
+          )}
+        </h1>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+          Vue administrative avec filtres intelligents
+        </p>
       </div>
 
-      {/* Liste des tickets */}
+      {/* Filtres smart */}
+      <div style={{
+        display: 'flex',
+        gap: '8px',
+        marginBottom: '20px',
+        flexWrap: 'wrap'
+      }}>
+        <Button
+          variant={activeFilter === 'actionable' ? 'primary' : 'outline'}
+          onClick={() => setActiveFilter('actionable')}
+        >
+          ⚡ À traiter ({counts.actionable})
+        </Button>
+        <Button
+          variant={activeFilter === 'in_progress' ? 'primary' : 'outline'}
+          onClick={() => setActiveFilter('in_progress')}
+        >
+          ⏳ En cours ({counts.in_progress})
+        </Button>
+        <Button
+          variant={activeFilter === 'resolved_recent' ? 'primary' : 'outline'}
+          onClick={() => setActiveFilter('resolved_recent')}
+        >
+          ✅ Résolus 7j ({counts.resolved_recent})
+        </Button>
+        <Button
+          variant={activeFilter === 'archived' ? 'primary' : 'outline'}
+          onClick={() => setActiveFilter('archived')}
+        >
+          📦 Archivés ({counts.archived})
+        </Button>
+        <Button
+          variant={activeFilter === 'all' ? 'primary' : 'outline'}
+          onClick={() => setActiveFilter('all')}
+        >
+          📋 Tous ({counts.all})
+        </Button>
+      </div>
+
+      {/* Recherche + Tri */}
+      <Card style={{ marginBottom: '20px' }}>
+        <CardContent>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: '250px' }}>
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="🔍 Rechercher (sujet, messages, token...)"
+              />
+            </div>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              style={{
+                padding: '0 16px',
+                height: '50px',
+                fontSize: '0.875rem',
+                border: '1px solid var(--border-color)',
+                borderRadius: '12px',
+                backgroundColor: 'var(--bg-input)',
+                color: 'var(--text-primary)'
+              }}
+            >
+              <option value="date">📅 Date</option>
+              <option value="priority">⚡ Priorité</option>
+              <option value="status">📊 Statut</option>
+              <option value="unread">💬 Non lus</option>
+            </select>
+            <Button
+              variant="outline"
+              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+            >
+              {sortOrder === 'asc' ? '⬆️' : '⬇️'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Liste tickets */}
       {loading ? (
-        <div className="text-center p-8 text-secondary">
-          ⏳ Chargement des tickets...
+        <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+          ⏳ Chargement...
         </div>
-      ) : filteredTickets.length === 0 ? (
+      ) : sorted.length === 0 ? (
         <Card>
-          <CardContent className="text-center p-8">
-            <div className="text-5xl mb-3">📭</div>
-            <p className="text-secondary">
-              {searchQuery ? 'Aucun ticket trouvé pour cette recherche.' : 'Aucun ticket à afficher.'}
+          <CardContent style={{ textAlign: 'center', padding: '40px' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '16px' }}>📭</div>
+            <p style={{ color: 'var(--text-secondary)' }}>
+              {searchQuery ? 'Aucun ticket trouvé' : 'Aucun ticket dans ce filtre'}
             </p>
           </CardContent>
         </Card>
       ) : (
-        <div className="d-flex flex-column gap-4">
-          {filteredTickets.map(ticket => (
-            <AdminTicket
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {sorted.map(ticket => (
+            <Card
               key={ticket.id}
-              ticket={ticket}
-              onReply={handleReply}
-              onClose={handleClose}
-              onEscalate={handleEscalate}
-              onUpdateStatus={handleUpdateStatus}
-              processing={processing === ticket.id}
-            />
+              style={{ cursor: 'pointer', transition: 'all 0.2s', zIndex: 1, position: 'relative', background: 'var(--bg-primary)', pointerEvents: 'auto' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                console.log('🔥 onClick déclenché (Admin):', ticket.id);
+                setSelectedTicket(ticket);
+                setModalOpen(true);
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'}
+              onMouseLeave={(e) => e.currentTarget.style.boxShadow = 'none'}
+            >
+              <CardContent>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                  <div style={{ fontSize: '1.5rem' }}>
+                    {getPriorityIcon(ticket.priority)}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                      <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '700' }}>
+                        {ticket.subject}
+                      </h3>
+                      {getStatusBadge(ticket.status)}
+                      {ticket.unread_count > 0 && (
+                        <span style={{
+                          backgroundColor: 'var(--primary)',
+                          color: 'white',
+                          padding: '2px 8px',
+                          borderRadius: '10px',
+                          fontSize: '0.7rem',
+                          fontWeight: '700'
+                        }}>
+                          {ticket.unread_count} 💬
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                      {ticket.type && <span style={{ marginRight: '8px' }}>🏷️ {ticket.type}</span>}
+                      {ticket.category && <span style={{ marginRight: '8px' }}>📂 {ticket.category}</span>}
+                      <span>📅 {new Date(ticket.created_at).toLocaleDateString('fr-FR')}</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
+      )}
+
+      {/* Modal détail */}
+      {modalOpen && selectedTicket && (
+        <TicketDetailModal
+          ticket={selectedTicket}
+          currentUserRole="admin"
+          onClose={() => setModalOpen(false)}
+          onSendMessage={handleSendMessage}
+          onMarkAsRead={handleMarkAsRead}
+          onResolve={handleResolve}
+          onReopen={handleReopen}
+          onCloseTicket={handleCloseTicket}
+        />
       )}
     </div>
   );

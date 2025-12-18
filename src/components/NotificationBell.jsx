@@ -61,8 +61,8 @@ const NotificationBell = ({ compact = false }) => {
       if (profilId) {
         const { data, error: ticketsError } = await supabase
           .from('tickets')
-          .select('id, type, status, subject, created_at, farm_id, token_id')
-          .eq('farm_id', profilId)
+          .select('id, type, status, subject, created_at, profile_id, token_id')
+          .eq('profile_id', profilId)
           .or('and(type.eq.creator,token_id.is.null),type.eq.report')
           .in('status', ['open', 'in_progress'])
           .order('created_at', { ascending: false })
@@ -75,10 +75,10 @@ const NotificationBell = ({ compact = false }) => {
       // 2. Charger les changements de statut de vérification (depuis profiles)
       const { data: farmsData, error: farmsError } = await supabase
         .from('profiles')
-        .select('id, name, status, status_updated_at')
+        .select('id, name, status, updated_at')
         .eq('owner_address', address)
-        .not('status', 'is', null)
-        .order('status_updated_at', { ascending: false })
+        .not('status', 'eq', null)
+        .order('updated_at', { ascending: false })
         .limit(5);
 
       if (farmsError) throw farmsError;
@@ -93,7 +93,7 @@ const NotificationBell = ({ compact = false }) => {
           const { data, error: activityError } = await supabase
             .from('activity_history')
             .select('id, action_type, amount, token_ticker, created_at, details, token_id')
-            .eq('farm_id', profilId)
+            .eq('profile_id', profilId)
             .gte('created_at', sevenDaysAgo.toISOString())
             .order('created_at', { ascending: false })
             .limit(10);
@@ -131,7 +131,7 @@ const NotificationBell = ({ compact = false }) => {
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
         farmsData.forEach(farm => {
-          const statusDate = new Date(farm.status_updated_at);
+          const statusDate = new Date(farm.updated_at);
           if (statusDate > sevenDaysAgo && farm.status !== 'pending') {
             allNotifications.push({
               id: `farm-${farm.id}`,

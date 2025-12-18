@@ -607,10 +607,10 @@ export const ProfilService = {
     console.log('🔍 getReportedProfils: Tentative de récupération des signalements...');
     
     const { data, error } = await supabase
-      .from('profil_reports')
+      .from('profile_reports')
       .select(`
         *,
-        profils!inner(
+        profiles!inner(
           id,
           name,
           description,
@@ -640,7 +640,7 @@ export const ProfilService = {
     const profilReports = {};
     data.forEach(report => {
       const profilId = report.profil_id;
-      const profil = report.profils;
+      const profil = report.profiles;
       
       // Exclure uniquement les profils bannies ou supprimées
       if (profil && profil.status !== 'banned' && profil.status !== 'deleted') {
@@ -665,7 +665,7 @@ export const ProfilService = {
   // 15. ADMIN: Ignorer les signalements d'un profil
   async ignoreReports(profilId, adminNote = '') {
     const { data, error } = await supabase
-      .from('profil_reports')
+      .from('profile_reports')
       .update({
         admin_status: 'ignored',
         admin_action_at: new Date().toISOString(),
@@ -682,7 +682,7 @@ export const ProfilService = {
   // 16b. Récupérer les signalements d'un profil spécifique
   async getMyProfilReports(profilId, role = 'creator') {
     let query = supabase
-      .from('profil_reports')
+      .from('profile_reports')
       .select('*')
       .eq('profil_id', profilId);
     // Si c'est un creator, ne montrer que les signalements visibles

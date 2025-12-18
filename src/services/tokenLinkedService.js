@@ -28,7 +28,7 @@ export const checkActiveTicketsForToken = async (tokenId, profilId = null) => {
       const { data: farmTickets } = await supabase
         .from('tickets')
         .select('id, type, status, subject, created_at')
-        .eq('farm_id', profilId)
+        .eq('profile_id', profilId)
         .eq('token_id', tokenId)
         .in('status', activeStatuses);
       

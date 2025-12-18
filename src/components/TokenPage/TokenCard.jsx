@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, Button, Badge } from '../UI';
 import TokenLinked from './TokenLinked';
 import TokenVisible from './TokenVisible';
+import TokenOffer from './TokenOffer';
 
 /**
  * TokenCard - Carte d'affichage pour un jeton avec toutes les informations et actions

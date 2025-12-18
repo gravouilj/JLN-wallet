@@ -16,6 +16,134 @@ import { NetworkFeesAvail, AddressHistory, TokenCard } from '../components/Token
 import AddressBook from '../components/AddressBook/AddressBook';
 
 /**
+ * BlockedProfileCard - Carte d'affichage d'un profil bloqué avec bouton de déblocage
+ */
+const BlockedProfileCard = ({ profile, onUnblock }) => {
+  const [unblockReason, setUnblockReason] = useState('');
+  const [showUnblockForm, setShowUnblockForm] = useState(false);
+  const [isUnblocking, setIsUnblocking] = useState(false);
+
+  const handleUnblock = async () => {
+    if (!unblockReason.trim()) {
+      alert('Veuillez fournir une raison de déblocage');
+      return;
+    }
+
+    setIsUnblocking(true);
+    try {
+      await onUnblock(profile.id, unblockReason);
+      setShowUnblockForm(false);
+      setUnblockReason('');
+    } catch (error) {
+      console.error('❌ Erreur déblocage:', error);
+    } finally {
+      setIsUnblocking(false);
+    }
+  };
+
+  return (
+    <Card style={{ border: '2px solid #f59e0b', backgroundColor: '#fffbeb' }}>
+      <CardContent style={{ padding: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+          <div style={{ flex: 1 }}>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: '#92400e', margin: '0 0 8px 0' }}>
+              {profile.name || 'Sans nom'}
+            </h3>
+            <div style={{ fontSize: '0.85rem', color: '#78350f', marginBottom: '4px' }}>
+              <strong>Adresse :</strong> {profile.owner_address?.substring(0, 20)}...
+            </div>
+            <div style={{ fontSize: '0.85rem', color: '#78350f', marginBottom: '4px' }}>
+              <strong>Statut :</strong> {profile.status}
+            </div>
+            <div style={{ fontSize: '0.85rem', color: '#78350f', marginBottom: '4px' }}>
+              <strong>Bloqué le :</strong> {new Date(profile.blocked_at).toLocaleDateString('fr-FR')}
+            </div>
+          </div>
+          <div style={{ fontSize: '2rem' }}>🚫</div>
+        </div>
+
+        <div style={{
+          padding: '12px',
+          backgroundColor: '#fef3c7',
+          borderRadius: '8px',
+          marginBottom: '16px'
+        }}>
+          <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#92400e', marginBottom: '4px' }}>
+            Raison du blocage :
+          </div>
+          <div style={{ fontSize: '0.85rem', color: '#78350f' }}>
+            {profile.blocked_reason}
+          </div>
+        </div>
+
+        {!showUnblockForm ? (
+          <Button
+            onClick={() => setShowUnblockForm(true)}
+            variant="primary"
+            fullWidth
+            style={{ backgroundColor: '#10b981', borderColor: '#10b981' }}
+          >
+            🔓 Débloquer ce profil
+          </Button>
+        ) : (
+          <div style={{ marginTop: '12px' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '0.875rem',
+              fontWeight: '600',
+              color: '#92400e',
+              marginBottom: '8px'
+            }}>
+              Raison du déblocage :
+            </label>
+            <textarea
+              value={unblockReason}
+              onChange={(e) => setUnblockReason(e.target.value)}
+              placeholder="Ex: Tickets résolus, fausse alerte, etc."
+              style={{
+                width: '100%',
+                padding: '12px',
+                border: '2px solid #fbbf24',
+                borderRadius: '8px',
+                fontSize: '0.875rem',
+                minHeight: '80px',
+                resize: 'vertical',
+                fontFamily: 'inherit',
+                boxSizing: 'border-box',
+                marginBottom: '12px'
+              }}
+              disabled={isUnblocking}
+            />
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <Button
+                onClick={handleUnblock}
+                variant="primary"
+                fullWidth
+                disabled={isUnblocking}
+                style={{ backgroundColor: '#10b981', borderColor: '#10b981' }}
+              >
+                {isUnblocking ? '⏳ Déblocage...' : '✅ Confirmer le déblocage'}
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowUnblockForm(false);
+                  setUnblockReason('');
+                }}
+                variant="outline"
+                fullWidth
+                disabled={isUnblocking}
+              >
+                Annuler
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+/**
  * ManageTokenPage - Gestionnaire de jetons pour créateurs
  * 
  * Fonctionnalités principales:
@@ -67,8 +195,11 @@ const ManageTokenPage = () => {
   // Solde XEC du wallet
   const [xecBalance, setXecBalance] = useState(0);
   
-  // Filtres admin: 'active' | 'inactive' | 'deleted' | 'all'
+  // Filtres admin: 'active' | 'inactive' | 'deleted' | 'blocked' | 'all'
   const [activeFilter, setActiveFilter] = useState('active');
+  
+  // Profils bloqués pour anti-fraude (admin)
+  const [blockedProfiles, setBlockedProfiles] = useState([]);
   
   // Historique des actions créateur
   const [globalHistory, setGlobalHistory] = useState([]);
@@ -112,6 +243,29 @@ const ManageTokenPage = () => {
     } catch (err) {
       console.error('❌ Erreur chargement profil:', err);
       return null;
+    }
+  };
+
+  /**
+   * Charge les profils bloqués (admin uniquement)
+   * @returns {Promise<void>}
+   */
+  const loadBlockedProfiles = async () => {
+    if (!isAdmin) return;
+    
+    try {
+      const { supabase } = await import('../services/supabaseClient');
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, owner_address, name, blocked_reason, blocked_at, status')
+        .eq('is_blocked_from_creating', true)
+        .order('blocked_at', { ascending: false });
+      
+      if (error) throw error;
+      setBlockedProfiles(data || []);
+      console.log('🚫 Profils bloqués chargés:', data?.length || 0);
+    } catch (error) {
+      console.error('❌ Erreur chargement profils bloqués:', error);
     }
   };
 
@@ -230,6 +384,20 @@ const ManageTokenPage = () => {
           displayTokens = tokens.filter(t => t.isDeleted && t.isFromJlnWallet);
         }
         break;
+      
+      case 'blocked':
+        // Profils bloqués: admin uniquement (pas de tokens, affichage spécial des profils)
+        if (isAdmin) {
+          displayTokens = []; // Pas de tokens ici
+        }
+        break;
+        
+      case 'all':
+        // Profils bloqués: admin uniquement (affichage spécial)
+        if (isAdmin) {
+          displayTokens = []; // Pas de tokens, on affiche les profils bloqués à la place
+        }
+        break;
         
       case 'all':
         // Tous: admin uniquement
@@ -279,6 +447,11 @@ const ManageTokenPage = () => {
         
         setMyProfile(myProfileData);
         setPendingCount(pendingCountData);
+        
+        // Si admin, charger les profils bloqués
+        if (isAdmin) {
+          await loadBlockedProfiles();
+        }
         
         // Charger le solde XEC
         const xecBalanceData = await wallet.getBalance();
@@ -659,6 +832,36 @@ const ManageTokenPage = () => {
                 gap: '8px',
                 marginTop: '12px'
               }}>
+                {/* Statut de visibilité du profil */}
+                <button
+                  onClick={() => navigate('/manage-profile', { state: { activeTab: 'security' } })}
+                  style={{ 
+                    padding: '8px 16px', 
+                    backgroundColor: myProfile.status === 'active' ? '#3b82f6' : '#6b7280', 
+                    color: '#fff', 
+                    borderRadius: '20px', 
+                    fontSize: '0.875rem', 
+                    fontWeight: '600',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.opacity = '0.9';
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.opacity = '1';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                  }}
+                  title={myProfile.status === 'active' ? 'Profil visible dans l\'annuaire - Cliquez pour modifier' : 'Profil en mode brouillon - Cliquez pour activer'}
+                >
+                  {myProfile.status === 'active' ? '🌐 Profil public' : '📝 Brouillon'}
+                </button>
+
                 {myProfile.verification_status === 'verified' && (
                   <div style={{ 
                     padding: '8px 16px', 
@@ -921,6 +1124,23 @@ const ManageTokenPage = () => {
                         🗑️ Supprimés ({tokens.filter(t => t.isDeleted && t.isFromJlnWallet).length})
                       </button>
                       <button
+                        onClick={() => setActiveFilter('blocked')}
+                        style={{
+                          padding: '8px 16px',
+                          borderRadius: '8px',
+                          fontWeight: '600',
+                          fontSize: '0.875rem',
+                          border: 'none',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          backgroundColor: activeFilter === 'blocked' ? '#f59e0b' : 'var(--bg-secondary)',
+                          color: activeFilter === 'blocked' ? '#fff' : 'var(--text-primary)',
+                          boxShadow: activeFilter === 'blocked' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
+                        }}
+                      >
+                        🚫 Bloqués ({blockedProfiles.length})
+                      </button>
+                      <button
                         onClick={() => setActiveFilter('all')}
                         style={{
                           padding: '8px 16px',
@@ -951,6 +1171,7 @@ const ManageTokenPage = () => {
                       {activeFilter === 'active' ? '🟢 Jetons avec offre en circulation (offre > 0)' :
                        activeFilter === 'inactive' ? '⚫ Jetons sans circulation (offre = 0)' :
                        activeFilter === 'deleted' ? '🗑️ Jetons supprimés ou signalés' :
+                       activeFilter === 'blocked' ? '🚫 Profils bloqués pour création/importation de jetons' :
                        '📋 Tous vos jetons créés ou importés'}
                     </p>
                   </CardContent>
@@ -958,8 +1179,48 @@ const ManageTokenPage = () => {
               </>
             )}
             
+            {/* Liste des profils bloqués (admin, filtre "Bloqués") */}
+            {activeFilter === 'blocked' && isAdmin && (
+              <>
+                {blockedProfiles.length === 0 ? (
+                  <Card>
+                    <CardContent style={{ padding: '24px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '3rem', marginBottom: '12px' }}>✅</div>
+                      <p style={{ fontSize: '1rem', color: 'var(--text-secondary)', margin: 0 }}>
+                        Aucun profil bloqué actuellement
+                      </p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  blockedProfiles.map((profile) => (
+                    <BlockedProfileCard
+                      key={profile.id}
+                      profile={profile}
+                      onUnblock={async (profileId, reason) => {
+                        try {
+                          const { default: adminService } = await import('../services/adminService');
+                          await adminService.adminUnblockProfile(profileId, address, reason);
+                          setNotification({
+                            type: 'success',
+                            message: `✅ Profil ${profile.name} débloqué avec succès`
+                          });
+                          await loadBlockedProfiles(); // Recharger la liste
+                        } catch (error) {
+                          console.error('❌ Erreur déblocage:', error);
+                          setNotification({
+                            type: 'error',
+                            message: `❌ Erreur lors du déblocage: ${error.message}`
+                          });
+                        }
+                      }}
+                    />
+                  ))
+                )}
+              </>
+            )}
+            
             {/* Liste des tokens filtrés */}
-            {getFilteredTokens().map((token) => {
+            {activeFilter !== 'blocked' && getFilteredTokens().map((token) => {
               const showToggles = !!myProfile && token.isFromjlnWallet === true;
               
               return (

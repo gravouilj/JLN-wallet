@@ -875,7 +875,27 @@ const ManageProfilePage = () => {
           // Ne pas bloquer la sauvegarde si la colonne n'existe pas encore
         }
       } else if (existingProfile?.verified && sensitiveFieldsChanged) {
-        // Profile vérifié avec modification de champs sensibles
+        // Profile vérifié avec modification de champs sensibles SANS demande de vérification
+        // Passage en 'pending' pour nécessiter une nouvelle validation admin
+        verificationStatus = 'pending';
+        isVerified = false;
+        
+        // Ajouter une entrée système dans l'historique
+        try {
+          const currentHistory = existingProfile?.communication_history || [];
+          profileData.communication_history = [
+            ...currentHistory,
+            {
+              author: 'system',
+              message: '⚠️ Modification de champs sensibles sur un profil vérifié - Nouvelle validation requise',
+              timestamp: new Date().toISOString()
+            }
+          ];
+        } catch (err) {
+          console.warn('⚠️ communication_history non disponible:', err);
+        }
+      } else if (!existingProfile?.verified && sensitiveFieldsChanged && !requestVerification) {
+        // Profile non vérifié avec modification - reste 'none'
         verificationStatus = 'none';
         isVerified = false;
       }
@@ -892,9 +912,11 @@ const ManageProfilePage = () => {
       // Message adapté selon le statut
       let successMessage = 'Profile enregistré avec succès !';
       if (requestVerification) {
-        successMessage = 'Enregistré ! Demande de vérification envoyée.';
+        successMessage = 'Enregistré ! Demande de vérification envoyée à l\'administrateur.';
       } else if (existingProfile?.verified && sensitiveFieldsChanged) {
-        successMessage = 'Enregistré ! Une nouvelle vérification sera nécessaire.';
+        successMessage = 'Enregistré ! Une nouvelle vérification par l\'administrateur sera nécessaire.';
+      } else if (sensitiveFieldsChanged) {
+        successMessage = 'Coordonnées enregistrées avec succès !';
       }
       
       setNotification({
@@ -1241,6 +1263,13 @@ const ManageProfilePage = () => {
                       await performSave(e, true);
                     }
                   }}
+                  onSaveWithoutVerification={async (e) => {
+                    if (e) e.preventDefault();
+                    
+                    // Sauvegarde simple sans demande de vérification
+                    // La logique de performSave gère automatiquement le changement de statut
+                    await performSave(e, false);
+                  }}
                 />
               )}
 
@@ -1257,10 +1286,11 @@ const ManageProfilePage = () => {
               {/* ONGLET 4: SÉCURITÉ & CONFIDENTIALITÉ */}
               {activeTab === 'security' && (
                 <SecurityTab
-                  existingProfile={existingProfile}
+                  existingProfiles={existingProfile}
                   togglingProfileStatus={togglingProfileStatus}
-                  onToggleProfileStatus={(checked) => handleToggleProfileStatus(checked ? 'active' : 'draft')}
+                  onToggleProfileStatus={handleToggleProfileStatus}
                   privacy={privacy}
+                  formData={formData}
                   onPrivacyChange={async (field, value) => {
                     // Mettre à jour le state local immédiatement
                     setPrivacy(prev => ({ ...prev, [field]: value }));

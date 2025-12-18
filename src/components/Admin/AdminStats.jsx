@@ -60,7 +60,7 @@ const AdminStats = ({ onNotification }) => {
     try {
       // Charger les stats des créateurs
       const { data: profils, error: profilsError } = await supabase
-        .from('profils')
+        .from('profiles')
         .select('verification_status, status, tokens');
 
       if (profilsError) throw profilsError;

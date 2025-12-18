@@ -14,7 +14,8 @@ const VerificationTab = ({
   handlePrivacyChange,
   handleUrlBlur,
   openLink,
-  onRequestVerification
+  onRequestVerification,
+  onSaveWithoutVerification
 }) => {
   const [selectedCountry, setSelectedCountry] = React.useState('FR');
 
@@ -391,28 +392,65 @@ const VerificationTab = ({
                 </div>
               )}
               
-              <Button
-                type="button"
-                onClick={onRequestVerification}
-                disabled={!canRequest}
-                variant="primary"
-                style={{
-                  width: '100%',
-                  height: '48px',
-                  fontSize: '1rem',
-                  fontWeight: '600',
-                  backgroundColor: canRequest ? '#10b981' : '#cbd5e1',
-                  borderColor: canRequest ? '#10b981' : '#cbd5e1',
-                  color: '#ffffff',
-                  cursor: canRequest ? 'pointer' : 'not-allowed',
-                  opacity: canRequest ? 1 : 0.7,
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                {canRequest 
-                  ? '✅ Demander la vérification' 
-                  : '🔒 Complétez les champs requis pour vérifier'}
-              </Button>
+              <div style={{ display: 'flex', gap: '12px', flexDirection: 'column' }}>
+                {/* Bouton Enregistrer sans vérification */}
+                <Button
+                  type="button"
+                  onClick={onSaveWithoutVerification}
+                  variant="outline"
+                  style={{
+                    width: '100%',
+                    height: '48px',
+                    fontSize: '1rem',
+                    fontWeight: '600',
+                    borderColor: '#3b82f6',
+                    color: '#3b82f6',
+                    backgroundColor: '#fff',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  💾 Enregistrer les coordonnées
+                </Button>
+                
+                {/* Bouton Demander vérification */}
+                <Button
+                  type="button"
+                  onClick={onRequestVerification}
+                  disabled={!canRequest}
+                  variant="primary"
+                  style={{
+                    width: '100%',
+                    height: '48px',
+                    fontSize: '1rem',
+                    fontWeight: '600',
+                    backgroundColor: canRequest ? '#10b981' : '#cbd5e1',
+                    borderColor: canRequest ? '#10b981' : '#cbd5e1',
+                    color: '#ffffff',
+                    cursor: canRequest ? 'pointer' : 'not-allowed',
+                    opacity: canRequest ? 1 : 0.7,
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  {canRequest 
+                    ? '✅ Demander la vérification' 
+                    : '🔒 Complétez les champs requis pour vérifier'}
+                </Button>
+              </div>
+              
+              {sensitiveFieldsChanged && existingProfiles?.verified && (
+                <div style={{
+                  marginTop: '12px',
+                  padding: '12px',
+                  backgroundColor: '#fef3c7',
+                  border: '1px solid #fbbf24',
+                  borderRadius: '8px',
+                  fontSize: '0.85rem',
+                  color: '#92400e',
+                  lineHeight: '1.5'
+                }}>
+                  ⚠️ <strong>Important :</strong> La modification de ces informations nécessitera une nouvelle validation par l'administrateur. Votre profil restera visible mais passera en statut "En attente de vérification".
+                </div>
+              )}
             </div>
           )}
         </Stack>
