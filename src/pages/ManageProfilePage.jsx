@@ -583,8 +583,8 @@ const ManageProfilePage = () => {
       const { data, error } = await supabase
         .from('profile_reports')
         .select('*')
-        .eq('profile_id', profileId)
-        .eq('status', 'pending')
+        .eq('profil_id', profileId)
+        .eq('admin_status', 'pending')
         .order('created_at', { ascending: false });
       
       if (error) throw error;
@@ -1057,7 +1057,7 @@ const ManageProfilePage = () => {
   };
 
   // Gestion suppression profil
-  const handleDeleteProfile = () => {
+  const handleDeleteProfil = () => {
     setShowDeleteModal(true);
     setDeleteStep(1);
   };
@@ -1069,7 +1069,7 @@ const ManageProfilePage = () => {
   const handleConfirmDeleteStep2 = async () => {
     setDeleting(true);
     try {
-      await ProfilService.deleteProfile(address);
+      await ProfilService.deleteProfil(address);
       
       setNotification({
         type: 'success',
@@ -1331,33 +1331,73 @@ const ManageProfilePage = () => {
               )}
 
               {/* Alertes système */}
-              {/* Alerte suppression en cours */}
+              {/* Alerte suppression / Réactivation */}
                 {existingProfile && existingProfile.status === 'deleted' && (
-                  <Card>
-                    <CardContent className="p-4 bg-red-50 dark:bg-red-950/30 border-2 border-red-500">
-                      <div className="flex items-start gap-3">
-                        <span className="text-3xl">⚠️</span>
-                        <div className="flex-1">
-                          <p className="text-base text-red-900 dark:text-red-100 font-bold mb-2">
-                            🗑️ Ferme en cours de suppression
-                          </p>
-                          <p className="text-sm text-red-800 dark:text-red-200 mb-3">
-                            Votre ferme a été marquée pour suppression et sera définitivement supprimée le{' '}
-                            <strong>
-                              {new Date(new Date(existingProfile.deletion_requested_at).getTime() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR')}
+                  <Card style={{ borderColor: '#ef4444', backgroundColor: '#fef2f2' }}>
+                    <CardContent className="p-6">
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+                        <div style={{ fontSize: '2.5rem' }}>🗑️</div>
+                        <div style={{ flex: 1 }}>
+                          <h3 style={{ 
+                            fontSize: '1.25rem', 
+                            fontWeight: '700', 
+                            color: '#991b1b', 
+                            marginBottom: '8px' 
+                          }}>
+                            Profil désactivé (Suppression logique)
+                          </h3>
+                          
+                          <p style={{ color: '#7f1d1d', marginBottom: '16px', lineHeight: '1.5' }}>
+                            Votre profil a été supprimé le <strong>
+                              {new Date(existingProfile.deleted_at || existingProfile.updated_at).toLocaleDateString('fr-FR')}
                             </strong>.
+                            <br/>
+                            Vos données personnelles ont été effacées, mais l'historique technique est conservé pour des raisons de sécurité pendant 1 an (jusqu'au {
+                              new Date(new Date(existingProfile.deleted_at || existingProfile.updated_at).getTime() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR')
+                            }).
                           </p>
-                          <div className="bg-white dark:bg-gray-800 p-3 rounded border border-red-300 mb-3">
-                            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">
-                              Raison:
+
+                          <div style={{ 
+                            backgroundColor: 'rgba(255,255,255,0.6)', 
+                            padding: '12px', 
+                            borderRadius: '8px', 
+                            border: '1px solid #fca5a5',
+                            marginBottom: '20px'
+                          }}>
+                            <p style={{ fontSize: '0.85rem', fontWeight: '600', color: '#7f1d1d', marginBottom: '4px' }}>
+                              Raison :
                             </p>
-                            <p className="text-sm text-gray-800 dark:text-gray-200">
+                            <p style={{ fontSize: '0.9rem', color: '#991b1b' }}>
                               {existingProfile.deletion_reason || 'Non spécifiée'}
                             </p>
                           </div>
-                          <p className="text-xs text-red-700 dark:text-red-300">
-                            ⏱️ Votre jeton reste utilisable. Vous pouvez continuer à l'utiliser normalement pendant cette période.
-                          </p>
+                          
+                          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                             <Button
+                                onClick={async () => {
+                                  if(!window.confirm("Voulez-vous réactiver votre profil ? Vous devrez remplir à nouveau vos informations.")) return;
+                                  
+                                  try {
+                                    setLoading(true);
+                                    await ProfilService.reactivateMyProfil(address);
+                                    setNotification({ type: 'success', message: '✅ Profil réactivé ! Vous pouvez maintenant le compléter.' });
+                                    // Force reload pour rafraîchir l'état complet
+                                    window.location.reload();
+                                  } catch (err) {
+                                    console.error(err);
+                                    setNotification({ type: 'error', message: 'Erreur lors de la réactivation' });
+                                    setLoading(false);
+                                  }
+                                }}
+                                style={{ 
+                                  backgroundColor: '#fff', 
+                                  color: '#dc2626', 
+                                  border: '1px solid #dc2626' 
+                                }}
+                              >
+                                ↩️ Annuler la suppression & Réactiver
+                              </Button>
+                          </div>
                         </div>
                       </div>
                     </CardContent>

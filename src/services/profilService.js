@@ -379,7 +379,7 @@ export const ProfilService = {
   async adminUpdateStatus(profilId, status, message = null) {
     // Récupérer la ferme pour accéder à l'historique actuel
     const { data: profil, error: fetchError } = await supabase
-      .from('farms')
+      .from('profiles')
       .select('communication_history')
       .eq('id', profilId)
       .single();
@@ -489,7 +489,7 @@ export const ProfilService = {
     
     // Marquer tous les signalements comme resolved
     await supabase
-      .from('profil_reports')
+      .from('profile_reports')
       .update({
         admin_status: 'resolved',
         admin_action_at: new Date().toISOString()
@@ -787,79 +787,80 @@ export const ProfilService = {
     }
   },
 
-  // 18. Suppression soft delete du profil (respecte logique Web3)
+// 18. Suppression intelligente (Mise en "Corbeille")
   async deleteProfil(ownerAddress) {
-    console.log('🗑️ deleteProfil appelé:', { ownerAddress });
+    console.log('🗑️ deleteProfil appelé (Corbeille):', { ownerAddress });
     
     try {
-      // Récupérer le profil actuel
       const profil = await this.getMyProfil(ownerAddress);
-      if (!profil) {
-        throw new Error('Profil introuvable');
-      }
-      
-      // Soft delete : nettoyage des données personnelles, conservation des données techniques
-      const payload = {
-        // Statut deleted
-        status: 'deleted',
-        
-        // VIDER les données personnelles
-        name: null,
-        email: null,
-        phone: null,
-        description: null,
-        address: null,
-        location_country: null,
-        location_region: null,
-        location_department: null,
-        website: null,
-        image_url: null,
-        
-        // Vider socials (JSONB)
-        socials: null,
-        
-        // Vider certifications (JSONB)
-        certifications: null,
-        
-        // Vider produits et services
-        products: null,
-        services: null,
-        
-        // Vider historique communication
-        communication_history: null,
-        
-        // CONSERVER les données techniques (pas dans le payload = pas modifié)
-        // - owner_address (conservé automatiquement car clé)
-        // - id (conservé automatiquement car clé primaire)
-        // - tokens (conservé pour référence blockchain)
-        // - created_at (conservé pour historique)
-        // - verification_status, verified, verified_at (historique sécurité)
-        
-        // Timestamp de suppression
-        updated_at: new Date().toISOString(),
-        deleted_at: new Date().toISOString()
-      };
-      
-      // Mettre à jour le profil
-      const { data, error } = await supabase
-        .from('profiles')
-        .update(payload)
-        .eq('owner_address', ownerAddress)
-        .select()
-        .single();
+      if (!profil) throw new Error('Profil introuvable');
 
-      if (error) {
-        console.error('❌ Erreur Supabase deleteProfil:', error);
-        throw error;
+      // Analyser le risque (Signalements ou Ban)
+      const reports = profil.profile_reports || [];
+      const isRisky = reports.some(r => r.admin_status !== 'ignored') || profil.status === 'banned';
+
+      if (isRisky) {
+        // --- CAS 1 : SOFT DELETE (On garde tout pour enquête/restauration) ---
+        console.log('⚠️ Mise en quarantaine/corbeille (Données conservées)');
+        
+        const softDeletePayload = {
+          status: 'deleted', // Rend le profil invisible dans l'annuaire
+          deleted_at: new Date().toISOString(),
+          deletion_reason: 'Suppression demandée (Données conservées pour historique/restauration)',
+          
+          // IMPORTANT : On NE MET PAS les champs à null ici.
+          // On les garde pour que l'admin puisse enquêter ou que l'user puisse restaurer.
+          // La protection se fait via le statut 'deleted' qui filtre les résultats côté public.
+        };
+
+        const { data, error } = await supabase
+          .from('profiles')
+          .update(softDeletePayload)
+          .eq('owner_address', ownerAddress)
+          .select()
+          .single();
+          
+        if (error) throw error;
+        return { success: true, type: 'soft', message: 'Profil désactivé et masqué.', data };
+
+      } else {
+        // --- CAS 2 : HARD DELETE (Suppression totale si profil vierge) ---
+        // Si vous préférez donner le droit à l'erreur à tout le monde,
+        // utilisez le CAS 1 pour tout le monde et supprimez ce bloc CAS 2.
+        
+        console.log('✅ Profil propre -> Hard Delete');
+        await supabase.from('profile_reports').delete().eq('profil_id', profil.id);
+        const { error } = await supabase.from('profiles').delete().eq('owner_address', ownerAddress);
+        if (error) throw error;
+        return { success: true, type: 'hard', message: 'Profil supprimé définitivement.' };
       }
-      
-      console.log('✅ Profil supprimé (soft delete):', data);
-      return data;
-      
+
     } catch (err) {
       console.error('❌ Erreur deleteProfil:', err);
       throw err;
     }
+  },
+
+  // 19. Réactivation (Restauration depuis la corbeille)
+  async reactivateMyProfil(ownerAddress) {
+    console.log('♻️ reactivateMyProfil appelé:', ownerAddress);
+    
+    // On repasse simplement en mode brouillon
+    // Les données (nom, bio, etc.) sont toujours là, donc l'utilisateur les retrouve !
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({
+        status: 'draft',             // Retour en brouillon (masqué mais éditable)
+        verification_status: 'none', // Reset de la vérification (doit re-demander)
+        deleted_at: null,
+        deletion_reason: null
+      })
+      .eq('owner_address', ownerAddress)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
   },
 
   // ADMIN: Récupérer les profils bannis
@@ -869,7 +870,7 @@ export const ProfilService = {
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
-      .in('status', ['banned', 'pending_deletion'])
+      .in('status', ['banned', 'pending_deletion', 'deleted']) // Inclut aussi les deleted soft
       .order('updated_at', { ascending: false});
 
     if (error) {
@@ -909,7 +910,7 @@ export const ProfilService = {
     
     // Marquer tous les signalements comme resolved
     await supabase
-      .from('profil_reports')
+      .from('profile_reports')
       .update({
         admin_status: 'resolved',
         admin_action_at: new Date().toISOString()

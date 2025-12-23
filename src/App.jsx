@@ -100,7 +100,7 @@ function App() {
                   ROUTES PRIVÉES (Wallet requis)
                   ======================================== */}
               
-              {/* Dashboard personnel (Wallet, ferme optionnelle) */}
+              {/* Dashboard personnel (Wallet, profil optionnel) */}
               <Route 
                 path="/wallet" 
                 element={

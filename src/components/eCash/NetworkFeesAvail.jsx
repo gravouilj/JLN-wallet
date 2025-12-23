@@ -116,7 +116,7 @@ const NetworkFeesAvail = ({
         {/* Ligne du haut : Solde et Badge */}
         <div className="d-flex align-center justify-between">
           <div className="d-flex align-center gap-2">
-            <span className="text-xl">💰</span>
+            <span className="text-xl">💎</span>
             <div>
               <div className="font-bold" style={{ color: 'var(--text-primary)' }}>
                 {xecBalance.toFixed(2)} XEC
@@ -165,7 +165,7 @@ const NetworkFeesAvail = ({
                 flex: 1
               }}
             >
-              💳 Gérer
+              💳 Gérer mes 💎 eCash (XEC)
             </Button>
 
             <a
@@ -210,7 +210,7 @@ const NetworkFeesAvail = ({
         {/* En-tête */}
         <div className="d-flex align-center justify-between mb-4">
           <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
-            💰 Frais Réseau
+            💎 Frais Réseau
           </h3>
           {false && showActions && (
             <button
@@ -335,7 +335,7 @@ const NetworkFeesAvail = ({
               <span className="font-semibold">Niveau faible</span>
             </div>
             <p className="text-xs mb-0" style={{ lineHeight: '1.4' }}>
-              Pensez à recharger votre solde 💎 XEC bientôt pour éviter les interruptions.
+              Pensez à recharger votre solde 💎 eCash (XEC) bientôt pour éviter les interruptions.
             </p>
           </div>
         )}

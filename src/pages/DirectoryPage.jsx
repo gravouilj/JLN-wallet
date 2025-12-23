@@ -49,10 +49,6 @@ const DirectoryPage = () => {
   const [modalProfile, setModalProfile] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // The wallet modal is controlled by isWalletModalOpen atom
-  // TopBar can set it to true to open the modal from anywhere
-  // The modal closes itself when connection succeeds or user clicks X
-
   // Get unique countries from profiles
   const countries = useMemo(() => {
     const uniqueCountries = [...new Set(profiles.map(profile => profile.location_country).filter(Boolean))];
@@ -131,7 +127,7 @@ const DirectoryPage = () => {
                 const info = await wallet.getTokenInfo(token.tokenId);
                 tickers[token.tokenId] = info.genesisInfo?.tokenTicker || token.ticker || 'UNK';
               } catch (e) {
-                console.warn(`⚠️ Impossible de charger ticker pour ${token.tokenId}`);
+                // Silencieux pour éviter de polluer la console en prod
                 tickers[token.tokenId] = token.ticker || '???';
               }
             }
@@ -160,7 +156,7 @@ const DirectoryPage = () => {
       const matchesSearch = profile.name.toLowerCase().includes(searchLower) ||
                            profile.description.toLowerCase().includes(searchLower) ||
                            (profile.location_country && profile.location_country.toLowerCase().includes(searchLower)) ||
-                           (profile.location_region && profile  .location_region.toLowerCase().includes(searchLower)) ||
+                           (profile.location_region && profile.location_region.toLowerCase().includes(searchLower)) ||
                            (profile.location_department && profile.location_department.toLowerCase().includes(searchLower)) ||
                            (profile.products && profile.products.some(p => p.toLowerCase().includes(searchLower))) ||
                            (profile.services && profile.services.some(s => s.toLowerCase().includes(searchLower)));
@@ -203,20 +199,10 @@ const DirectoryPage = () => {
     selectedService,
   }), [searchQuery, selectedCountry, selectedRegion, selectedDepartment, selectedProduct, selectedService]);
   
-  // Utiliser le hook pour injecter les CTA dans la liste
+  // Utiliser le hook pour injecter les CTA dans la liste (sans logs bruyants)
   const profilesWithCTAs = useCTAInjection(filteredProfiles, userContext, filterContext);
-  
-  // Debug: Log pour voir ce qui est retourné
-  useEffect(() => {
-    console.log('🔍 Debug CTA:');
-    console.log('- filteredProfiles:', filteredProfiles.length);
-    console.log('- profilesWithCTAs:', profilesWithCTAs.length);
-    console.log('- userContext:', userContext);
-    console.log('- CTA items:', profilesWithCTAs.filter(f => f.isCTA));
-  }, [filteredProfiles, profilesWithCTAs, userContext]);
 
   const handleSelectProfile = (profile) => {
-    console.log('Selected profile:', profile);
     setSelectedProfile(profile);
     navigate('/wallet');
   };
@@ -237,7 +223,6 @@ const DirectoryPage = () => {
   };
   
   const handleCardClick = (profile) => {
-    // Les CTA sont gérés directement par le composant CTACard
     setModalProfile(profile);
     setIsModalOpen(true);
   };
@@ -546,7 +531,6 @@ const DirectoryPage = () => {
         profileTickers={profileTickers}
       />
       
-      {/* Wallet Connection Modal */}
       {/* OnboardingModal - Modal pédagogique de connexion/création/import */}
       <OnboardingModal
         isOpen={isWalletModalOpen}
