@@ -1,0 +1,397 @@
+/* === LANDING PAGE REBRANDING (Version Validée & Complétée) === */
+
+.landing-wrapper {
+  background-color: var(--bg-primary);
+  min-height: 100vh;
+}
+
+/* Hero Section */
+.landing-hero {
+  padding: 60px 24px;
+  text-align: center;
+  background: radial-gradient(circle at top, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+}
+
+.hero-title {
+  font-size: 2.5rem;
+  font-weight: 800;
+  line-height: 1.1;
+  margin-bottom: 20px;
+  letter-spacing: -0.02em;
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, var(--accent-primary), #10b981);
+  -webkit-background-clip: text; 
+  -webkit-text-fill-color: transparent;
+}
+
+.hero-subtitle {
+  font-size: 1.15rem;
+  color: var(--text-secondary);
+  max-width: 600px;
+  margin: 0 auto 32px;
+  line-height: 1.6;
+}
+
+.hero-cta-group {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.hero-main-cta {
+  padding: 14px 32px;
+  font-size: 1.1rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+/* Role Selector (Modern Segmented Control) */
+.role-selector-container {
+  display: flex;
+  justify-content: center;
+  margin: -25px 0 40px;
+  position: sticky;
+  top: 10px;
+  z-index: 10;
+}
+
+.role-selector {
+  background: var(--bg-secondary);
+  padding: 6px;
+  border-radius: 50px;
+  display: flex;
+  border: 1px solid var(--border-primary);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.role-tab {
+  padding: 10px 24px;
+  border-radius: 40px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.role-tab.active {
+  background-color: var(--bg-primary);
+  color: var(--accent-primary);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+/* Sections & Layout */
+.section-container {
+  padding: 60px 20px;
+}
+
+.section-container.bg-alt {
+  background-color: var(--bg-secondary);
+}
+
+.bg-secondary-dim {
+    background-color: var(--bg-secondary);
+    border-top: 1px solid var(--border-primary);
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.section-header-centered {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.section-header-centered h2 {
+  font-size: 1.8rem;
+  margin-bottom: 12px;
+}
+
+.section-header-centered p {
+  color: var(--text-secondary);
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+/* Workflow Steps */
+.workflow-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 24px;
+}
+
+.workflow-step {
+  text-align: center;
+  padding: 20px;
+}
+
+.step-number {
+  width: 40px;
+  height: 40px;
+  background: var(--accent-primary);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  margin: 0 auto 16px;
+  font-size: 1.2rem;
+}
+
+/* Grilles */
+.benefits-grid, .features-grid-detailed, .profiles-showcase {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  margin-bottom: 40px;
+}
+
+.benefit-card, .feature-item, .profile-type-card {
+  background: var(--bg-secondary);
+  padding: 32px;
+  border-radius: 20px;
+  text-align: center;
+  border: 1px solid var(--border-primary);
+  transition: transform 0.3s;
+}
+
+.benefit-card:hover, .profile-type-card:hover { transform: translateY(-5px); }
+
+.benefit-icon, .feature-icon {
+  font-size: 2.5rem;
+  margin-bottom: 16px;
+}
+
+/* === STORYTELLING & CAS D'USAGE === */
+
+.usecase-selector-wrapper {
+  overflow-x: auto;
+  padding: 10px 5px; /* Ajouté du padding vertical pour éviter le clipping lors du défilement */
+  margin-bottom: 20px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch; /* Défilement fluide sur iOS */
+}
+
+.usecase-selector-wrapper::-webkit-scrollbar { display: none; }
+
+.usecase-tabs {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-start;
+}
+
+@media (min-width: 768px) {
+  .usecase-tabs { justify-content: center; }
+}
+
+.usecase-tab-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 12px; /* Augmenté le padding haut/bas */
+  min-width: 95px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  line-height: 1.2; /* Ajouté pour laisser de la place à l'emoji */
+  overflow: visible; /* Assure que rien n'est coupé à l'intérieur */
+}
+
+.usecase-tab-btn .tab-icon {
+  font-size: 2rem; /* Taille légèrement ajustée */
+  height: 2.4rem; /* Hauteur fixe pour l'icône pour stabiliser l'alignement */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.usecase-tab-btn .tab-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.usecase-tab-btn:hover { border-color: var(--accent-primary); transform: translateY(-2px); }
+
+.usecase-tab-btn.active {
+  background: var(--bg-primary);
+  border-color: var(--accent-primary);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.usecase-tab-btn.active .tab-label { color: var(--accent-primary); }
+
+.usecase-display-area { min-height: 350px; }
+
+/* La grande carte de détail */
+.usecase-detail-card.main-case {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 24px;
+  padding: 32px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.03);
+  text-align: left;
+}
+
+.usecase-header {
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.usecase-text h3 {
+  font-size: 1.4rem;
+  margin-bottom: 16px;
+  color: var(--text-primary);
+}
+
+/* Listes personnalisées avec flèches */
+.custom-list {
+  list-style: none;
+  padding: 0;
+}
+
+.custom-list li {
+  position: relative;
+  padding-left: 28px;
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.custom-list li::before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: var(--accent-primary);
+  font-weight: bold;
+}
+
+/* Créateur : Pile de cas d'usage */
+.usecases-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 30px;
+}
+
+.usecase-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 24px;
+  background: var(--bg-primary);
+  border-radius: 16px;
+  border: 1px solid var(--border-primary);
+  text-align: left;
+}
+
+.usecase-icon { font-size: 2rem; flex-shrink: 0; }
+
+.usecase-content h3 {
+  font-size: 1.1rem;
+  margin-bottom: 4px;
+}
+
+.usecase-content p {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* Grille d'actions créateur */
+.creator-actions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* Pricing Section */
+.pricing-section-dark {
+  background: #0f172a;
+  padding: 80px 20px;
+  border-radius: 40px 40px 0 0;
+}
+
+.pricing-glass-card {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 30px;
+  padding: 40px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.pricing-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.price-tag .amount {
+  font-size: 3rem;
+  font-weight: 800;
+  color: #4ade80;
+  display: block;
+}
+
+.price-tag .period {
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+.pricing-list {
+  margin: 32px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pricing-item {
+  display: flex;
+  justify-content: space-between;
+  color: #e2e8f0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+/* Footer & Divers */
+.legal-footer {
+  padding: 40px 24px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+}
+
+.philosophy-tags {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.separator {
+    height: 1px;
+    background: var(--border-primary);
+    margin: 40px 0;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .hero-title { font-size: 2rem; }
+  .creator-actions-grid { grid-template-columns: 1fr; }
+  .pricing-header { flex-direction: column; text-align: center; gap: 16px; }
+  .workflow-grid { grid-template-columns: 1fr; }
+  .usecase-detail-card.main-case { padding: 20px; }
+}

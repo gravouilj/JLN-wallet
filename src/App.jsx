@@ -43,6 +43,7 @@ import './styles/layout.css';
 import './styles/components.css';
 import './styles/pages.css';
 import './styles/utilities.css';
+import './styles/landing.css';
 
 function App() {
   const [locale] = useAtom(localeAtom);
@@ -90,8 +91,8 @@ function App() {
               {/* Annuaire - Point d'entrée public */}
               <Route path="/" element={<DirectoryPage />} />
               
-              {/* Espace Producteur - DOIT Être PUBLIC */}
-              <Route path="/landing" element={<LandingPage />} />
+              {/* Espace Créateur - DOIT Être PUBLIC */}
+              <Route path="/landingpage" element={<LandingPage />} />
               
               {/* FAQ - Page d'aide publique */}
               <Route path="/faq" element={<FaqPage />} />
