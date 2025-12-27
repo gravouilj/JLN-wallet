@@ -11,7 +11,6 @@ import SendPage from './pages/SendPage';
 import SettingsPage from './pages/SettingsPage';
 import LandingPage from './pages/LandingPage';
 import FaqPage from './pages/FaqPage';
-import CreateTokenPage from './pages/CreateTokenPage';
 import CompleteTokenImportPage from './pages/CompleteTokenImportPage';
 import ManageTokenPage from './pages/ManageTokenPage';
 import ManageProfilePage from './pages/ManageProfilePage';
@@ -140,16 +139,10 @@ function App() {
                 } 
               />
               
-              {/* Création de jetons */}
+              {/* Création de jetons - redirige vers manage-token (wizard intégré) */}
               <Route 
                 path="/create-token" 
-                element={
-                  <ProtectedRoute requireProfile={false}>
-                    <ErrorBoundary>
-                      <CreateTokenPage />
-                    </ErrorBoundary>
-                  </ProtectedRoute>
-                } 
+                element={<Navigate to="/manage-token" replace />}
               />
               
               {/* Compléter l'import d'un token existant */}
@@ -168,7 +161,7 @@ function App() {
               <Route 
                 path="/manage-token" 
                 element={
-                  <AdminGateRoute fallbackRoute="/create-token">
+                  <AdminGateRoute fallbackRoute="/wallet">
                     <ErrorBoundary>
                       <ManageTokenPage />
                     </ErrorBoundary>

@@ -11,6 +11,7 @@ import { useXecPrice } from '../hooks/useXecPrice';
 import { notificationAtom, currencyAtom } from '../atoms';
 import { Card, CardContent, Button, PageLayout, Stack, PageHeader, Tabs } from '../components/UI';
 import ImportTokenModal from '../components/Creators/ImportTokenModal';
+import CreateTokenModal from '../components/Creators/CreateTokenModal';
 import { getGlobalHistory } from '../services/historyService';
 import { NetworkFeesAvail, AddressHistory, TokenCard } from '../components/TokenPage';
 import AddressBook from '../components/AddressBook/AddressBook';
@@ -212,6 +213,7 @@ const ManageTokenPage = () => {
   
   // États d'affichage des modales/sections
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [showGlobalAddressBook, setShowGlobalAddressBook] = useState(false);
 
   // ============================================
@@ -988,7 +990,10 @@ const ManageTokenPage = () => {
         {/* Boutons d'action principaux - Grille 2 colonnes */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
           <Button
-            onClick={() => navigate('/create-token')}
+            onClick={() => {
+              console.log('🔘 Clic sur Créer un jeton');
+              setShowCreateModal(true);
+            }}
             variant="primary"
             fullWidth
             style={{ height: '80px', fontSize: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
@@ -1429,6 +1434,23 @@ const ManageTokenPage = () => {
               setShowImportModal(false);
             }}
             onImportSuccess={handleImportSuccess}
+          />
+        )}
+
+        {/* Modal de création de token - Wizard 5 étapes */}
+        {wallet && (
+          <CreateTokenModal
+            isOpen={showCreateModal}
+            onClose={() => {
+              console.log('🔘 Fermeture du modal création');
+              setShowCreateModal(false);
+            }}
+            onSuccess={(tokenData) => {
+              console.log('✅ Token créé:', tokenData);
+              setShowCreateModal(false);
+              // Recharger les tokens après création
+              loadTokens();
+            }}
           />
         )}
       </PageLayout>

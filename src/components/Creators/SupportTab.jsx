@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import ClientTicketForm from '../Client/ClientTicketForm';
 import { Card, CardContent, Button, Stack, Input } from '../UI';
 import { TicketDetailModal } from '../TicketSystem';
 import { getTickets, addMessageToTicket, markMessagesAsRead, resolveTicket, escalateToAdmin } from '../../services/ticketService';
@@ -24,6 +25,7 @@ const SupportTab = ({ profilId, walletAddress, setNotification }) => {
   const { t } = useTranslation();
   
   const [activeTab, setActiveTab] = useState('clients'); // clients, admin
+  const [showNewAdminTicket, setShowNewAdminTicket] = useState(false);
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -246,8 +248,36 @@ const SupportTab = ({ profilId, walletAddress, setNotification }) => {
             </span>
           )}
         </Button>
+        {activeTab === 'admin' && (
+          <Button
+            variant={showNewAdminTicket ? 'outline' : 'primary'}
+            onClick={() => setShowNewAdminTicket((v) => !v)}
+            style={{ marginLeft: '8px', minWidth: 140 }}
+          >
+            ✉️ Nouveau ticket
+          </Button>
+        )}
       </div>
 
+      {/* Formulaire nouveau ticket admin (créateur vers admin) */}
+      {activeTab === 'admin' && showNewAdminTicket && (
+        <Card>
+          <CardContent>
+            <ClientTicketForm
+              walletAddress={walletAddress}
+              allowTypeSelection={false}
+              autoContext={{ creatorProfileId: profilId }}
+              setNotification={setNotification}
+              onSubmit={() => {
+                setShowNewAdminTicket(false);
+                setNotification?.({ type: 'success', message: 'Ticket envoyé à l’admin' });
+                loadTickets();
+              }}
+              onCancel={() => setShowNewAdminTicket(false)}
+            />
+          </CardContent>
+        </Card>
+      )}
       {/* Filtres */}
       <Card>
         <CardContent>

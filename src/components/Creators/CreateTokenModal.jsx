@@ -115,10 +115,10 @@ const CreateTokenModal = ({ isOpen, onClose, onSuccess }) => {
       
       setNotification({
         type: 'success',
-        message: `✅ Token ${formData.ticker} créé avec succès ! TXID: ${result.txid.substring(0, 8)}...`
+        message: `✅ Jeton ${formData.ticker} créé avec succès ! TXID: ${result.txid.substring(0, 8)}...`
       });
       
-      console.log('✅ Token créé:', result);
+      console.log('✅ Jeton créé:', result);
       
       // Callback de succès avec les données
       onSuccess?.({
@@ -132,10 +132,10 @@ const CreateTokenModal = ({ isOpen, onClose, onSuccess }) => {
       handleClose();
       
     } catch (err) {
-      console.error('❌ Erreur création token:', err);
+      console.error('❌ Erreur création jeton:', err);
       setNotification({
         type: 'error',
-        message: err.message || 'Impossible de créer le token'
+        message: err.message || 'Impossible de créer le jeton'
       });
     } finally {
       setProcessing(false);
@@ -167,7 +167,7 @@ const CreateTokenModal = ({ isOpen, onClose, onSuccess }) => {
       <Modal.Header>
         <div>
           <h2 className="text-xl font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
-            ✨ Créer un Nouveau Token
+            ✨ Créer un Nouveau Jeton
           </h2>
           <p className="text-sm text-secondary">
             Étape {currentStep}/{totalSteps}
@@ -208,12 +208,12 @@ const CreateTokenModal = ({ isOpen, onClose, onSuccess }) => {
               <div className="d-flex align-center gap-2 mb-2">
                 <span className="text-xl">💡</span>
                 <span className="font-semibold" style={{ color: 'var(--text-info)' }}>
-                  Identité du token
+                  Identité du jeton
                 </span>
               </div>
               <p className="text-sm mb-0" style={{ color: 'var(--text-info)', lineHeight: '1.5' }}>
-                Le <strong>ticker</strong> est le symbole court de votre token (ex: BTC, EUR). 
-                Le <strong>nom</strong> est son appellation complète (ex: Bitcoin, Euro).
+                Le <strong>ticker</strong> est le symbole court de votre jeton (ex: EUR pour €, USD pour le $). 
+                Le <strong>nom</strong> est son appellation complète (ex: Jeton Ville de Paris, Jeton des Pays de la Loire, Jeton ESS "Par Ici").
               </p>
             </div>
 
@@ -221,7 +221,7 @@ const CreateTokenModal = ({ isOpen, onClose, onSuccess }) => {
               label="Ticker (Symbole)"
               value={formData.ticker}
               onChange={(e) => updateField('ticker', e.target.value.toUpperCase())}
-              placeholder="Ex: FARM, TOKEN, COIN..."
+              placeholder="Ex: JETONPARIS, JPDL, PARICI"
               maxLength={12}
               helperText={`${formData.ticker.length}/12 caractères. Court et mémorable !`}
               required
@@ -231,9 +231,9 @@ const CreateTokenModal = ({ isOpen, onClose, onSuccess }) => {
               label="Nom complet"
               value={formData.name}
               onChange={(e) => updateField('name', e.target.value)}
-              placeholder="Ex: Mon Token de Ferme"
+              placeholder="Ex: Jeton ESS Par Ici, Jeton Refuge Animaux"
               maxLength={100}
-              helperText="Nom descriptif de votre token"
+              helperText="Nom descriptif de votre jeton"
               required
             />
 
@@ -242,7 +242,7 @@ const CreateTokenModal = ({ isOpen, onClose, onSuccess }) => {
                 Décimales (Précision)
               </label>
               <div className="d-flex gap-2 mb-2">
-                {[0, 2, 4, 8].map(value => (
+                {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(value => (
                   <button
                     key={value}
                     onClick={() => updateField('decimals', value)}
@@ -281,12 +281,12 @@ const CreateTokenModal = ({ isOpen, onClose, onSuccess }) => {
               <div className="d-flex align-center gap-2 mb-2">
                 <span className="text-xl">💡</span>
                 <span className="font-semibold" style={{ color: 'var(--text-info)' }}>
-                  Offre de tokens
+                  Offre de jetons
                 </span>
               </div>
               <p className="text-sm mb-0" style={{ color: 'var(--text-info)', lineHeight: '1.5' }}>
-                L'<strong>offre initiale</strong> est le nombre de tokens créés au départ. 
-                Un token <strong>variable</strong> peut être réémis plus tard, un token <strong>fixe</strong> ne le peut pas.
+                L'<strong>offre initiale</strong> est le nombre de jetons créés au départ. 
+                Un jeton <strong>variable</strong> peut être réémis plus tard, un jeton <strong>fixe</strong> ne le peut pas.
               </p>
             </div>
 
@@ -323,10 +323,10 @@ const CreateTokenModal = ({ isOpen, onClose, onSuccess }) => {
               />
               <div className="flex-1">
                 <div className="font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
-                  🔄 Offre variable (Mintable)
+                  🔄 Offre variable (ré-émission possible)
                 </div>
                 <p className="text-xs text-secondary mb-0" style={{ lineHeight: '1.4' }}>
-                  Vous pourrez créer de nouveaux tokens plus tard. 
+                  Vous pourrez créer de nouveaux jetons plus tard. 
                   Utile pour récompenses progressives, fidélité, etc.
                 </p>
               </div>
@@ -368,11 +368,11 @@ const CreateTokenModal = ({ isOpen, onClose, onSuccess }) => {
               <div className="d-flex align-center gap-2 mb-2">
                 <span className="text-xl">💡</span>
                 <span className="font-semibold" style={{ color: 'var(--text-info)' }}>
-                  Image du token (optionnel)
+                  Image du jeton (optionnel)
                 </span>
               </div>
               <p className="text-sm mb-0" style={{ color: 'var(--text-info)', lineHeight: '1.5' }}>
-                Une image rend votre token plus reconnaissable. Vous pourrez la modifier plus tard.
+                Une image rend votre jeton plus reconnaissable. Vous pourrez la modifier plus tard.
               </p>
             </div>
 
@@ -430,17 +430,17 @@ const CreateTokenModal = ({ isOpen, onClose, onSuccess }) => {
               <div className="d-flex align-center gap-2 mb-2">
                 <span className="text-xl">💡</span>
                 <span className="font-semibold" style={{ color: 'var(--text-info)' }}>
-                  Utilité du token
+                  Utilité du jeton
                 </span>
               </div>
               <p className="text-sm mb-0" style={{ color: 'var(--text-info)', lineHeight: '1.5' }}>
-                Expliquez pourquoi votre token existe et ce qu'il offre aux détenteurs.
+                Expliquez pourquoi votre jeton existe et ce qu'il offre aux détenteurs.
               </p>
             </div>
 
             <div>
               <label className="d-block text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
-                🎯 Objectif du token
+                🎯 Objectif du jeton
               </label>
               <Textarea
                 value={formData.purpose}
@@ -461,7 +461,7 @@ const CreateTokenModal = ({ isOpen, onClose, onSuccess }) => {
               <Textarea
                 value={formData.counterpart}
                 onChange={(e) => updateField('counterpart', e.target.value)}
-                placeholder="Ex: 1 token = 1€ de réduction, accès prioritaire aux nouveaux produits..."
+                placeholder="Ex: 1 jeton = 1€ de réduction, accès prioritaire aux nouveaux produits..."
                 rows={3}
                 maxLength={500}
               />
@@ -479,7 +479,7 @@ const CreateTokenModal = ({ isOpen, onClose, onSuccess }) => {
             >
               <p className="text-xs mb-0" style={{ color: 'var(--success-dark)', lineHeight: '1.4' }}>
                 ✅ Ces informations seront visibles sur votre profil public et aideront les utilisateurs 
-                à comprendre l'intérêt de votre token.
+                à comprendre l'intérêt de votre jeton.
               </p>
             </div>
           </div>
@@ -502,7 +502,7 @@ const CreateTokenModal = ({ isOpen, onClose, onSuccess }) => {
                 </span>
               </div>
               <p className="text-sm mb-0" style={{ color: 'var(--success-dark)', lineHeight: '1.5' }}>
-                Vérifiez les informations avant de créer votre token.
+                Vérifiez les informations avant de créer votre jeton.
               </p>
             </div>
 
@@ -556,7 +556,7 @@ const CreateTokenModal = ({ isOpen, onClose, onSuccess }) => {
               </div>
               <p className="text-xs mb-0" style={{ color: 'var(--text-info)', lineHeight: '1.4' }}>
                 Environ <strong>10-20 XEC</strong> de frais réseau seront prélevés pour enregistrer 
-                votre token sur la blockchain eCash.
+                votre jeton sur la blockchain eCash.
               </p>
             </div>
 
@@ -584,8 +584,7 @@ const CreateTokenModal = ({ isOpen, onClose, onSuccess }) => {
               />
               <div className="flex-1">
                 <p className="text-sm mb-0" style={{ lineHeight: '1.5' }}>
-                  Je comprends que la création d'un token sur la blockchain est <strong>irréversible</strong> 
-                  et que je suis responsable de son usage.
+                  Je comprends que la création d'un jeton sur la blockchain est <strong>irréversible</strong> et que je suis responsable de son usage.
                 </p>
               </div>
             </div>
@@ -617,7 +616,7 @@ const CreateTokenModal = ({ isOpen, onClose, onSuccess }) => {
               onClick={handleCreate}
               disabled={!canProceed() || processing}
             >
-              {processing ? '⏳ Création...' : '✨ Créer le Token'}
+              {processing ? '⏳ Création...' : '✨ Créer le Jeton'}
             </Button>
           )}
         </div>

@@ -24,15 +24,12 @@ const TopBar = () => {
   const setWalletModalOpen = useSetAtom(walletModalOpenAtom);
 
   // App name always displayed in center (dynamic based on route)
-  const isHomePage = location.pathname === '/';
+  const isHomePage = location.pathname === '/landingpage' || location.pathname === '/';
   const isFarmerInfoPage = location.pathname === '/farmer-info';
   const isCreateTokenPage = location.pathname === '/create-token';
   
   // Dynamic title based on current page
-  let appName = '🌱 Farm Wallet';
-  if (isCreateTokenPage) {
-    appName = '🏭 Atelier Jeton';
-  }
+  let appName = 'JLN WALLET';
   
   const showBackButton = !isHomePage;
   const showFarmerLinkLeft = isHomePage && !isFarmerInfoPage;

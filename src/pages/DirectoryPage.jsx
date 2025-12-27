@@ -283,7 +283,7 @@ const DirectoryPage = () => {
       <TopBar />
 
       <header className="directory-header">
-        <h1>Soutenez vos producteurs locaux en direct 🇫🇷</h1>
+        <h1>Soutenez le développement local différement</h1>
         <p className="directory-subtitle">
           {t('directory.subtitle') || 'La plateforme de crowdfunding local décentralisé sur eCash'}
         </p>

@@ -1,19 +1,8 @@
 import { useState } from 'react';
-import { Card, CardContent } from './UI';
+import { Card } from './UI';
 
 /**
- * Faq - Composant d'accordion FAQ générique et réutilisable
- * 
- * Conforme au STYLING_GUIDE.md :
- * - Classes utilitaires (d-flex, gap-*, mb-*, p-*, rounded-*, etc.)
- * - Variables CSS pour les couleurs
- * - Animation smooth et accessible
- * 
- * @param {Object} props
- * @param {Array} props.items - Liste des questions/réponses [{question, answer, icon?}]
- * @param {number} props.defaultOpenIndex - Index de l'item ouvert par défaut
- * @param {boolean} props.allowMultiple - Permettre plusieurs items ouverts simultanément
- * @param {string} props.className - Classes CSS additionnelles
+ * Faq - Composant d'accordéon FAQ moderne
  */
 const Faq = ({ 
   items = [], 
@@ -28,14 +17,10 @@ const Faq = ({
   const toggleItem = (index) => {
     if (allowMultiple) {
       setOpenIndexes(prev => 
-        prev.includes(index) 
-          ? prev.filter(i => i !== index)
-          : [...prev, index]
+        prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index]
       );
     } else {
-      setOpenIndexes(prev => 
-        prev.includes(index) ? [] : [index]
-      );
+      setOpenIndexes(prev => prev.includes(index) ? [] : [index]);
     }
   };
 
@@ -43,116 +28,95 @@ const Faq = ({
 
   if (!items || items.length === 0) {
     return (
-      <div className="empty-state p-6 text-center">
-        <div className="text-4xl mb-3">❓</div>
-        <p className="text-secondary text-sm">Aucune question disponible</p>
+      <div className="empty-state p-8 text-center bg-secondary rounded-lg border-dashed">
+        <div className="text-4xl mb-3 opacity-50">🔍</div>
+        <p className="text-secondary text-sm">Aucun résultat ne correspond à votre recherche.</p>
       </div>
     );
   }
 
   return (
-    <div className={`faq-container ${className}`} style={{ 
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '12px'
-    }}>
+    <div className={`faq-container ${className}`} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       {items.map((item, index) => {
         const isItemOpen = isOpen(index);
         
         return (
           <Card 
             key={index}
-            className="faq-item"
+            className={`faq-item ${isItemOpen ? 'faq-item-open' : ''}`}
             style={{
               overflow: 'hidden',
-              transition: 'all 0.2s ease',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
               border: isItemOpen 
-                ? '2px solid var(--accent-primary)' 
-                : '1px solid var(--border-primary)'
+                ? '1px solid var(--accent-primary)' 
+                : '1px solid var(--border-primary)',
+              boxShadow: isItemOpen ? '0 4px 20px rgba(0,0,0,0.08)' : 'none',
+              backgroundColor: 'var(--bg-primary)'
             }}
           >
             <button
               onClick={() => toggleItem(index)}
-              className="faq-question cursor-pointer hover-lift"
+              className="faq-question cursor-pointer"
               style={{
                 width: '100%',
-                padding: '16px 20px',
-                background: isItemOpen 
-                  ? 'var(--bg-secondary)' 
-                  : 'var(--bg-primary)',
+                padding: '18px 24px',
+                background: isItemOpen ? 'var(--bg-secondary)' : 'transparent',
                 border: 'none',
                 textAlign: 'left',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '12px',
+                gap: '16px',
                 transition: 'background-color 0.2s',
                 outline: 'none'
               }}
               aria-expanded={isItemOpen}
-              aria-controls={`faq-answer-${index}`}
             >
-              {/* Icon optionnel */}
               {item.icon && (
-                <span className="faq-icon" style={{ 
-                  fontSize: '1.5rem',
-                  flexShrink: 0 
-                }}>
+                <span className="faq-icon" style={{ fontSize: '1.4rem', flexShrink: 0 }}>
                   {item.icon}
                 </span>
               )}
               
-              {/* Question */}
-              <span className="faq-question-text flex-1 font-medium" style={{
-                color: 'var(--text-primary)',
-                fontSize: '0.95rem',
-                lineHeight: '1.5'
+              <span className="faq-question-text flex-1 font-bold" style={{
+                color: isItemOpen ? 'var(--accent-primary)' : 'var(--text-primary)',
+                fontSize: '1rem',
+                lineHeight: '1.4'
               }}>
                 {item.question}
               </span>
               
-              {/* Toggle indicator */}
-              <span 
-                className="faq-toggle-icon"
-                style={{
-                  fontSize: '1.3rem',
-                  color: 'var(--accent-primary)',
-                  transform: isItemOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                  transition: 'transform 0.3s ease',
-                  flexShrink: 0,
-                  lineHeight: 1
-                }}
-              >
+              <span style={{
+                fontSize: '0.8rem',
+                color: 'var(--accent-primary)',
+                transform: isItemOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                opacity: 0.7
+              }}>
                 ▼
               </span>
             </button>
 
-            {/* Answer - avec animation */}
+            {/* Animation de hauteur fluide via CSS Grid */}
             <div
-              id={`faq-answer-${index}`}
-              className="faq-answer"
               style={{
-                maxHeight: isItemOpen ? '500px' : '0',
-                opacity: isItemOpen ? 1 : 0,
-                overflow: 'hidden',
-                transition: 'max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease',
-                padding: isItemOpen ? '0 20px 20px 20px' : '0 20px'
+                display: 'grid',
+                gridTemplateRows: isItemOpen ? '1fr' : '0fr',
+                transition: 'grid-template-rows 0.3s ease-out',
               }}
-              role="region"
-              aria-labelledby={`faq-question-${index}`}
             >
-              <div style={{
-                color: 'var(--text-secondary)',
-                fontSize: '0.9rem',
-                lineHeight: '1.7',
-                paddingTop: isItemOpen ? '12px' : '0',
-                borderTop: isItemOpen ? '1px solid var(--border-primary)' : 'none',
-                transition: 'padding-top 0.3s ease'
-              }}>
-                {typeof item.answer === 'string' ? (
-                  <p style={{ margin: 0 }}>{item.answer}</p>
-                ) : (
-                  item.answer
-                )}
+              <div style={{ overflow: 'hidden' }}>
+                <div style={{
+                  padding: '0 24px 24px 24px',
+                  color: 'var(--text-secondary)',
+                  fontSize: '0.95rem',
+                  lineHeight: '1.6',
+                  borderTop: '1px solid var(--border-primary)',
+                  marginTop: '0'
+                }}>
+                  <div style={{ paddingTop: '16px' }}>
+                    {typeof item.answer === 'string' ? <p style={{ margin: 0 }}>{item.answer}</p> : item.answer}
+                  </div>
+                </div>
               </div>
             </div>
           </Card>
@@ -163,40 +127,36 @@ const Faq = ({
 };
 
 /**
- * FaqSection - Section FAQ avec titre et sous-titre
- * Wrapper pratique pour afficher une section FAQ complète
+ * FaqSection - Wrapper thématique
  */
 export const FaqSection = ({ 
-  title = 'Questions Fréquentes',
-  subtitle = null,
-  icon = '❓',
+  title,
+  subtitle,
+  icon,
   items = [],
   ...faqProps 
 }) => {
   return (
-    <div className="faq-section">
-      {/* Header */}
+    <div className="faq-section mb-10">
+      {/* Header - Affiché uniquement si un titre est passé */}
       {(title || subtitle) && (
-        <div className="section-header mb-5" style={{ textAlign: 'center' }}>
-          {icon && (
-            <div className="section-icon text-5xl mb-3">
-              {icon}
-            </div>
-          )}
-          {title && (
-            <h2 className="section-title text-2xl font-bold mb-2 text-primary">
-              {title}
-            </h2>
-          )}
+        <div className="section-header mb-6" style={{ paddingLeft: '8px' }}>
+          <div className="d-flex align-center gap-3 mb-2">
+            {icon && <span className="text-2xl">{icon}</span>}
+            {title && (
+              <h2 className="text-xl font-bold text-primary" style={{ margin: 0 }}>
+                {title}
+              </h2>
+            )}
+          </div>
           {subtitle && (
-            <p className="section-subtitle text-secondary text-sm">
+            <p className="text-secondary text-sm">
               {subtitle}
             </p>
           )}
         </div>
       )}
       
-      {/* FAQ Items */}
       <Faq items={items} {...faqProps} />
     </div>
   );

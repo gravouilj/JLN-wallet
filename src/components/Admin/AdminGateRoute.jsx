@@ -18,7 +18,7 @@ import DisconnectedView from '../Layout/DisconnectedView';
  * - Si connecté MAIS sans permission → Redirige vers fallbackRoute
  * - Si connecté ET avec permission → Affiche children
  */
-const AdminGateRoute = ({ children, fallbackRoute = '/create-token' }) => {
+const AdminGateRoute = ({ children, fallbackRoute = '/wallet' }) => {
   const navigate = useNavigate();
   const [walletConnected] = useAtom(walletConnectedAtom);
   const { wallet } = useEcashWallet();

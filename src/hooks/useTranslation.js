@@ -18,7 +18,11 @@ export const useTranslation = () => {
     languages: ['en', 'fr'],
     languageNames: {
       en: 'English',
-      fr: 'Français'
+      fr: 'Français',
+      de: 'Deutsch',
+      es: 'Español',
+      it: 'Italiano',
+      pt: 'Português',
     }
   };
 };

@@ -7,6 +7,7 @@ import { Button, Card, CardContent, Badge } from '../components/UI';
 import { useProfiles } from '../hooks/useProfiles';
 import { useXecPrice } from '../hooks/useXecPrice';
 import BottomNavigation from '../components/Layout/BottomNavigation';
+
 import '../styles/landing.css';
 
 const LandingPage = () => {
@@ -30,11 +31,22 @@ const LandingPage = () => {
     else navigate(path);
   };
 
-  const getFiatCost = (xecAmount) => {
-    if (!price || typeof price.convert !== 'function') return '...';
-    const fiatAmount = price.convert(xecAmount, currency);
-    return fiatAmount < 0.01 ? "moins d'un centime" : `environ ${fiatAmount.toFixed(2)} ${currency}`;
-  };
+ const getFiatCost = (xecAmount) => {
+  if (!price || typeof price.convert !== 'function') return '...';
+  
+  const fiatAmount = price.convert(xecAmount, currency);
+
+  // Si le montant est minuscule (inférieur à 0.01), on autorise jusqu'à 8 décimales.
+  // Sinon, on reste sur les 2 décimales standards du commerce.
+  const precision = fiatAmount < 0.01 ? 8 : 2;
+
+  const formattedValue = fiatAmount.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: precision,
+  });
+
+  return `${formattedValue} ${currency}`;
+};
 
   const [selectedCase, setSelectedCase] = useState('daniel');
   
@@ -74,23 +86,23 @@ const LandingPage = () => {
             <div className="workflow-grid">
               <div className="workflow-step">
                 <div className="step-number">1</div>
-                <h5>Portefeuille</h5>
-                <p>Ouvrez ou importez votre wallet. Sans inscription, vous restez seul maître de vos clés.</p>
+                <h5>Votre Portefeuille</h5>
+                <p>Créez votre portefeuille en quelques secondes. Aucune inscription, aucune donnée personnelle à fournir.</p>
               </div>
               <div className="workflow-step">
                 <div className="step-number">2</div>
-                <h5>Jetons d'usage</h5>
-                <p>Utilisez des jetons pour le soutien local, la fidélité ou l'accès à des services.</p>
+                <h5>Des Jetons Utiles</h5>
+                <p>Les jetons servent à soutenir un projet, récompenser des clients ou accéder à des services locaux.</p>
               </div>
               <div className="workflow-step">
                 <div className="step-number">3</div>
-                <h5>Échange direct</h5>
-                <p>Payez par QR code en face-à-face. La technologie s'efface au profit du lien humain.</p>
+                <h5>Des Échanges Simples</h5>
+                <p>Payez ou recevez des jetons par QR code, de manière instantanée et sécurisée.</p>
               </div>
               <div className="workflow-step">
                 <div className="step-number">4</div>
-                <h5>Valeur préservée</h5>
-                <p>La richesse circule entre vous, sans extraction par des plateformes centralisées.</p>
+                <h5>Une valeur qui circule localement</h5>
+                <p>Les échanges en jetons se font en face-à-face et sans commission.</p>
               </div>
             </div>
           </section>
@@ -99,8 +111,8 @@ const LandingPage = () => {
           <section className="section-container text-center">
             <h2 className="mb-4">Redonner du sens à nos échanges</h2>
             <p className="max-w-800 mx-auto text-secondary text-lg">
-              L'économie est devenue abstraite. Cette application est une infrastructure de confiance pour <strong>numériser vos échanges locaux</strong>. 
-              Ici, pas de spéculation, pas de trading ou de commissions exhorbitantes mais, mais un outil pour soutenir ceux que vous connaissez et renforcer la résilience de votre territoire.
+              L'économie est devenue abstraite. Cette application est une infrastructure de confiance pour <strong>améliorer vos échanges locaux</strong>. 
+              Ici, pas de spéculation ou de commissions exhorbitantes, mais un outil pour soutenir ceux que vous connaissez et renforcer l'économie de votre territoire.
             </p>
             <div className="philosophy-tags mt-6">
               <Badge variant="outline">#InfrastructureLibre</Badge>
@@ -117,7 +129,7 @@ const LandingPage = () => {
                 className={`role-tab ${activeRole === 'user' ? 'active' : ''}`}
                 onClick={() => setActiveRole('user')}
               >
-                👤 Pour les Citoyens
+                👤 Pour les Utilisateurs
               </button>
               <button 
                 className={`role-tab ${activeRole === 'creator' ? 'active' : ''}`}
@@ -128,40 +140,145 @@ const LandingPage = () => {
             </div>
           </div>
 
-          {/* === CONTENU : UTILISATEUR === */}
+          {/* === CONTENU : UTILISATEUR (Optimisé) === */}
           {activeRole === 'user' && (
             <div className="role-content fade-in">
               <section className="section-container bg-alt">
                 <div className="section-header-centered">
-                  <h2>Agissez sur votre territoire</h2>
-                  <p>Soutenez les initiatives locales et sécurisez vos avantages d'usage.</p>
+                  <Badge variant="outline" className="mb-2">Usage Quotidien</Badge>
+                  <h2>Une nouvelle façon de consommer</h2>
+                  <p>Reprenez le contrôle sur vos échanges et soutenez l'économie qui a du sens pour vous.</p>
                 </div>
                 
                 <div className="benefits-grid">
                   <div className="benefit-card">
+                    <div className="benefit-icon">🔒</div>
+                    <h3>Zéro Donnée, Totale Vie Privée</h3>
+                    <p>Pas d'email, pas de compte, pas de profil public. Votre portefeuille vit sur votre téléphone. Vous restez anonyme dans vos soutiens et vos achats.</p>
+                  </div>
+                  <div className="benefit-card">
                     <div className="benefit-icon">🤝</div>
-                    <h3>Confiance Partagée</h3>
-                    <p>L'application sécurise l'échange mais c'est la rencontre qui compte. Payez vos producteurs ou artisans d'un simple geste au marché ou en boutique.</p>
+                    <h3>Le Lien Humain d'abord</h3>
+                    <p>L'application n'est qu'un support. L'échange se fait en face à face, au marché ou en boutique. C'est le retour à la confiance directe entre individus.</p>
                   </div>
                   <div className="benefit-card">
-                    <div className="benefit-icon">🎁</div>
-                    <h3>Avantages d'usage</h3>
-                    <p>En soutenant un projet à l'avance, vous sécurisez l'accès à des produits ou services futurs à des conditions préférentielles choisies par le créateur.</p>
+                    <div className="benefit-icon">💎</div>
+                    <h3>Soutien Réel, Valeur Réelle</h3>
+                    <p>Vos jetons ne sont pas des actifs virtuels. Ils représentent des produits, des services ou des remises chez des gens que vous pouvez rencontrer.</p>
                   </div>
                   <div className="benefit-card">
-                    <div className="benefit-icon">📢</div>
-                    <h3>Recommandation</h3>
-                    <p>Partagez vos jetons (bons d'achat numériques) avec vos proches pour leur faire découvrir les talents de votre région.</p>
+                    <div className="benefit-icon">⚡</div>
+                    <h3>Zéro Frais d'Usage</h3>
+                    <p>Recevoir, stocker et payer en jetons d'usage est totalement gratuit pour vous. L'infrastructure technique est portée par le réseau global.</p>
                   </div>
+                </div>
+                
+                <div className="cta-centered mt-8">
+                   <Button onClick={() => navigate('/')} variant="primary" size="lg">
+                    🔍 Explorer les projets autour de moi
+                  </Button>
+                </div>
+              </section>
+            </div>
+          )}
+          {/* === CONTENU : CRÉATEUR (Professionnels & Institutions) === */}
+          {activeRole === 'creator' && (
+            <div className="role-content fade-in">
+              <section className="section-container bg-alt">
+                <div className="section-header-centered">
+                  <Badge variant="outline" className="mb-2">Dispositifs pour l'Économie Réelle</Badge>
+                  <h2>Émettez vos propres supports d'échange</h2>
+                  <p>Artisans, associations ou municipalités : organisez la circulation de la valeur sur votre territoire grâce à un support technique neutre.</p>
+                </div>
+                
+                {/* 1. Les Leviers d'Usage Local */}
+                <div className="usecases-stack mb-12">
+                  <div className="usecase-card">
+                    <div className="usecase-icon">📈</div>
+                    <div className="usecase-content">
+                      <h3>Anticipation de Trésorerie par le Pré-achat</h3>
+                      <p>Activez votre communauté pour sécuriser vos besoins opérationnels (stocks, matériel). Vos soutiens pré-achètent vos produits ou services aujourd'hui pour les consommer plus tard.</p>
+                      <Badge variant="success">Zéro dette bancaire</Badge>
+                    </div>
+                  </div>
+
+                  <div className="usecase-card">
+                    <div className="usecase-icon">🏛️</div>
+                    <div className="usecase-content">
+                      <h3>Dispositifs Territoriaux & Sociaux</h3>
+                      <p>Municipalités et Institutions : lancez des jetons d'usage et d'utilité (ex: aides culturelles, incitations écologiques) utilisables exclusivement dans les commerces de proximité partenaires.</p>
+                      <Badge variant="success">Relocalisation de la valeur</Badge>
+                    </div>
+                  </div>
+
+                  <div className="usecase-card">
+                    <div className="usecase-icon">🎁</div>
+                    <div className="usecase-content">
+                      <h3>Programmes de Fidélité Circulaire</h3>
+                      <p>Remplacez les cartes papier par des jetons de récompense non-financiers. Encouragez le retour en boutique et créez des cercles d'entraide entre commerçants et associations.</p>
+                      <Badge variant="success">Engagement communautaire</Badge>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Les Garanties d'Infrastructure (Le Bouclier Réglementaire) */}
+                <div className="section-header-centered">
+                  <h3>Un cadre technique protecteur</h3>
+                  <p className="text-sm text-secondary">L'application est une infrastructure neutre conçue pour l'usage, pas pour la finance.</p>
+                </div>
+                <div className="profiles-showcase mb-12">
+                  <div className="profile-type-card">
+                    <h4>⚙️ Paramétrage d'Usage</h4>
+                    <p>Définissez les règles : quantité fixe pour un projet ou variable pour un flux. Vous fixez la validité et les conditions de retrait des produits.</p>
+                  </div>
+                  <div className="profile-type-card featured">
+                    <Badge variant="primary">Conformité</Badge>
+                    <h4>🛡️ Absence de Droits Financiers</h4>
+                    <p>Les jetons créés sont des instruments d'échange de biens et services. Ils ne confèrent aucun droit au profit, dividende ou intérêt.</p>
+                  </div>
+                  <div className="profile-type-card">
+                    <h4>⚖️ Indépendance Technique</h4>
+                    <p>L'app ne collecte pas de fonds et n'intervient pas dans la relation émetteur-client. Elle fournit l'outil de traçabilité blockchain.</p>
+                  </div>
+                  <div className="profile-type-card">
+                    <h4>🧾 Support Comptable</h4>
+                    <p>Support idéal pour la gestion des "produits constatés d'avance" (préventes) ou des titres d'accès numériques.</p>
+                  </div>
+                </div>
+
+                <div className="creator-actions-grid mt-8">
+                  <Button onClick={() => handleAction('/manage-token')} variant="primary" size="lg">🔨 Créer un jeton d'usage</Button>
+                  <Button onClick={() => handleAction('/manage-tokens')} variant="outline" size="lg">🔑 Gérer mes outils</Button>
                 </div>
               </section>
 
-                      {/* === SECTION STORYTELLING : LES CAS D'USAGE RÉELS === */}
+              {/* 3. Les Profils de Confiance */}
+              <section className="section-container">
+                <h2 className="text-center mb-8">Niveaux de Crédibilité</h2>
+                <div className="profiles-showcase">
+                  <div className="profile-type-card">
+                    <h4>🕵️ Profil Libre</h4>
+                    <p>Usage privé ou cercles d'amis. Pas d'identification requise, aucune visibilité dans l'annuaire public.</p>
+                  </div>
+                  <div className="profile-type-card featured">
+                    <Badge variant="primary">Standard Pro</Badge>
+                    <h4>📝 Public</h4>
+                    <p>Pour les commerçants, artisans et associations. Votre projet est visible par tous les citoyens de votre zone géographique.</p>
+                  </div>
+                  <div className="profile-type-card border-success">
+                    <h4>✅ Vérifié</h4>
+                    <p>Identification légale (KYC). Obligatoire pour les institutions et entreprises souhaitant une visibilité institutionnelle maximale.</p>
+                  </div>
+                </div>
+              </section>
+            </div>
+          )}
+                    {/* === SECTION STORYTELLING : LES CAS D'USAGE RÉELS === */}
             <section className="section-container">
               <div className="section-header-centered">
                 <Badge variant="primary" className="mb-2">Exemples concrets</Badge>
                 <h2>L'économie humaine en action</h2>
-                <p>Découvrez comment citoyens et créateurs utilisent JLN Wallet pour transformer leur quotidien.</p>
+                <p>Découvrez comment citoyens, commercants et créateurs utilisent JLN Wallet pour transformer leur quotidien.</p>
               </div>
 
               {/* Sélecteur de Cas d'Usage (Scroll horizontal sur mobile) */}
@@ -338,91 +455,6 @@ const LandingPage = () => {
                 )}
               </div>
             </section>
-            </div>
-          )} 
-          {/* === CONTENU : CRÉATEUR === */}
-          {activeRole === 'creator' && (
-            <div className="role-content fade-in">
-              <section className="section-container bg-alt">
-                <div className="section-header-centered">
-                  <h2>Maîtrisez votre circulation de valeur</h2>
-                  <p>Artisans, associations, mairies ou entreprises : créez votre outil d'échange sur mesure.</p>
-                </div>
-                
-                <div className="usecases-stack">
-                  <div className="usecase-card">
-                    <div className="usecase-icon">📈</div>
-                    <div className="usecase-content">
-                      <h3>Prévente & Trésorerie</h3>
-                      <p>Financez vos besoins opérationnels (matériel, stocks, lancements) en vendant vos futurs produits ou services. <strong>Vous conservez 100% de la valeur générée.</strong></p>
-                    </div>
-                  </div>
-                  <div className="usecase-card">
-                    <div className="usecase-icon">💎</div>
-                    <div className="usecase-content">
-                      <h3>Récompenses Locales</h3>
-                      <p>Remplacez les cartes de fidélité papier. Émettez vos propres jetons de récompense pour encourager vos clients à revenir et stabiliser votre activité.</p>
-                    </div>
-                  </div>
-                  <div className="usecase-card">
-                    <div className="usecase-icon">🏛️</div>
-                    <div className="usecase-content">
-                      <h3>Circuits Courts & Territoires</h3>
-                      <p>Créez un instrument d'échange pour relocaliser la consommation, dynamiser un centre-ville ou organiser les services d'une association.</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="creator-actions-grid mt-8">
-                  <Button onClick={() => handleAction('/create-token')} variant="primary" size="lg">🔨 Créer un jeton d'usage</Button>
-                  <Button onClick={() => handleAction('/manage-tokens')} variant="outline" size="lg">🔑 Gérer mes outils</Button>
-                </div>
-              </section>
-
-              {/* Les Profils Créateurs */}
-              <section className="section-container">
-                <h2 className="text-center mb-8">Crédibilité & Confiance</h2>
-                <div className="profiles-showcase">
-                  <div className="profile-type-card">
-                    <h4>🕵️ Libre</h4>
-                    <p>Usage informel, tests ou cercles privés. Aucune identification n'est requise pour démarrer.</p>
-                  </div>
-                  <div className="profile-type-card featured">
-                    <Badge variant="primary">Standard</Badge>
-                    <h4>📝 Public</h4>
-                    <p>Pour les commerçants et associations. Apparaissez dans l'annuaire pour être trouvé par les citoyens locaux.</p>
-                  </div>
-                  <div className="profile-type-card border-success">
-                    <h4>✅ Vérifié</h4>
-                    <p>Entreprises et institutions. Badge de confiance officiel après vérification de votre existence légale (KYC).</p>
-                  </div>
-                </div>
-              </section>
-              {/* === SECTION INFRASTRUCTURE === */}
-              <section className="section-container bg-secondary-dim">
-                <h2 className="text-center mb-4">Un outil, pas un produit financier</h2>
-                <p className="text-center text-secondary mb-12 max-w-600 mx-auto">JLN Wallet est une infrastructure neutre. La valeur des jetons dépend exclusivement de l'engagement réel des créateurs.</p>
-                <div className="features-grid-detailed">
-                  <div className="feature-item">
-                    <div className="feature-icon">⚙️</div>
-                    <h5>Liberté de paramétrage</h5>
-                    <p>Quantité fixe pour un projet précis ou variable pour une activité récurrente. Vous définissez les règles de votre écosystème.</p>
-                  </div>
-                  <div className="feature-item">
-                    <div className="feature-icon">🛡️</div>
-                    <h5>Responsabilité partagée</h5>
-                    <p>Les jetons ne sont pas des instruments d'investissement. Ils représentent des droits d'usage, des contreparties ou des accès locaux.</p>
-                  </div>
-                  <div className="feature-item">
-                    <div className="feature-icon">💼</div>
-                    <h5>Clarté opérationnelle</h5>
-                    <p>Un support numérique idéal pour gérer des "produits constatés d'avance" ou des programmes de fidélité communautaires.</p>
-                  </div>
-                </div>
-              </section>
-            </div>
-          )}
-          <div className="separator"></div>
 
           {/* === PRICING SECTION (Contraste Corrigé) === */}
           <section className="section-container pricing-section-dark">
@@ -430,12 +462,12 @@ const LandingPage = () => {
               <div className="pricing-header">
                 <h2 style={{color: 'white', margin: 0}}>Transparence & Coûts</h2>
                 <div className="price-tag">
-                  <span className="amount" style={{color: '#4ade80'}}>Libre</span>
+                  <span className="amount" style={{color: '#4ade80'}}>Gratuit</span>
                   <span className="period" style={{color: '#94a3b8'}}>zéro commission</span>
                 </div>
               </div>
               <p className="pricing-intro" style={{color: '#cbd5e1', marginBottom: '32px'}}>
-                L'application est un outil gratuit. Nous ne percevons aucune commission sur vos échanges ou vos préventes.
+                L'application est un outil gratuit. Nous ne percevons aucune commission sur la création et vos échanges de jetons.
               </p>
               
               <div className="pricing-list">
@@ -451,10 +483,14 @@ const LandingPage = () => {
                   <span style={{color: '#e2e8f0'}}>Envoi de jetons (réseau)</span>
                   <strong style={{color: 'white'}}>{getFiatCost(1)} *</strong>
                 </div>
+                <div className="pricing-item" style={{borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '12px'}}>
+                  <span style={{color: '#e2e8f0'}}>Envois et Distribution: eCash (XEC)</span>
+                  <strong style={{color: 'white'}}>10% - Min 5.46 XEC (= {getFiatCost(1)})</strong>
+                </div>
               </div>
               
               <p className="pricing-disclaimer" style={{color: '#94a3b8', fontSize: '0.8rem', marginTop: '24px', fontStyle: 'italic'}}>
-                * Frais de "timbre numérique" payés à la blockchain eCash (XEC) pour sécuriser l'infrastructure. JLN Portefeuille ne perçoit aucune rémunération sur ces frais.
+                * Frais de réseau incompressibles payés à l'infrastructure eCash (XEC) pour sécuriser les transactions. JLN Portefeuille ne perçoit aucune rémunération sur ces frais.
               </p>
             </div>
           </section>
@@ -483,11 +519,11 @@ const LandingPage = () => {
             </section>
           )}
 
-          {/* === AVERTISSEMENT LÉGAL (BOUCLIER) === */}
+          {/* === AVERTISSEMENT LÉGAL === */}
           <footer className="legal-footer">
             <div className="max-w-800 mx-auto">
               <p className="mb-4">
-                <strong>Bouclier Juridique :</strong> L'application est un support technologique. Les jetons émis sont des jetons d'usage (contreparties, fidélité, accès). Ils ne confèrent aucun droit financier, dividende ou promesse de rendement. Chaque créateur est seul responsable de la définition et de la livraison de ses contreparties, ainsi que de sa conformité fiscale locale.
+                <strong>Avertissement Juridique :</strong> L'application est un support technologique. Les jetons émis sont des jetons d'usage (contreparties, fidélité, accès). Ils ne confèrent aucun droit financier, dividende ou promesse de rendement. Chaque créateur est seul responsable de la définition et de la livraison de ses contreparties, ainsi que de sa conformité fiscale locale.
               </p>
               <p>© 2026 JLN Wallet - L'infrastructure au service du lien humain.</p>
             </div>
