@@ -1,10 +1,14 @@
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useState } from 'react';
-import PropTypes from 'prop-types';
-import { useAtom, useSetAtom } from 'jotai';
-import { walletConnectedAtom, notificationAtom, walletModalOpenAtom } from '../../atoms';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { 
+  mnemonicAtom,           // ✅ Source de vérité pour la connexion
+  hasEncryptedWalletAtom, // ✅ Pour savoir si on doit déverrouiller
+  notificationAtom, 
+  walletModalOpenAtom 
+} from '../../atoms';
 import { useTranslation } from '../../hooks/useTranslation';
-import { useEcashWallet, useEcashBalance } from '../../hooks/useEcashWallet';
+import { useEcashBalance, useEcashWallet } from '../../hooks/useEcashWallet';
 import { useIsCreator } from '../../hooks/useIsCreator';
 import ThemeToggle from '../ThemeToggle';
 import LanguageToggle from '../LanguageToggle';
@@ -14,89 +18,75 @@ const TopBar = () => {
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
-  const [walletConnected] = useAtom(walletConnectedAtom);
+  
+  // États globaux
+  const mnemonic = useAtomValue(mnemonicAtom); // Est-on connecté ?
+  const hasEncryptedWallet = useAtomValue(hasEncryptedWalletAtom); // A-t-on un wallet local ?
+  const setWalletModalOpen = useSetAtom(walletModalOpenAtom);
+  const setNotification = useSetAtom(notificationAtom);
+
   const { loading, refreshBalance } = useEcashBalance();
   const { resetWallet } = useEcashWallet();
   const isCreator = useIsCreator();
+  
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const setNotification = useSetAtom(notificationAtom);
-  const setWalletModalOpen = useSetAtom(walletModalOpenAtom);
 
-  // App name always displayed in center (dynamic based on route)
+  // Vérification de connexion basée sur la présence du mnemonic en RAM
+  const isWalletConnected = !!mnemonic;
+
+  // Logique d'affichage
   const isHomePage = location.pathname === '/landingpage' || location.pathname === '/';
-  const isFarmerInfoPage = location.pathname === '/farmer-info';
-  const isCreateTokenPage = location.pathname === '/create-token';
-  
-  // Dynamic title based on current page
-  let appName = 'JLN WALLET';
-  
   const showBackButton = !isHomePage;
-  const showFarmerLinkLeft = isHomePage && !isFarmerInfoPage;
-
+  
   const handleBackClick = () => {
     navigate(-1);
   };
 
   const handleRefreshClick = async () => {
     if (!refreshBalance || loading || isRefreshing) return;
-
     setIsRefreshing(true);
     try {
       await refreshBalance();
     } catch (error) {
       console.error('Failed to refresh balance:', error);
     } finally {
-      // Reset refreshing state after a short delay
-      setTimeout(() => {
-        setIsRefreshing(false);
-      }, 1000);
+      setTimeout(() => setIsRefreshing(false), 1000);
     }
   };
 
-  const handleLogoutClick = () => {
-    setShowLogoutModal(true);
+  // --- LOGIQUE DE CONNEXION / DECONNEXION ---
+
+  const handleAuthClick = () => {
+    if (isWalletConnected) {
+      // Cas 1: Déjà connecté -> On ouvre la modale de déconnexion
+      setShowLogoutModal(true);
+    } else {
+      // Cas 2: Pas connecté
+      if (hasEncryptedWallet) {
+        // Un wallet existe -> On va sur /wallet pour déclencher le "Unlock Screen"
+        navigate('/wallet');
+      } else {
+        // Rien n'existe -> On ouvre le modal de création
+        setWalletModalOpen(true);
+      }
+    }
   };
 
   const handleLogoutConfirm = () => {
-    console.log('🚪 Logout confirmed, resetting wallet...');
-    
-    // Close modal first
+    console.log('🚪 Logout confirmed...');
     setShowLogoutModal(false);
-    
-    // Show notification
     setNotification({
       type: 'success',
       message: t('common.logoutSuccess') || 'Déconnexion réussie'
     });
-    
-    // Use resetWallet from hook - it handles everything correctly
-    resetWallet();
-  };
-
-  const handleLogoutCancel = () => {
-    setShowLogoutModal(false);
-  };
-
-  const handleLogin = () => {
-    // Navigate to home and open wallet modal
-    if (location.pathname === '/') {
-      // Already on home, just open modal
-      setWalletModalOpen(true);
-    } else {
-      // Navigate to home first
-      navigate('/');
-      // Open modal after navigation (slight delay to ensure page loads)
-      setTimeout(() => {
-        setWalletModalOpen(true);
-      }, 100);
-    }
+    resetWallet(); // Ceci recharge la page et vide la RAM
   };
 
   return (
     <div className="top-bar top-bar-solid">
       <div className="top-bar-content">
-        {/* LEFT SECTION */}
+        {/* GAUCHE : Bouton Retour */}
         <div className="top-bar-spacer">
           {showBackButton && (
             <button
@@ -110,24 +100,27 @@ const TopBar = () => {
           )}
         </div>
 
-        {/* CENTER SECTION - App Name */}
-        <h1 className="page-title">{appName}</h1>
+        {/* CENTRE : Titre Cliquable */}
+        <div className="page-title">
+            <Link to="/" style={{ textDecoration: 'none', color: 'inherit', fontWeight: 'bold' }}>
+                JLN WALLET
+            </Link>
+        </div>
 
-        {/* RIGHT SECTION - Always visible */}
+        {/* DROITE : Actions */}
         <div className="top-bar-spacer">
-          {/* Creator shortcut - if user is creator (AVANT FAQ) */}
+          {/* Raccourci Créateur */}
           {isCreator && (
             <button
               onClick={() => navigate('/manage-token')}
               className="creator-shortcut"
               title={t('topBar.creatorDashboard') || 'Tableau de bord créateur'}
-              aria-label={t('topBar.creatorDashboard') || 'Tableau de bord créateur'}
             >
               🗝️
             </button>
           )}
           
-          {/* FAQ button - TOUJOURS visible */}
+          {/* FAQ */}
           <button
             onClick={() => navigate('/faq')}
             className="support-link"
@@ -135,27 +128,33 @@ const TopBar = () => {
           >
             ❓
           </button>
-          {/* NotificationBell - Visible pour tout le monde (admin, créateur, client) */}
-          {walletConnected && <NotificationBell compact={true} />}
+
+          {/* Notifications (Seulement si connecté) */}
+          {isWalletConnected && <NotificationBell compact={true} />}
           
-          {/* 
-          {/* Auth button - ALWAYS visible with primary background */}
+          {/* Bouton Principal Auth (Connexion / Déconnexion / Déverrouiller) */}
           <button
-            onClick={walletConnected ? handleLogoutClick : handleLogin}
-            className="auth-button auth-button-primary"
-            title={walletConnected ? t('common.disconnect') : t('common.connect')}
+            onClick={handleAuthClick}
+            className={`auth-button ${isWalletConnected ? 'auth-button-connected' : 'auth-button-primary'}`}
+            title={isWalletConnected ? t('common.disconnect') : (hasEncryptedWallet ? 'Déverrouiller' : t('common.connect'))}
           >
-            <span className="auth-icon">{walletConnected ? '🔓' : '🔒'}</span>
-            <span className="auth-text">{walletConnected ? t('common.disconnect') : t('common.connect')}</span>
+            <span className="auth-icon">{isWalletConnected ? '🔓' : (hasEncryptedWallet ? '🔑' : '🚀')}</span>
+            <span className="auth-text">
+                {isWalletConnected 
+                    ? (t('common.disconnect') || 'Déconnexion')
+                    : (hasEncryptedWallet ? 'Déverrouiller' : (t('common.connect') || 'Connexion'))
+                }
+            </span>
           </button>
+
           <LanguageToggle />
           <ThemeToggle compact={true} />
         </div>
       </div>
 
-      {/* Logout Confirmation Modal */}
+      {/* Modal de Confirmation Déconnexion */}
       {showLogoutModal && (
-        <div className="logout-modal-overlay" onClick={handleLogoutCancel}>
+        <div className="logout-modal-overlay" onClick={() => setShowLogoutModal(false)}>
           <div className="logout-modal" onClick={(e) => e.stopPropagation()}>
             <div className="logout-modal-header">
               <h2>{t('common.logout') || 'Déconnexion'}</h2>
@@ -166,7 +165,7 @@ const TopBar = () => {
             <div className="logout-modal-footer">
               <button 
                 className="logout-modal-cancel"
-                onClick={handleLogoutCancel}
+                onClick={() => setShowLogoutModal(false)}
               >
                 {t('common.cancel') || 'Annuler'}
               </button>
@@ -183,7 +182,5 @@ const TopBar = () => {
     </div>
   );
 };
-
-TopBar.propTypes = {};
 
 export default TopBar;

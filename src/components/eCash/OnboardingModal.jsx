@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useSetAtom } from 'jotai';
-import { useNavigate } from 'react-router-dom'; // Nécessaire pour le bouton retour
-import { mnemonicAtom, hasEncryptedWalletAtom } from '../../atoms';
+import { useNavigate } from 'react-router-dom'; 
+import { mnemonicAtom, hasEncryptedWalletAtom, walletModalOpenAtom } from '../../atoms';
 import { storageService } from '../../services/storageService';
 import { generateMnemonic } from '../../services/ecashWallet'; 
 
@@ -15,7 +15,8 @@ const STEPS = {
 const OnboardingModal = ({ onClose, isPageMode = false }) => {
   const setMnemonicAtom = useSetAtom(mnemonicAtom);
   const setHasEncryptedWallet = useSetAtom(hasEncryptedWalletAtom);
-  const navigate = useNavigate(); // Hook de navigation
+  const setWalletModalOpen = useSetAtom(walletModalOpenAtom);
+  const navigate = useNavigate(); 
 
   const [step, setStep] = useState(STEPS.WELCOME);
   const [mnemonic, setMnemonic] = useState('');
@@ -25,17 +26,10 @@ const OnboardingModal = ({ onClose, isPageMode = false }) => {
   const [error, setError] = useState('');
 
   // --- ACTIONS ---
-
   const startCreate = () => {
-    try {
-      const newMnemonic = generateMnemonic(); 
-      setMnemonic(newMnemonic);
-      setError('');
-      setStep(STEPS.CREATE);
-    } catch (e) {
-      console.error(e);
-      setError("Erreur technique : Impossible de générer le mnémonique.");
-    }
+    setMnemonic(generateMnemonic());
+    setError('');
+    setStep(STEPS.CREATE);
   };
 
   const startImport = () => {
@@ -44,125 +38,82 @@ const OnboardingModal = ({ onClose, isPageMode = false }) => {
     setStep(STEPS.IMPORT);
   };
 
-  const validateImport = (e) => {
-    if(e) e.preventDefault();
+  const validateImport = () => {
     const words = mnemonic.trim().split(/\s+/);
-    if (words.length !== 12) {
-      setError(`Phrase invalide : ${words.length} mots trouvés sur 12 requis.`);
-      return;
-    }
+    if (words.length !== 12) return setError(`Phrase invalide : ${words.length} mots.`);
     setError('');
     setStep(STEPS.PASSWORD);
   };
 
-  const confirmBackup = () => {
-    setStep(STEPS.PASSWORD);
-  };
+  const handleFinalize = async () => {
+    // ALERT DE DEBUG : Si tu ne vois pas ça, c'est un problème CSS majeur
+    // alert("Click reçu !"); 
+    console.log("🚀 Click reçu");
 
-  const handleFinalize = async (e) => {
-    e.preventDefault();
     setError('');
-
-    if (!mnemonic) {
-      setError("Erreur critique : Aucune phrase à sauvegarder.");
-      return;
-    }
-    if (password.length < 8) {
-      setError("Le mot de passe doit faire au moins 8 caractères.");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError("Les mots de passe ne correspondent pas.");
-      return;
-    }
+    if (!mnemonic) return setError("Erreur: Pas de phrase.");
+    if (password.length < 8) return setError("Mot de passe trop court.");
+    if (password !== confirmPassword) return setError("Mots de passe différents.");
 
     setLoading(true);
 
     try {
       await storageService.saveWallet(mnemonic, password);
+      
+      // Mise à jour critique
       setHasEncryptedWallet(true);
       setMnemonicAtom(mnemonic);
+      
+      // Fermeture explicite
+      setWalletModalOpen(false); 
       if (onClose) onClose();
+
+      // Redirection force
+      navigate('/'); 
+
     } catch (err) {
-      console.error("Erreur SAVE:", err);
-      setError("Échec de la sauvegarde : " + (err.message || "Erreur inconnue"));
+      alert("Erreur: " + err.message);
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  // --- STYLES INTELLIGENTS ---
-  // Si isPageMode est activé, on retire le style "Overlay Fixe" pour que le Header reste cliquable
-  const containerStyle = isPageMode ? {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-    padding: '2rem 1rem',
-    minHeight: '60vh'
+  // --- STYLES ---
+  const overlayStyle = isPageMode ? {
+    display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: '2rem 1rem', minHeight: '60vh'
   } : {
     position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.85)',
     display: 'flex', alignItems: 'center', justifyContent: 'center', 
-    zIndex: 10000,
-    backdropFilter: 'blur(5px)'
-  };
-
-  const cardStyle = {
-    maxWidth: '500px', 
-    width: '100%', 
-    padding: '2rem', 
-    position: 'relative',
-    backgroundColor: 'var(--bg-card, #fff)', // Assure un fond
-    borderRadius: '12px',
-    boxShadow: isPageMode ? 'none' : '0 25px 50px -12px rgba(0, 0, 0, 0.25)' // Ombre seulement en popup
+    zIndex: 10000, backdropFilter: 'blur(5px)',
+    pointerEvents: 'auto' // Force les clics
   };
 
   return (
-    <div className={isPageMode ? "" : "modal-overlay"} style={containerStyle}>
-      <div className="card" style={cardStyle}>
+    <div className={isPageMode ? "" : "modal-overlay"} style={overlayStyle}>
+      <div className="card" style={{ maxWidth: '500px', width: '100%', padding: '2rem', position: 'relative', background: '#fff', borderRadius: '12px' }}>
         
-        {/* BOUTON FERMER (Popup) */}
         {!isPageMode && onClose && (
-          <button 
-            onClick={onClose}
-            style={{ position: 'absolute', top: '15px', right: '15px', background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1 }}
-          >
-            &times;
-          </button>
+          <button onClick={onClose} style={{ position: 'absolute', top: '15px', right: '15px', background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>&times;</button>
         )}
 
-        {/* HEADER DU MODAL */}
-        <div style={{ marginBottom: '1.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          {step !== STEPS.WELCOME && (
-            <button onClick={() => setStep(STEPS.WELCOME)} className="btn-ghost" style={{padding: '0.5rem'}}>
-              &larr; Retour
-            </button>
-          )}
-          <h2 style={{ margin: 0, fontSize: '1.25rem' }}>Configuration Wallet</h2>
+        {/* HEADER */}
+        <div style={{ marginBottom: '1rem', borderBottom: '1px solid #eee', paddingBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          {step !== STEPS.WELCOME && <button onClick={() => setStep(STEPS.WELCOME)} className="btn-ghost">&larr; Retour</button>}
+          <h2 style={{ margin: 0 }}>Configuration Wallet</h2>
         </div>
 
-        {/* --- ETAPE 1 : ACCUEIL --- */}
+        {/* CONTENU */}
         {step === STEPS.WELCOME && (
           <div className="flex-col gap-4">
-            <p className="text-secondary">Pour interagir avec la blockchain, vous avez besoin d'un portefeuille.</p>
-            <div className="grid gap-3 mt-4">
-              <button className="btn-primary" onClick={startCreate} style={{padding: '1rem'}}>
-                🚀 Créer un nouveau Wallet
-              </button>
-              <button className="btn-outline" onClick={startImport} style={{padding: '1rem'}}>
-                📥 Importer (J'ai déjà 12 mots)
-              </button>
-            </div>
+            <p>Bienvenue. Créez ou importez un wallet.</p>
+            <button className="btn-primary" onClick={startCreate} style={{width:'100%', padding:'1rem', marginBottom:'0.5rem'}}>🚀 Créer</button>
+            <button className="btn-outline" onClick={startImport} style={{width:'100%', padding:'1rem'}}>📥 Importer</button>
             
-            {/* BOUTON RETOUR ACCUEIL (Seulement en mode Page) */}
             {isPageMode && (
-              <div style={{ marginTop: '2rem', textAlign: 'center', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
-                <p style={{fontSize: '0.9rem', marginBottom: '0.5rem'}}>Vous ne voulez pas créer de wallet tout de suite ?</p>
-                <button 
-                  onClick={() => navigate('/')} 
-                  className="btn-ghost"
-                  style={{ textDecoration: 'underline' }}
-                >
+              <div style={{marginTop: '2rem', textAlign: 'center'}}>
+                <button onClick={() => navigate('/')} style={{background:'none', border:'none', textDecoration:'underline', cursor:'pointer', color:'blue'}}>
                   Retourner à l'annuaire public
                 </button>
               </div>
@@ -170,84 +121,39 @@ const OnboardingModal = ({ onClose, isPageMode = false }) => {
           </div>
         )}
 
-        {/* --- ETAPE 2A : CREATION --- */}
         {step === STEPS.CREATE && (
-          <div className="flex-col gap-4">
-            <div className="alert-warning p-4 rounded">
-              ⚠️ <strong>Sauvegardez ceci !</strong> Ces 12 mots sont le seul moyen de récupérer votre argent.
-            </div>
-            
-            <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded grid grid-cols-3 gap-2 font-mono text-sm my-4">
-              {mnemonic.split(' ').map((word, i) => (
-                <div key={i} className="bg-white dark:bg-black p-1 rounded border border-slate-200 dark:border-slate-700 text-center">
-                  <span className="text-gray-400 select-none mr-1">{i+1}.</span>{word}
-                </div>
-              ))}
-            </div>
-
-            <button className="btn-primary w-full" onClick={confirmBackup}>
-              C'est noté, étape suivante
-            </button>
-          </div>
+           <div>
+             <div style={{background:'#f0f0f0', padding:'1rem', margin:'1rem 0', fontFamily:'monospace'}}>{mnemonic}</div>
+             <button className="btn-primary w-full" onClick={() => setStep(STEPS.PASSWORD)}>J'ai sauvegardé</button>
+           </div>
         )}
 
-        {/* --- ETAPE 2B : IMPORT --- */}
         {step === STEPS.IMPORT && (
-          <div className="flex-col gap-4">
-            <label>Saisissez vos 12 mots secrets :</label>
-            <textarea
-              value={mnemonic}
-              onChange={(e) => setMnemonic(e.target.value)}
-              placeholder="mot1 mot2 mot3 ..."
-              className="input-field w-full h-32 p-3 font-mono"
-            />
-            {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
-            
-            <button className="btn-primary w-full mt-4" onClick={validateImport} disabled={!mnemonic}>
-              Valider la phrase
-            </button>
-          </div>
+           <div>
+             <textarea value={mnemonic} onChange={e=>setMnemonic(e.target.value)} style={{width:'100%', height:'100px'}} />
+             <button className="btn-primary w-full mt-4" onClick={validateImport}>Valider</button>
+           </div>
         )}
 
-        {/* --- ETAPE 3 : PASSWORD (FINAL) --- */}
         {step === STEPS.PASSWORD && (
-          <form onSubmit={handleFinalize} className="flex-col gap-4">
-            <div className="text-center mb-4">
-              <h3>🔒 Sécurisez vos clés</h3>
-              <p className="text-sm text-secondary">
-                Choisissez un mot de passe pour chiffrer votre wallet sur cet appareil.
-              </p>
-            </div>
+          <div className="flex-col gap-4">
+            <h3>Sécurisez vos clés</h3>
+            <input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Mot de passe" className="input-field w-full" style={{padding:'0.5rem', marginBottom:'0.5rem', width:'100%'}} />
+            <input type="password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} placeholder="Confirmer" className="input-field w-full" style={{padding:'0.5rem', width:'100%'}} />
+            
+            {error && <p style={{color:'red'}}>{error}</p>}
 
-            <div className="form-group">
-              <label>Mot de passe</label>
-              <input
-                type="password"
-                className="input-field w-full"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoFocus
-                placeholder="8 caractères minimum"
-              />
-            </div>
-
-            <div className="form-group mt-3">
-              <label>Confirmer</label>
-              <input
-                type="password"
-                className="input-field w-full"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Répétez le mot de passe"
-              />
-            </div>
-
-            {error && <div className="p-3 bg-red-100 text-red-700 rounded text-sm mt-3">{error}</div>}
-
-            <button type="submit" className="btn-primary w-full mt-6" disabled={loading}>
-              {loading ? 'Création et chiffrement...' : 'Terminer et Accéder au Wallet'}
+            {/* BOUTON TYPE BUTTON + ONCLICK DIRECT (Pas de form submit) */}
+            <button 
+              type="button" 
+              className="btn-primary w-full mt-6" 
+              disabled={loading}
+              onClick={handleFinalize} // Appel direct
+              style={{padding:'1rem', width:'100%', background:'blue', color:'white', cursor:'pointer'}}
+            >
+              {loading ? 'Traitement...' : 'Terminer et Accéder'}
             </button>
-          </form>
+          </div>
         )}
 
       </div>

@@ -8,7 +8,6 @@ import { useEcashWallet, useEcashToken } from '../hooks/useEcashWallet';
 import { useAdmin } from '../hooks/useAdmin';
 import TopBar from '../components/Layout/TopBar';
 import BottomNavigation from '../components/Layout/BottomNavigation';
-import OnboardingModal from '../components/eCash/OnboardingModal';
 import SearchFilters from '../components/SearchFilters';
 import { CreatorProfileCard, CreatorProfileModal } from '../components/Creators/CreatorProfile';
 import { Button } from '../components/UI';
@@ -529,13 +528,6 @@ const DirectoryPage = () => {
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         profileTickers={profileTickers}
-      />
-      
-      {/* OnboardingModal - Modal pédagogique de connexion/création/import */}
-      <OnboardingModal
-        isOpen={isWalletModalOpen}
-        onClose={() => setIsWalletModalOpen(false)}
-        onConnected={() => setIsWalletModalOpen(false)}
       />
       
       {/* Floating Admin Button - Only visible for admins */}

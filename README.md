@@ -47,7 +47,7 @@ A beautiful, lightweight wallet for **eCash (XEC)** and P2P tokens, built with R
 - 🏪 **Profil selector** - Filter tokens by profil with persistent selection
 - 💰 **Smart balance display** - 70% XEC / 30% USD split with real-time rates
 - 📷 **QR codes** - Scan & generate QR codes for payments
-- 🔐 **Secure** - Non-custodial, keys stored locally
+- 🔐 **Secure** - Non-custodial. Private keys are AES-256 encrypted client-side with a user password before local storage. Zero knowledge architecture.
 
 ### Token Management
 - 📊 **Unified action tabs** - Send/Airdrop/Mint/Burn on single row

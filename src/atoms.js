@@ -291,7 +291,6 @@ toggleProfileFavoriteAtom.debugLabel = 'toggleProfileFavoriteAtom';
 
 // Wallet Modal Open State
 export const walletModalOpenAtom = atom(false);
-walletModalOpenAtom.debugLabel = 'walletModalOpenAtom';
 
 // ============================================
 // CURRENCY MANAGEMENT
