@@ -1,6 +1,6 @@
 import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
-import { loadMnemonic, saveMnemonic } from './utils/mnemonicStorage';
+import { storageService } from './services/storageService'; // NOUVEL IMPORT SÉCURITÉ
 
 // ============================================
 // LANGUAGE & AUTO-DETECTION
@@ -220,17 +220,24 @@ mnemonicCollapsedAtom.debugLabel = 'mnemonicCollapsedAtom';
 export const coinSelectionStrategyAtom = atom('efficient');
 coinSelectionStrategyAtom.debugLabel = 'coinSelectionStrategyAtom';
 
-// Saved mnemonic atom with localStorage persistence for wallet restoration
-// Using atomWithStorage for automatic localStorage sync (Jotai best practice)
-export const savedMnemonicAtom = atomWithStorage('jlnwallet-mnemonic', '', undefined, { unstable_getOnInit: true });
-savedMnemonicAtom.debugLabel = 'savedMnemonicAtom';
+// ============================================
+// 🔒 SECURITY & WALLET STORAGE (UPDATED)
+// ============================================
 
-// Mnemonic setter atom for backward compatibility
-// atomWithStorage handles persistence automatically, so this just updates the atom
-export const mnemonicSetterAtom = atom(null, (get, set, newMnemonic) => {
-  set(savedMnemonicAtom, newMnemonic || '');
-});
-mnemonicSetterAtom.debugLabel = 'mnemonicSetterAtom';
+// 1. IN-MEMORY MNEMONIC (Non-persistant)
+// Cet atome contient la seed phrase déchiffrée UNIQUEMENT en mémoire RAM.
+// Si l'utilisateur rafraîchit la page, ceci redevient null (sécurité).
+export const mnemonicAtom = atom(null);
+mnemonicAtom.debugLabel = 'mnemonicAtom';
+
+// 2. CHECK ENCRYPTED VAULT
+// Vérifie si un portefeuille chiffré existe dans le stockage local.
+// Utile pour rediriger vers "Login" ou "Créer Wallet".
+export const hasEncryptedWalletAtom = atom(storageService.hasWallet());
+hasEncryptedWalletAtom.debugLabel = 'hasEncryptedWalletAtom';
+
+// Note: L'ancien 'savedMnemonicAtom' a été supprimé pour des raisons de sécurité.
+// Le mnemonic ne doit jamais être stocké en clair via atomWithStorage.
 
 // ============================================
 // FAVORITE PROFILE SYSTEM

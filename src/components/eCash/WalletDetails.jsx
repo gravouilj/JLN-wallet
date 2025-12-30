@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useAtom, useSetAtom } from 'jotai';
-import { walletAtom, notificationAtom, savedMnemonicAtom } from '../../atoms';
-import { Card, CardContent, Button, Badge } from '../UI';
-import { useEcashWallet } from '../../hooks/useEcashWallet';
+// CORRECTION ICI : on remplace savedMnemonicAtom par mnemonicAtom
+import { walletAtom, notificationAtom, mnemonicAtom } from '../../atoms';
+import { Card, CardContent, Button } from '../UI';
+// L'import de useEcashWallet n'est plus nécessaire ici si on utilise les atomes, mais on peut le laisser si d'autres logiques l'utilisent
+// import { useEcashWallet } from '../../hooks/useEcashWallet'; 
 
 const WalletDetails = () => {
   const [wallet] = useAtom(walletAtom);
-  const [savedMnemonic] = useAtom(savedMnemonicAtom);
+  // CORRECTION ICI : Récupération de la phrase depuis la mémoire sécurisée (RAM)
+  const [mnemonic] = useAtom(mnemonicAtom);
   const setNotification = useSetAtom(notificationAtom);
   
   const [showMnemonic, setShowMnemonic] = useState(false);
@@ -19,18 +22,19 @@ const WalletDetails = () => {
       try {
         // Tentative de récupération propre via le hook ou l'objet wallet
         // Note: Ceci dépend de l'implémentation exacte de votre classe EcashWallet
-        const privKey = wallet.sk ? wallet.getPrivateKeyWIF() : 'Non disponible'; 
-        // Si getPrivateKeyWIF n'existe pas, adapter selon votre service ecashWallet.js
-        // Fallback simple pour l'affichage si la fonction manque
-        setPrivateKeyWIF(privKey || 'Clé privée protégée'); 
+        const privKey = wallet.sk ? wallet.getPrivateKeyWIF() : null; 
+        
+        // Si getPrivateKeyWIF n'existe pas, on tente de la dériver manuellement ou on affiche un message
+        setPrivateKeyWIF(privKey || 'Fonction non disponible sur ce wallet'); 
       } catch (e) {
+        console.error(e);
         setPrivateKeyWIF('Erreur récupération clé');
       }
     }
   }, [showPrivateKey, wallet]);
 
   const handleCopy = (text, label) => {
-    if (!text || text === 'N/A') return;
+    if (!text || text === 'N/A' || text.includes('••••')) return;
     navigator.clipboard.writeText(text).then(() => {
       setNotification({ type: 'success', message: `✅ ${label} copié !` });
     }).catch(() => {
@@ -40,7 +44,8 @@ const WalletDetails = () => {
 
   if (!wallet) return null;
 
-  const mnemonic = savedMnemonic || 'Phrase non sauvegardée';
+  // Si le mnemonic est null (ex: logout), on affiche un placeholder
+  const displayMnemonic = mnemonic || 'Phrase non disponible (Wallet verrouillé)';
 
   return (
     <div className="space-y-4 mt-4">
@@ -75,14 +80,14 @@ const WalletDetails = () => {
               ? 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200' 
               : 'bg-gray-200 dark:bg-gray-800 border-transparent text-transparent select-none'
           }`}>
-            {showMnemonic ? mnemonic : '•••• •••• •••• •••• •••• •••• •••• •••• •••• •••• •••• ••••'}
+            {showMnemonic ? displayMnemonic : '•••• •••• •••• •••• •••• •••• •••• •••• •••• •••• •••• ••••'}
           </div>
 
           {showMnemonic && (
             <div className="mt-3 flex justify-end">
               <Button 
                 variant="outline" 
-                onClick={() => handleCopy(mnemonic, 'Mnemonic')}
+                onClick={() => handleCopy(displayMnemonic, 'Mnemonic')}
                 style={{ height: '36px', fontSize: '0.85rem' }}
               >
                 📋 Copier la phrase
@@ -92,8 +97,41 @@ const WalletDetails = () => {
         </CardContent>
       </Card>
       
-      {/* Note: On peut masquer la clé privée WIF si non essentielle pour simplifier l'UI, 
-          ou l'ajouter dans une seconde Card similaire si besoin expert. */}
+      {/* Section Clé Privée (Optionnelle mais souvent demandée) */}
+      <Card className="mt-4">
+        <CardContent>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-bold text-gray-900 dark:text-white">Clé Privée (WIF)</h3>
+            <Button 
+              variant="ghost" 
+              onClick={() => setShowPrivateKey(!showPrivateKey)}
+              style={{ fontSize: '0.8rem', padding: '4px 12px', height: 'auto' }}
+            >
+              {showPrivateKey ? '🙈 Masquer' : '👁️ Révéler'}
+            </Button>
+          </div>
+
+          <div className={`p-4 rounded-xl font-mono text-sm border break-all transition-all ${
+            showPrivateKey 
+              ? 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200' 
+              : 'bg-gray-200 dark:bg-gray-800 border-transparent text-transparent select-none'
+          }`}>
+             {showPrivateKey ? privateKeyWIF : '••••••••••••••••••••••••••••••••••••••••••••••••••••'}
+          </div>
+          
+          {showPrivateKey && (
+             <div className="mt-3 flex justify-end">
+              <Button 
+                variant="outline" 
+                onClick={() => handleCopy(privateKeyWIF, 'Clé Privée')}
+                style={{ height: '36px', fontSize: '0.85rem' }}
+              >
+                📋 Copier la clé
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };

@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useAtom } from 'jotai';
+import { useAtom, useAtomValue } from 'jotai';
 import {
   walletAtom,
   walletConnectedAtom,
-  savedMnemonicAtom,
-  mnemonicSetterAtom,
+  mnemonicAtom, // ✅ On utilise uniquement l'atome sécurisé en mémoire
   hdPathAtom,
   balanceAtom,
   totalBalanceAtom,
@@ -13,116 +12,80 @@ import {
   scriptLoadedAtom,
   tokenRefreshTriggerAtom
 } from '../atoms';
-import { createWallet, generateMnemonic, validateMnemonic } from '../services/ecashWallet';
+import { createWallet } from '../services/ecashWallet';
+import { storageService } from '../services/storageService'; // ✅ Pour le logout propre
 
 // --- HOOK PRINCIPAL DU WALLET ---
 export const useEcashWallet = () => {
+  // On récupère le mnemonic depuis la RAM (défini par UnlockWallet ou OnboardingModal)
+  const mnemonic = useAtomValue(mnemonicAtom);
+  
   const [wallet, setWallet] = useAtom(walletAtom);
   const [walletConnected, setWalletConnected] = useAtom(walletConnectedAtom);
-  const [savedMnemonic] = useAtom(savedMnemonicAtom);
-  const [, setMnemonic] = useAtom(mnemonicSetterAtom);
   const [hdPath] = useAtom(hdPathAtom);
   const [, setScriptLoaded] = useAtom(scriptLoadedAtom);
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Initialisation depuis la sauvegarde
-  const initializeWallet = useCallback(async () => {
-    if (!savedMnemonic) return;
-    if (wallet && wallet.getAddress()) return; // Déjà initialisé
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      console.log('🔑 Initialisation du wallet...');
-      const walletInstance = await createWallet(savedMnemonic, hdPath);
-      
-      // VÉRIFICATION CRITIQUE
-      try {
-        const address = walletInstance.getAddress();
-        if (!address) throw new Error('Adresse invalide');
-        console.log('✅ Wallet prêt:', address);
-      } catch (e) {
-        throw new Error('Wallet créé mais inutilisable (pas d\'adresse)');
+  // LOGIQUE D'INITIALISATION REACTIVE
+  // Dès que 'mnemonic' change (login succès), on instancie le wallet
+  useEffect(() => {
+    // Si pas de mnemonic (logout), on nettoie l'état
+    if (!mnemonic) {
+      if (wallet) {
+        setWallet(null);
+        setWalletConnected(false);
+        setScriptLoaded(false);
       }
-
-      setWallet(walletInstance);
-      setWalletConnected(true);
-      setScriptLoaded(true);
-    } catch (err) {
-      console.error('❌ Échec init wallet:', err);
-      setError(err.message);
-      setWalletConnected(false);
-    } finally {
-      setLoading(false);
+      return;
     }
-  }, [savedMnemonic, hdPath, wallet, setWallet, setWalletConnected, setScriptLoaded]);
 
-  // Création nouveau wallet
-  const generateNewWallet = useCallback(async () => {
-    setLoading(true);
-    try {
-      const newMnemonic = generateMnemonic();
-      const walletInstance = await createWallet(newMnemonic, hdPath);
-      
-      if (!walletInstance.getAddress()) throw new Error('Erreur génération adresse');
+    // Si le wallet est déjà initialisé avec ce mnemonic, on ne fait rien
+    if (wallet && wallet.getAddress()) return;
 
-      setMnemonic(newMnemonic);
-      setWallet(walletInstance);
-      setWalletConnected(true);
-      setScriptLoaded(true);
-      return newMnemonic;
-    } catch (err) {
-      setError(err.message);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, [hdPath, setMnemonic, setWallet, setWalletConnected, setScriptLoaded]);
+    const init = async () => {
+      setLoading(true);
+      setError(null);
+      console.log('🔑 Initialisation du wallet depuis la mémoire sécurisée...');
 
-  // Import wallet
-  const importWallet = useCallback(async (mnemonic) => {
-    setLoading(true);
-    try {
-      if (!validateMnemonic(mnemonic)) throw new Error('Mnémonique invalide');
-      
-      const walletInstance = await createWallet(mnemonic, hdPath);
-      if (!walletInstance.getAddress()) throw new Error('Erreur dérivation adresse');
-      
-      setMnemonic(mnemonic);
-      setWallet(walletInstance);
-      setWalletConnected(true);
-      setScriptLoaded(true);
-      return walletInstance;
-    } catch (err) {
-      setError(err.message);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, [hdPath, setMnemonic, setWallet, setWalletConnected, setScriptLoaded]);
+      try {
+        const walletInstance = await createWallet(mnemonic, hdPath);
+        
+        // Validation basique
+        if (!walletInstance.getAddress()) throw new Error('Instance wallet invalide');
 
+        setWallet(walletInstance);
+        setWalletConnected(true);
+        setScriptLoaded(true);
+        console.log('✅ Wallet prêt et connecté.');
+      } catch (err) {
+        console.error('❌ Échec init wallet:', err);
+        setError(err.message);
+        setWalletConnected(false);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    init();
+  }, [mnemonic, hdPath, wallet, setWallet, setWalletConnected, setScriptLoaded]);
+
+  // Déconnexion (Logout logique)
   const disconnectWallet = useCallback(() => {
     setWallet(null);
     setWalletConnected(false);
     setScriptLoaded(false);
+    // Note: Pour un vrai logout, il faut setter mnemonicAtom à null (via App/Header)
   }, [setWallet, setWalletConnected, setScriptLoaded]);
 
+  // Reset complet (Suppression des données chiffrées)
   const resetWallet = useCallback(() => {
-    setMnemonic('');
-    disconnectWallet();
-    localStorage.removeItem('profil-wallet-mnemonic');
-    window.location.reload();
-  }, [setMnemonic, disconnectWallet]);
-
-  // Auto-init au montage
-  useEffect(() => {
-    if (savedMnemonic && !wallet && !loading) {
-      initializeWallet();
+    if (window.confirm("Êtes-vous sûr de vouloir supprimer le portefeuille de cet appareil ?")) {
+      storageService.clearWallet(); // Supprime le vault chiffré
+      window.location.reload(); // Recharge pour retourner à l'accueil
     }
-  }, [savedMnemonic, wallet, loading, initializeWallet]);
+  }, []);
 
   // Helper adresse
   const address = useMemo(() => {
@@ -135,19 +98,17 @@ export const useEcashWallet = () => {
     walletConnected,
     loading,
     error,
-    generateNewWallet,
-    importWallet,
     disconnectWallet,
     resetWallet
+    // Note: generateNewWallet et importWallet ne sont plus ici car gérés par l'UI (OnboardingModal)
   };
 };
 
-// --- HOOK DE BALANCE (Fusionné) ---
+// --- HOOK DE BALANCE (Inchangé mais nettoyé) ---
 export const useEcashBalance = (refreshInterval = 10000) => {
   const [wallet] = useAtom(walletAtom);
   const [walletConnected] = useAtom(walletConnectedAtom);
   
-  // Atomes globaux à mettre à jour
   const [balance, setBalance] = useAtom(balanceAtom);
   const [, setTotalBalance] = useAtom(totalBalanceAtom);
   const [balanceBreakdown, setBalanceBreakdown] = useAtom(balanceBreakdownAtom);
@@ -168,9 +129,8 @@ export const useEcashBalance = (refreshInterval = 10000) => {
     try {
       const balanceData = await wallet.getBalance();
       
-      // 1. Mise à jour des atomes
-      setBalance(balanceData.balance); // XEC pur
-      setTotalBalance(balanceData.totalBalance); // Total avec dust
+      setBalance(balanceData.balance);
+      setTotalBalance(balanceData.totalBalance);
       setBalanceBreakdown(balanceData.balanceBreakdown || {
         spendableBalance: balanceData.balance,
         totalBalance: balanceData.totalBalance,
@@ -179,7 +139,6 @@ export const useEcashBalance = (refreshInterval = 10000) => {
         tokenUtxos: balanceData.utxos?.token?.length || 0
       });
 
-      // 2. Déclencher le refresh des tokens car les UTXOs ont changé
       setTokenRefreshTrigger(Date.now());
 
     } catch (err) {
@@ -190,7 +149,6 @@ export const useEcashBalance = (refreshInterval = 10000) => {
     }
   }, [wallet, walletConnected, setBalance, setTotalBalance, setBalanceBreakdown, setTokenRefreshTrigger]);
 
-  // Auto-refresh interval
   useEffect(() => {
     if (walletConnected) {
       fetchBalance();
@@ -199,7 +157,6 @@ export const useEcashBalance = (refreshInterval = 10000) => {
     }
   }, [walletConnected, fetchBalance, refreshInterval]);
 
-  // Trigger manuel (WebSocket)
   useEffect(() => {
     if (walletConnected && triggerRefresh > 0) {
       fetchBalance();
@@ -215,10 +172,10 @@ export const useEcashBalance = (refreshInterval = 10000) => {
   };
 };
 
-// --- HOOK DE TOKEN (Optimisé) ---
+// --- HOOK DE TOKEN (Inchangé) ---
 export const useEcashToken = (tokenId) => {
   const [wallet] = useAtom(walletAtom);
-  const [triggerRefresh] = useAtom(balanceRefreshTriggerAtom); // Écoute aussi les updates globaux
+  const [triggerRefresh] = useAtom(balanceRefreshTriggerAtom);
   
   const [tokenInfo, setTokenInfo] = useState(null);
   const [tokenBalance, setTokenBalance] = useState('0');
@@ -245,12 +202,12 @@ export const useEcashToken = (tokenId) => {
 
   useEffect(() => {
     fetchToken();
-  }, [fetchToken, triggerRefresh]); // Se met à jour si le wallet reçoit une notif
+  }, [fetchToken, triggerRefresh]);
 
   return { tokenInfo, tokenBalance, loading, refreshToken: fetchToken };
 };
 
-// --- HOOK ENVOI XEC ---
+// --- HOOK ENVOI XEC (Inchangé) ---
 export const useEcashXec = () => {
   const [wallet] = useAtom(walletAtom);
   const [walletConnected] = useAtom(walletConnectedAtom);

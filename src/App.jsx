@@ -1,7 +1,7 @@
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect } from 'react';
-import { useAtom } from 'jotai';
-import { localeAtom, savedMnemonicAtom } from './atoms';
+import { useAtom, useAtomValue } from 'jotai';
+import { localeAtom, mnemonicAtom, hasEncryptedWalletAtom, walletModalOpenAtom } from './atoms';
 import i18n from './i18n';
 
 // Pages
@@ -28,6 +28,11 @@ import Notification from './components/Notification';
 import LoadingScreen from './components/LoadingScreen';
 import ErrorBoundary from './components/ErrorBoundary';
 import FloatingAdminButton from './components/Admin/FloatingAdminButton';
+import Header from './components/Header'; // ✅ AJOUT INDISPENSABLE
+
+// SECURITY COMPONENTS
+import UnlockWallet from './components/Auth/UnlockWallet';
+import OnboardingModal from './components/eCash/OnboardingModal';
 
 // Hooks
 import { useEcashWallet } from './hooks/useEcashWallet';
@@ -44,10 +49,40 @@ import './styles/pages.css';
 import './styles/utilities.css';
 import './styles/landing.css';
 
+/**
+ * Composant de sécurité (Guard)
+ * Intercepte l'accès aux routes privées (ex: /wallet).
+ * - Si connecté : Affiche la page.
+ * - Si wallet verrouillé : Affiche Login.
+ * - Si aucun wallet : Affiche Wizard (Mode page bloquante).
+ */
+const WalletAuthGuard = ({ children }) => {
+  const mnemonic = useAtomValue(mnemonicAtom);
+  const hasEncryptedWallet = useAtomValue(hasEncryptedWalletAtom);
+
+  // 1. L'utilisateur est connecté (clé en RAM) -> Accès autorisé
+  if (mnemonic) {
+    return children;
+  }
+
+  // 2. Un wallet existe mais est verrouillé -> Demande mot de passe
+  if (hasEncryptedWallet) {
+    return (
+      <div className="main-content center-screen">
+        <UnlockWallet />
+      </div>
+    );
+  }
+
+  // 3. Aucun wallet n'existe -> Wizard de création (Mode Bloquant)
+  // isPageMode=true retire le bouton "Fermer" car on est sur une route privée
+  return <OnboardingModal isPageMode={true} />;
+};
+
 function App() {
   const [locale] = useAtom(localeAtom);
-  const [savedMnemonic] = useAtom(savedMnemonicAtom);
-  const { walletConnected, loading, initializeWallet } = useEcashWallet();
+  const [isModalOpen, setIsModalOpen] = useAtom(walletModalOpenAtom); // ✅ Gestion ouverture modal depuis Header
+  const { loading } = useEcashWallet();
 
   useEffect(() => {
     // Initialize i18n on app load
@@ -63,10 +98,7 @@ function App() {
     }
   }, [locale]);
 
-  // NOTE: Auto-initialization is handled by useEcashWallet hook
-  // No need to call initializeWallet here to avoid infinite loop
-
-  // Show loading state while wallet initializes
+  // Show loading state while wallet initializes (global check)
   if (loading) {
     return (
       <ThemeProvider>
@@ -82,6 +114,27 @@ function App() {
           <div className="app-container">
             <Notification />
             <FloatingAdminButton />
+            
+            {/* ✅ LE HEADER DOIT ÊTRE ICI POUR ÊTRE VISIBLE PARTOUT */}
+            <Header />
+
+            {/* ✅ MODAL GLOBAL (Popup) */}
+            {/* S'ouvre quand on clique sur "Connexion" dans le Header */}
+            {isModalOpen && (
+               <div style={{
+                 position: 'fixed', 
+                 zIndex: 9999, 
+                 top:0, left:0, 
+                 width:'100%', height:'100%',
+                 pointerEvents: 'none' // Permet de cliquer à travers le container vide, le modal réactivera les events
+               }}>
+                 {/* On passe une fonction onClose pour fermer le modal */}
+                 <div style={{ pointerEvents: 'auto', width: '100%', height: '100%' }}>
+                    <OnboardingModal onClose={() => setIsModalOpen(false)} />
+                 </div>
+               </div>
+            )}
+
             <Routes>
               {/* ========================================
                   ROUTES PUBLIQUES (Sans wallet requis)
@@ -97,18 +150,21 @@ function App() {
               <Route path="/faq" element={<FaqPage />} />
               
               {/* ========================================
-                  ROUTES PRIVÉES (Wallet requis)
+                  ROUTES PRIVÉES (Wallet + Auth requis)
+                  Toutes ces routes sont enveloppées dans WalletAuthGuard
                   ======================================== */}
               
               {/* Dashboard personnel (Wallet, profil optionnel) */}
               <Route 
                 path="/wallet" 
                 element={
-                  <ProtectedRoute requireProfile={false}>
-                    <ErrorBoundary>
-                      <ClientWalletPage />
-                    </ErrorBoundary>
-                  </ProtectedRoute>
+                  <WalletAuthGuard>
+                    <ProtectedRoute requireProfile={false}>
+                      <ErrorBoundary>
+                        <ClientWalletPage />
+                      </ErrorBoundary>
+                    </ProtectedRoute>
+                  </WalletAuthGuard>
                 } 
               />
               
@@ -116,11 +172,13 @@ function App() {
               <Route 
                 path="/send" 
                 element={
-                  <ProtectedRoute requireProfile={false}>
-                    <ErrorBoundary>
-                      <SendPage />
-                    </ErrorBoundary>
-                  </ProtectedRoute>
+                  <WalletAuthGuard>
+                    <ProtectedRoute requireProfile={false}>
+                      <ErrorBoundary>
+                        <SendPage />
+                      </ErrorBoundary>
+                    </ProtectedRoute>
+                  </WalletAuthGuard>
                 } 
               />
               
@@ -131,11 +189,13 @@ function App() {
               <Route 
                 path="/settings" 
                 element={
-                  <ProtectedRoute requireProfile={false}>
-                    <ErrorBoundary>
-                      <SettingsPage />
-                    </ErrorBoundary>
-                  </ProtectedRoute>
+                  <WalletAuthGuard>
+                    <ProtectedRoute requireProfile={false}>
+                      <ErrorBoundary>
+                        <SettingsPage />
+                      </ErrorBoundary>
+                    </ProtectedRoute>
+                  </WalletAuthGuard>
                 } 
               />
               
@@ -149,11 +209,13 @@ function App() {
               <Route 
                 path="/complete-token-import" 
                 element={
-                  <ProtectedRoute requireProfile={false}>
-                    <ErrorBoundary>
-                      <CompleteTokenImportPage />
-                    </ErrorBoundary>
-                  </ProtectedRoute>
+                  <WalletAuthGuard>
+                    <ProtectedRoute requireProfile={false}>
+                      <ErrorBoundary>
+                        <CompleteTokenImportPage />
+                      </ErrorBoundary>
+                    </ProtectedRoute>
+                  </WalletAuthGuard>
                 } 
               />
               
@@ -161,11 +223,13 @@ function App() {
               <Route 
                 path="/manage-token" 
                 element={
-                  <AdminGateRoute fallbackRoute="/wallet">
-                    <ErrorBoundary>
-                      <ManageTokenPage />
-                    </ErrorBoundary>
-                  </AdminGateRoute>
+                  <WalletAuthGuard>
+                    <AdminGateRoute fallbackRoute="/wallet">
+                      <ErrorBoundary>
+                        <ManageTokenPage />
+                      </ErrorBoundary>
+                    </AdminGateRoute>
+                  </WalletAuthGuard>
                 }
               />
               
@@ -173,11 +237,13 @@ function App() {
               <Route 
                 path="/token/:tokenId" 
                 element={
-                  <ProtectedRoute requireProfile={false}>
-                    <ErrorBoundary>
-                      <TokenPage />
-                    </ErrorBoundary>
-                  </ProtectedRoute>
+                  <WalletAuthGuard>
+                    <ProtectedRoute requireProfile={false}>
+                      <ErrorBoundary>
+                        <TokenPage />
+                      </ErrorBoundary>
+                    </ProtectedRoute>
+                  </WalletAuthGuard>
                 } 
               />
               
@@ -185,11 +251,13 @@ function App() {
               <Route 
                 path="/request-listing/:tokenId" 
                 element={
-                  <ProtectedRoute requireProfile={false}>
-                    <ErrorBoundary>
-                      <RequestListingPage />
-                    </ErrorBoundary>
-                  </ProtectedRoute>
+                  <WalletAuthGuard>
+                    <ProtectedRoute requireProfile={false}>
+                      <ErrorBoundary>
+                        <RequestListingPage />
+                      </ErrorBoundary>
+                    </ProtectedRoute>
+                  </WalletAuthGuard>
                 } 
               />
               
@@ -197,11 +265,13 @@ function App() {
               <Route 
                 path="/manage-profile/:tokenId" 
                 element={
-                  <AdminGateRoute fallbackRoute="/manage-token">
-                    <ErrorBoundary>
-                      <ManageProfilePage />
-                    </ErrorBoundary>
-                  </AdminGateRoute>
+                  <WalletAuthGuard>
+                    <AdminGateRoute fallbackRoute="/manage-token">
+                      <ErrorBoundary>
+                        <ManageProfilePage />
+                      </ErrorBoundary>
+                    </AdminGateRoute>
+                  </WalletAuthGuard>
                 }
               />
               
@@ -209,11 +279,13 @@ function App() {
               <Route 
                 path="/manage-profile" 
                 element={
-                  <ProtectedRoute requireProfile={false}>
-                    <ErrorBoundary>
-                      <ManageProfilePage />
-                    </ErrorBoundary>
-                  </ProtectedRoute>
+                  <WalletAuthGuard>
+                    <ProtectedRoute requireProfile={false}>
+                      <ErrorBoundary>
+                        <ManageProfilePage />
+                      </ErrorBoundary>
+                    </ProtectedRoute>
+                  </WalletAuthGuard>
                 } 
               />
               
@@ -221,11 +293,13 @@ function App() {
               <Route 
                 path="/support" 
                 element={
-                  <ProtectedRoute requireProfile={false}>
-                    <ErrorBoundary>
-                      <SupportPage />
-                    </ErrorBoundary>
-                  </ProtectedRoute>
+                  <WalletAuthGuard>
+                    <ProtectedRoute requireProfile={false}>
+                      <ErrorBoundary>
+                        <SupportPage />
+                      </ErrorBoundary>
+                    </ProtectedRoute>
+                  </WalletAuthGuard>
                 } 
               />
               
@@ -233,11 +307,13 @@ function App() {
               <Route 
                 path="/admin/verification" 
                 element={
-                  <AdminGateRoute fallbackRoute="/">
-                    <ErrorBoundary>
-                      <AdminVerificationPage />
-                    </ErrorBoundary>
-                  </AdminGateRoute>
+                  <WalletAuthGuard>
+                    <AdminGateRoute fallbackRoute="/">
+                      <ErrorBoundary>
+                        <AdminVerificationPage />
+                      </ErrorBoundary>
+                    </AdminGateRoute>
+                  </WalletAuthGuard>
                 }
               />
               
@@ -245,11 +321,13 @@ function App() {
               <Route 
                 path="/admin" 
                 element={
-                  <AdminGateRoute fallbackRoute="/">
-                    <ErrorBoundary>
-                      <AdminDashboard />
-                    </ErrorBoundary>
-                  </AdminGateRoute>
+                  <WalletAuthGuard>
+                    <AdminGateRoute fallbackRoute="/">
+                      <ErrorBoundary>
+                        <AdminDashboard />
+                      </ErrorBoundary>
+                    </AdminGateRoute>
+                  </WalletAuthGuard>
                 }
               />
               
