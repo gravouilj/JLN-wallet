@@ -1,32 +1,23 @@
 import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
-import { storageService } from './services/storageService'; // NOUVEL IMPORT SÉCURITÉ
+import { storageService } from './services/storageService'; 
+import { APP_CONFIG } from './config/constants'; // ✅ Import de la config
 
 // ============================================
 // LANGUAGE & AUTO-DETECTION
 // ============================================
 
-/**
- * Détecte la langue appropriée selon le navigateur
- * @returns {string} Code langue ('fr' ou 'en')
- */
 const getBrowserLanguage = () => {
   if (typeof window === 'undefined') return 'fr';
-  
   const lang = (navigator.language || navigator.userLanguage || 'fr').toLowerCase();
-  
-  // Détecte si la langue du navigateur est du français
   if (lang.includes('fr')) return 'fr';
-  
-  // Par défaut, retourne 'en' pour les autres langues
   return 'en';
 };
 
-// Language/Locale atom with localStorage persistence and browser auto-detection
 const getInitialLocale = () => {
   if (typeof window !== 'undefined') {
-    const saved = localStorage.getItem('jlnwallet-language');
-    return saved || getBrowserLanguage(); // Auto-détecte si rien n'est sauvegardé
+    const saved = localStorage.getItem(APP_CONFIG.STORAGE_KEYS.LANGUAGE);
+    return saved || getBrowserLanguage();
   }
   return getBrowserLanguage();
 };
@@ -37,22 +28,18 @@ export const localeAtom = atom(
   (get) => get(_localeAtom),
   (get, set, newLocale) => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('jlnwallet-language', newLocale);
+      localStorage.setItem(APP_CONFIG.STORAGE_KEYS.LANGUAGE, newLocale);
     }
     set(_localeAtom, newLocale);
   }
 );
 localeAtom.debugLabel = 'localeAtom';
-
-// Language atom - alias for localeAtom for consistency
 export const languageAtom = localeAtom;
-languageAtom.debugLabel = 'languageAtom';
 
 // ============================================
-// JLN WALLET PLATFORM - Dynamic Token System
+// JLN WALLET PLATFORM
 // ============================================
 
-// Selected profile atom with localStorage persistence
 const getInitialSelectedProfile = () => {
   if (typeof window !== 'undefined') {
     const saved = localStorage.getItem('jlnwallet-selected-profile');
@@ -76,60 +63,35 @@ export const selectedProfileAtom = atom(
     set(_selectedProfileAtom, newProfile);
   }
 );
-selectedProfileAtom.debugLabel = 'selectedProfileAtom';
 
-// Current Token ID atom - derived from selected profile
-// This replaces the old static VITE_TOKEN_ID approach
 export const currentTokenIdAtom = atom((get) => {
   const selectedProfile = get(selectedProfileAtom);
   return selectedProfile?.tokenId || '';
 });
-currentTokenIdAtom.debugLabel = 'currentTokenIdAtom';
-
-// Legacy tokenIdAtom - now redirects to currentTokenIdAtom for backward compatibility
 export const tokenIdAtom = currentTokenIdAtom;
-tokenIdAtom.debugLabel = 'tokenIdAtom';
 
-// Fixed HD derivation path - always Cashtab type (1899)
-export const hdPathAtom = atom("m/44'/1899'/0'/0/0");
-hdPathAtom.debugLabel = 'hdPathAtom';
+// ============================================
+// CORE WALLET CONFIG
+// ============================================
 
-// XEC wallet options - simplified, no analytics
+// ✅ Utilisation de la constante pour le chemin de dérivation
+export const hdPathAtom = atom(APP_CONFIG.DERIVATION_PATH);
+
 export const optionsAtom = atom((get) => {
   const hdPath = get(hdPathAtom);
-
   return {
     hdPath,
-    // EcashWallet handles Chronik connection internally
     noUpdate: true,
   };
 });
-optionsAtom.debugLabel = 'optionsAtom';
 
-// Wallet connection and instance atoms
 export const walletConnectedAtom = atom(false);
-walletConnectedAtom.debugLabel = 'walletConnectedAtom';
-
 export const walletAtom = atom(null);
-walletAtom.debugLabel = 'walletAtom';
-
-// Single token state (instead of eTokens array)
 export const tokenAtom = atom(null);
-tokenAtom.debugLabel = 'tokenAtom';
-
-// XEC price in USD
 export const priceAtom = atom(0);
-priceAtom.debugLabel = 'priceAtom';
-
-// XEC balance (in XEC units - from wallet.getXecBalance())
 export const balanceAtom = atom(0);
-balanceAtom.debugLabel = 'balanceAtom';
-
-// Total balance (all UTXOs including token dust)
 export const totalBalanceAtom = atom(0);
-totalBalanceAtom.debugLabel = 'totalBalanceAtom';
 
-// Balance breakdown for detailed display
 export const balanceBreakdownAtom = atom({
   spendableBalance: 0,
   totalBalance: 0,
@@ -137,54 +99,41 @@ export const balanceBreakdownAtom = atom({
   pureXecUtxos: 0,
   tokenUtxos: 0
 });
-balanceBreakdownAtom.debugLabel = 'balanceBreakdownAtom';
 
-// Refresh trigger atoms
 export const balanceRefreshTriggerAtom = atom(0);
-balanceRefreshTriggerAtom.debugLabel = 'balanceRefreshTriggerAtom';
-
 export const tokenRefreshTriggerAtom = atom(0);
-tokenRefreshTriggerAtom.debugLabel = 'tokenRefreshTriggerAtom';
 
-// UI state atoms
+// ============================================
+// UI STATE
+// ============================================
+
 export const busyAtom = atom(false);
-busyAtom.debugLabel = 'busyAtom';
-
 export const notificationAtom = atom(null);
-notificationAtom.debugLabel = 'notificationAtom';
-
-// Script loading state atoms
 export const scriptLoadedAtom = atom(false);
-scriptLoadedAtom.debugLabel = 'scriptLoadedAtom';
-
 export const scriptErrorAtom = atom(null);
-scriptErrorAtom.debugLabel = 'scriptErrorAtom';
 
+// ============================================
+// THEME MANAGEMENT
+// ============================================
 
-// Theme management atom with localStorage persistence
 const getInitialTheme = () => {
   if (typeof window !== 'undefined') {
-    const savedTheme = localStorage.getItem('jlnwallet-theme');
-    return savedTheme || 'light'; // Default to light theme
+    const savedTheme = localStorage.getItem(APP_CONFIG.STORAGE_KEYS.THEME);
+    return savedTheme || 'light';
   }
   return 'light';
 };
 
 export const themeAtom = atom(getInitialTheme());
-themeAtom.debugLabel = 'themeAtom';
 
-// Theme setter atom that also persists to localStorage
 export const themeSetterAtom = atom(null, (get, set, newTheme) => {
   set(themeAtom, newTheme);
   if (typeof window !== 'undefined') {
-    localStorage.setItem('jlnwallet-theme', newTheme);
-    // Apply theme to document root
+    localStorage.setItem(APP_CONFIG.STORAGE_KEYS.THEME, newTheme);
     document.documentElement.setAttribute('data-theme', newTheme);
   }
 });
-themeSetterAtom.debugLabel = 'themeSetterAtom';
 
-// Blockchain status atom - shared global state for connection status
 export const blockchainStatusAtom = atom({
   connected: false,
   blockHeight: 0,
@@ -192,13 +141,15 @@ export const blockchainStatusAtom = atom({
   error: null,
   lastChecked: null
 });
-blockchainStatusAtom.debugLabel = 'blockchainStatusAtom';
 
-// Mnemonic UI state management with localStorage persistence
+// ============================================
+// MNEMONIC & SECURITY
+// ============================================
+
 const getInitialMnemonicCollapsed = () => {
   if (typeof window !== 'undefined') {
     const saved = localStorage.getItem('jlnwallet-mnemonic-collapsed');
-    return saved === 'true'; // Convert string to boolean, default false (expanded)
+    return saved === 'true';
   }
   return false;
 };
@@ -214,36 +165,19 @@ export const mnemonicCollapsedAtom = atom(
     set(_mnemonicCollapsedAtom, collapsed);
   }
 );
-mnemonicCollapsedAtom.debugLabel = 'mnemonicCollapsedAtom';
 
-// Simplified coin selection strategy - always 'efficient'
 export const coinSelectionStrategyAtom = atom('efficient');
-coinSelectionStrategyAtom.debugLabel = 'coinSelectionStrategyAtom';
-
-// ============================================
-// 🔒 SECURITY & WALLET STORAGE (UPDATED)
-// ============================================
 
 // 1. IN-MEMORY MNEMONIC (Non-persistant)
-// Cet atome contient la seed phrase déchiffrée UNIQUEMENT en mémoire RAM.
-// Si l'utilisateur rafraîchit la page, ceci redevient null (sécurité).
 export const mnemonicAtom = atom(null);
-mnemonicAtom.debugLabel = 'mnemonicAtom';
 
 // 2. CHECK ENCRYPTED VAULT
-// Vérifie si un portefeuille chiffré existe dans le stockage local.
-// Utile pour rediriger vers "Login" ou "Créer Wallet".
 export const hasEncryptedWalletAtom = atom(storageService.hasWallet());
-hasEncryptedWalletAtom.debugLabel = 'hasEncryptedWalletAtom';
-
-// Note: L'ancien 'savedMnemonicAtom' a été supprimé pour des raisons de sécurité.
-// Le mnemonic ne doit jamais être stocké en clair via atomWithStorage.
 
 // ============================================
-// FAVORITE PROFILE SYSTEM
+// FAVORITES
 // ============================================
 
-// Load favorite profiles from localStorage
 const getInitialFavoriteProfiles = () => {
   if (typeof window !== 'undefined') {
     const saved = localStorage.getItem('jlnwallet-favorite-profiles');
@@ -254,7 +188,6 @@ const getInitialFavoriteProfiles = () => {
 
 const _favoriteProfilesAtom = atom(getInitialFavoriteProfiles());
 
-// Favorite profiles atom with localStorage persistence
 export const favoriteProfilesAtom = atom(
   (get) => get(_favoriteProfilesAtom),
   (get, set, newFavorites) => {
@@ -264,59 +197,40 @@ export const favoriteProfilesAtom = atom(
     set(_favoriteProfilesAtom, newFavorites);
   }
 );
-favoriteProfilesAtom.debugLabel = 'favoriteProfilesAtom';
 
-// Helper atom to check if a profile is favorite
 export const isProfileFavoriteAtom = atom((get) => (profileId) => {
   const favorites = get(favoriteProfilesAtom);
   return favorites.includes(profileId);
 });
-isProfileFavoriteAtom.debugLabel = 'isProfileFavoriteAtom';
 
-// Helper atom to toggle favorite status
 export const toggleProfileFavoriteAtom = atom(
   null,
   (get, set, profileId) => {
     const favorites = get(favoriteProfilesAtom);
     if (favorites.includes(profileId)) {
-      // Remove from favorites
       set(favoriteProfilesAtom, favorites.filter(id => id !== profileId));
     } else {
-      // Add to favorites
       set(favoriteProfilesAtom, [...favorites, profileId]);
     }
   }
 );
-toggleProfileFavoriteAtom.debugLabel = 'toggleProfileFavoriteAtom';
 
 // Wallet Modal Open State
 export const walletModalOpenAtom = atom(false);
 
 // ============================================
-// CURRENCY MANAGEMENT
+// CURRENCY
 // ============================================
 
-/**
- * Détecte la devise appropriée selon la locale du navigateur
- * Mappe les langues du navigateur à leur devise principale
- * @returns {string} Code devise (EUR, USD, GBP, CHF)
- */
 const getBrowserCurrency = () => {
   if (typeof window === 'undefined') return 'EUR';
-  
   const lang = (navigator.language || navigator.userLanguage || 'fr').toLowerCase();
   
-  // Mapping intelligent selon la locale
-  if (lang.includes('en-us')) return 'USD'; // États-Unis
-  if (lang.includes('en-gb')) return 'GBP'; // Royaume-Uni
-  if (lang.includes('de-ch') || lang.includes('fr-ch')) return 'CHF'; // Suisse
+  if (lang.includes('en-us')) return 'USD';
+  if (lang.includes('en-gb')) return 'GBP';
+  if (lang.includes('de-ch') || lang.includes('fr-ch')) return 'CHF';
   
-  // PAR DÉFAUT : EUR (France, Belgique, Allemagne, Espagne, Italie et reste du monde francophone)
   return 'EUR';
 };
 
-// Currency selection atom with localStorage persistence and intelligent browser detection
-// Supported currencies: EUR, USD, GBP, CHF
-// Default: getBrowserCurrency() with EUR fallback for francophone audience
 export const currencyAtom = atomWithStorage('app_currency', getBrowserCurrency());
-currencyAtom.debugLabel = 'currencyAtom';

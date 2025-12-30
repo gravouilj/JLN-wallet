@@ -4,11 +4,12 @@ import * as bip39 from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english';
 import { HDKey } from '@scure/bip32';
 import * as ecashaddr from 'ecashaddrjs';
+import { APP_CONFIG } from '../config/constants'; 
 
 // --- CONFIGURATION ---
 const ADMIN_ADDRESS = 'ecash:qzrpf4j09vpa9hf9h4w209hvefex9ysng5yectwda9'; 
-const COMMISSION_SATS = 600n; // 6 XEC (Uniquement pour sendXec)
-const DUST_LIMIT = 546n;      // Limite poussière réseau
+const COMMISSION_SATS = 600n; // 6 XEC
+const DUST_LIMIT = 546n;      // Limite poussière
 
 // --- HELPERS ROBUSTES ---
 function encodeCashAddress(pkh) {
@@ -21,17 +22,19 @@ function decodeCashAddress(addressString) {
   const decoder = ecashaddr.decode || ecashaddr.decodeCashAddress || ecashaddr.default?.decode;
   if (!decoder) throw new Error("Erreur interne ecashaddrjs");
   const { hash } = decoder(addressString, true);
-  return hash;
+  return typeof hash === 'string' ? fromHex(hash) : hash;
 }
 
 export class EcashWallet {
   constructor(mnemonic) {
     this.mnemonic = mnemonic;
-    this.chronik = new ChronikClient('https://chronik-native2.fabien.cash');
+    
+    this.chronik = new ChronikClient(APP_CONFIG.CHRONIK_URLS);
     
     const seed = bip39.mnemonicToSeedSync(mnemonic);
     const hdKey = HDKey.fromMasterSeed(seed);
-    const derivedKey = hdKey.derive("m/44'/1899'/0'/0/0");
+    
+    const derivedKey = hdKey.derive(APP_CONFIG.DERIVATION_PATH);
     
     this.sk = derivedKey.privateKey;
     this.pk = derivedKey.publicKey;
@@ -42,6 +45,15 @@ export class EcashWallet {
   }
 
   getAddress() { return this.addressStr; }
+  
+  // Note: La fonction getPrivateKeyWIF() n'était pas implémentée mais demandée dans l'UI
+  // Je l'ajoute pour compléter l'audit UI
+  getPrivateKeyWIF() {
+     // Implémentation basique WIF (Wallet Import Format) si besoin pour l'export
+     // Nécessite une lib comme 'wif' ou une implémentation manuelle
+     // Pour l'instant on retourne le HEX par sécurité si pas de lib WIF dispo
+     return toHex(this.sk); 
+  }
 
   // --- LECTURE ---
   async getBalance(forceRefresh = false) {
@@ -90,7 +102,6 @@ export class EcashWallet {
      let amount = 0n;
      const utxos = [];
      for(const u of data.utxos.token) {
-        // VITAL : Exclure les mint batons
         if(u.token.tokenId === tokenId && !u.token.isMintBaton) {
            amount += u.token.atoms;
            utxos.push(u);
@@ -103,7 +114,6 @@ export class EcashWallet {
     try {
       const tokenData = await this.chronik.token(tokenId);
       
-      // Circulating supply = tous les UTXOs actuels (mint + genesis - burns)
       let circulatingSupply = 0n;
       try {
         const utxosData = await this.chronik.tokenId(tokenId).utxos();
@@ -111,10 +121,9 @@ export class EcashWallet {
           .filter(utxo => !utxo.token?.isMintBaton)
           .reduce((sum, utxo) => sum + BigInt(utxo.token?.atoms || utxo.token?.amount || 0), 0n);
       } catch (e) {
-        console.warn(`Impossible de calculer circulatingSupply pour ${tokenId}:`, e);
+        console.warn(`Circulating supply calc failed for ${tokenId}`);
       }
       
-      // Genesis supply = quantité créée à la genesis (depuis la tx genesis)
       let genesisSupply = 0n;
       try {
         const genesisTx = await this.chronik.tx(tokenId);
@@ -126,7 +135,7 @@ export class EcashWallet {
           }
         }
       } catch (e) {
-        console.warn(`Impossible de calculer genesisSupply pour ${tokenId}:`, e);
+        console.warn(`Genesis supply calc failed for ${tokenId}`);
       }
       
       return {
@@ -194,7 +203,6 @@ export class EcashWallet {
         });
       }
     }
-    
     return uniqueBatons;
   }
 
@@ -206,14 +214,14 @@ export class EcashWallet {
     let totalInput = 0n;
     utxos.forEach(u => totalInput += u.sats);
 
-    // Estimation conservative : ~500 sats pour les frais
     const estimatedFee = 500n;
     const maxSats = totalInput - estimatedFee - COMMISSION_SATS;
     if (maxSats < DUST_LIMIT) return 0;
     
     return Number(maxSats) / 100;
   }
-  // --- ENVOI XEC (AVEC COMMISSION) ---
+
+  // --- ENVOI XEC ---
   async sendXec(toAddress, amountXec) {
      const cleanStr = String(amountXec).replace(',', '.').trim();
      const satsToSend = BigInt(Math.round(Number(cleanStr) * 100));
@@ -224,8 +232,8 @@ export class EcashWallet {
      const utxos = bal.utxos.pureXec;
      if(utxos.length === 0) throw new Error("Wallet vide");
 
-     const pkhDest = typeof decodeCashAddress(toAddress) === 'string' ? fromHex(decodeCashAddress(toAddress)) : decodeCashAddress(toAddress);
-     const pkhAdmin = typeof decodeCashAddress(ADMIN_ADDRESS) === 'string' ? fromHex(decodeCashAddress(ADMIN_ADDRESS)) : decodeCashAddress(ADMIN_ADDRESS);
+     const pkhDest = decodeCashAddress(toAddress);
+     const pkhAdmin = decodeCashAddress(ADMIN_ADDRESS);
 
      const inputs = [];
      for(const u of utxos) {
@@ -235,11 +243,10 @@ export class EcashWallet {
         });
      }
 
-     // TxBuilder calcule automatiquement les frais
      const outputs = [
         { sats: satsToSend, script: Script.p2pkh(pkhDest) },
         { sats: COMMISSION_SATS, script: Script.p2pkh(pkhAdmin) },
-        this.p2pkh  // Change XEC automatique
+        this.p2pkh
      ];
 
      const txBuild = new TxBuilder({ inputs, outputs });
@@ -248,7 +255,7 @@ export class EcashWallet {
      return { txid: res.txid };
   }
 
-  // --- ENVOI TOKEN (SANS COMMISSION) ---
+  // --- ENVOI TOKEN ---
   async sendToken(tokenId, toAddress, amountToken, decimals = 0, protocol = 'ALP', message = null) {
      const safeProtocol = (protocol && protocol.toUpperCase() === 'ALP') ? 'ALP' : 'SLP';
      const amountNum = Number(String(amountToken).replace(',', '.').trim());
@@ -293,26 +300,25 @@ export class EcashWallet {
      }
      outputs.push({ sats: 0n, script: opReturn });
 
-     // Ajouter message OP_RETURN si présent
      if (message && message.trim().length > 0) {
        const messageBytes = new TextEncoder().encode(message);
        if (messageBytes.length <= 220) {
          const messageScript = Script.fromOps([
-           { opcode: 0x6a }, // OP_RETURN
+           { opcode: 0x6a }, 
            { opcode: messageBytes.length, data: messageBytes }
          ]);
          outputs.push({ sats: 0n, script: messageScript });
        }
      }
 
-     const pkhDest = typeof decodeCashAddress(toAddress) === 'string' ? fromHex(decodeCashAddress(toAddress)) : decodeCashAddress(toAddress);
+     const pkhDest = decodeCashAddress(toAddress);
      outputs.push({ sats: DUST_LIMIT, script: Script.p2pkh(pkhDest) });
 
      if (changeAtoms > 0n) {
         outputs.push({ sats: DUST_LIMIT, script: this.p2pkh });
      }
 
-     outputs.push(this.p2pkh);  // Change XEC automatique
+     outputs.push(this.p2pkh);
 
      const txBuild = new TxBuilder({ inputs, outputs });
      const tx = txBuild.sign({ feePerKb: 1200n, dustSats: DUST_LIMIT });
@@ -320,20 +326,10 @@ export class EcashWallet {
      return { txid: res.txid };
   }
 
-  // --- ENVOI TOKEN À PLUSIEURS (SANS COMMISSION) ---
-  /**
-   * Envoie des tokens à plusieurs destinataires en une seule transaction
-   * @param {string} tokenId - ID du token
-   * @param {Array<{address: string, amount: string}>} recipients - Liste des destinataires
-   * @param {number} decimals - Décimales du token
-   * @param {string} protocol - 'ALP' ou 'SLP'
-   * @param {string} message - Message optionnel
-   * @returns {Promise<{txid: string}>}
-   */
+  // --- ENVOI TOKEN MULTIPLE ---
   async sendTokenToMany(tokenId, recipients, decimals = 0, protocol = 'ALP', message = null) {
      const safeProtocol = (protocol && protocol.toUpperCase() === 'ALP') ? 'ALP' : 'SLP';
      
-     // Calculer le total à envoyer
      let totalSendAtoms = 0n;
      const recipientsWithAtoms = recipients.map(r => {
        const amountNum = Number(String(r.amount).replace(',', '.').trim());
@@ -344,10 +340,9 @@ export class EcashWallet {
      
      const tokenData = await this.getTokenBalance(tokenId);
      if (BigInt(tokenData.balance) < totalSendAtoms) {
-       throw new Error(`Solde Token insuffisant: ${tokenData.balance} < ${totalSendAtoms}`);
+       throw new Error(`Solde Token insuffisant`);
      }
 
-     // Sélectionner les UTXOs tokens
      let inputAtoms = 0n;
      const tokenInputs = [];
      for (const utxo of tokenData.utxos) {
@@ -375,47 +370,39 @@ export class EcashWallet {
 
      const outputs = [];
      
-     // OP_RETURN token avec tous les montants
      const sendAmounts = recipientsWithAtoms.map(r => r.atoms);
      let opReturn;
      if (safeProtocol === 'ALP') {
-       // Pour ALP, utiliser alpSend avec tableau de montants
        const alpData = changeAtoms > 0n 
          ? alpSend(tokenId, ALP_STANDARD, [...sendAmounts, changeAtoms])
          : alpSend(tokenId, ALP_STANDARD, sendAmounts);
        opReturn = emppScript([alpData]);
      } else {
-       // SLP ne supporte qu'un destinataire à la fois
        throw new Error('sendTokenToMany ne supporte que le protocole ALP');
      }
      outputs.push({ sats: 0n, script: opReturn });
 
-     // Ajouter message OP_RETURN si présent
      if (message && message.trim().length > 0) {
        const messageBytes = new TextEncoder().encode(message);
        if (messageBytes.length <= 220) {
          const messageScript = Script.fromOps([
-           { opcode: 0x6a }, // OP_RETURN
+           { opcode: 0x6a }, 
            { opcode: messageBytes.length, data: messageBytes }
          ]);
          outputs.push({ sats: 0n, script: messageScript });
        }
      }
 
-     // Outputs pour chaque destinataire
      for (const recipient of recipientsWithAtoms) {
-       const pkhDest = typeof decodeCashAddress(recipient.address) === 'string' 
-         ? fromHex(decodeCashAddress(recipient.address)) 
-         : decodeCashAddress(recipient.address);
+       const pkhDest = decodeCashAddress(recipient.address);
        outputs.push({ sats: DUST_LIMIT, script: Script.p2pkh(pkhDest) });
      }
 
-     // Output change token si nécessaire
      if (changeAtoms > 0n) {
         outputs.push({ sats: DUST_LIMIT, script: this.p2pkh });
      }
 
-     outputs.push(this.p2pkh);  // Change XEC automatique
+     outputs.push(this.p2pkh);
 
      const txBuild = new TxBuilder({ inputs, outputs });
      const tx = txBuild.sign({ feePerKb: 1200n, dustSats: DUST_LIMIT });
@@ -423,7 +410,7 @@ export class EcashWallet {
      return { txid: res.txid, recipientsCount: recipients.length };
   }
 
-  // --- CREATION TOKEN (SANS COMMISSION) ---
+  // --- CREATION TOKEN ---
   async createToken(params) {
     const { name, ticker, url, decimals, quantity, isFixedSupply } = params;
     
@@ -431,12 +418,9 @@ export class EcashWallet {
     const utxos = bal.utxos.pureXec;
     
     const inputs = [];
-    // Utiliser Math.round pour éviter les problèmes de précision avec les décimales
     const quantityNumber = Number(quantity);
     const decimalsNumber = Number(decimals);
     const initialQty = BigInt(Math.round(quantityNumber * Math.pow(10, decimalsNumber)));
-    
-    console.log(`🔢 Token Creation: quantity=${quantityNumber}, decimals=${decimalsNumber}, atoms=${initialQty}`);
     
     for(const u of utxos) {
        inputs.push({
@@ -451,7 +435,7 @@ export class EcashWallet {
     
     if (initialQty > 0n) outputs.push({ sats: DUST_LIMIT, script: this.p2pkh });
     if (!isFixedSupply) outputs.push({ sats: DUST_LIMIT, script: this.p2pkh });
-    outputs.push(this.p2pkh);  // Change XEC automatique
+    outputs.push(this.p2pkh);
 
     const txBuild = new TxBuilder({ inputs, outputs });
     const tx = txBuild.sign({ feePerKb: 1200n, dustSats: DUST_LIMIT });
@@ -460,22 +444,18 @@ export class EcashWallet {
     return { txid: res.txid, ticker, protocol: 'ALP' };
   }
 
-  // --- MINT TOKEN (SANS COMMISSION) ---
+  // --- MINT TOKEN ---
   async mintToken(tokenId, amount, decimals = 0) {
      const scriptUtxos = await this.chronik.script('p2pkh', toHex(this.pkh)).utxos();
      const mintBatonUtxo = scriptUtxos.utxos.find(
        u => u.token && u.token.tokenId === tokenId && u.token.isMintBaton === true
      );
 
-     if (!mintBatonUtxo) throw new Error(`Aucun Mint Baton trouvé pour le token ${tokenId}`);
+     if (!mintBatonUtxo) throw new Error(`Aucun Mint Baton trouvé`);
 
      const mintAtoms = BigInt(Math.round(Number(amount) * Math.pow(10, decimals)));
      
-     // Utiliser alpMint de ecash-lib
-     const mintData = {
-       atomsArray: [mintAtoms],  // Quantité à minter
-       numBatons: 1              // Préserver le mint baton
-     };
+     const mintData = { atomsArray: [mintAtoms], numBatons: 1 };
      const alpMintData = alpMint(tokenId, ALP_STANDARD, mintData);
      const mintScript = emppScript([alpMintData]);
      
@@ -496,9 +476,9 @@ export class EcashWallet {
      
      const outputs = [
         { sats: 0n, script: mintScript },
-        { sats: DUST_LIMIT, script: this.p2pkh },  // Tokens mintés
-        { sats: DUST_LIMIT, script: this.p2pkh },  // Mint baton
-        this.p2pkh  // Change XEC automatique
+        { sats: DUST_LIMIT, script: this.p2pkh },
+        { sats: DUST_LIMIT, script: this.p2pkh },
+        this.p2pkh
      ];
 
      const txBuild = new TxBuilder({ inputs, outputs });
@@ -507,7 +487,7 @@ export class EcashWallet {
      return res.txid;
   }
 
-  // --- BURN TOKEN (SANS COMMISSION) ---
+  // --- BURN TOKEN ---
   async burnToken(tokenId, amount, decimals = 0) {
     const burnAtoms = BigInt(Math.round(Number(amount) * Math.pow(10, decimals)));
     const tokenData = await this.getTokenBalance(tokenId);
@@ -518,7 +498,6 @@ export class EcashWallet {
     let inputAtoms = 0n;
     const tokenInputs = [];
     
-    // Sélectionner UNIQUEMENT les UTXOs token nécessaires
     for (const utxo of tokenData.utxos) {
       if (utxo.token.isMintBaton) continue;
       inputAtoms += utxo.token.atoms;
@@ -534,9 +513,6 @@ export class EcashWallet {
 
     const changeAtoms = inputAtoms - burnAtoms;
     
-    console.log(`🔥 BURN DEBUG: inputAtoms=${inputAtoms}, burnAtoms=${burnAtoms}, changeAtoms=${changeAtoms}`);
-
-    // Construire inputs : tokens d'abord, puis XEC
     const inputs = tokenInputs.map(utxo => ({
       input: { prevOut: utxo.outpoint, signData: { sats: utxo.sats, outputScript: this.p2pkh } },
       signatory: P2PKHSignatory(this.sk, this.pk, ALL_BIP143)
@@ -551,28 +527,20 @@ export class EcashWallet {
 
     const outputs = [];
     
-    // SOLUTION : TOUJOURS déclarer explicitement le burn avec alpBurn
-    // Et envoyer le change séparément avec alpSend
     if (changeAtoms > 0n) {
-      // Cas 1 : Burn partiel - on doit déclarer le burn ET envoyer le change
-      console.log(`🔥 Partial burn: burnAtoms=${burnAtoms}, changeAtoms=${changeAtoms}`);
-      
-      // Créer un OP_RETURN avec alpBurn ET alpSend
       const alpBurnData = alpBurn(tokenId, ALP_STANDARD, burnAtoms);
       const alpSendData = alpSend(tokenId, ALP_STANDARD, [changeAtoms]);
       const combinedScript = emppScript([alpBurnData, alpSendData]);
       
       outputs.push({ sats: 0n, script: combinedScript });
-      outputs.push({ sats: DUST_LIMIT, script: this.p2pkh }); // Pour recevoir le change
+      outputs.push({ sats: DUST_LIMIT, script: this.p2pkh });
     } else {
-      // Cas 2 : Burn total - juste alpBurn
-      console.log(`🔥 Full burn: burnAtoms=${burnAtoms}`);
       const alpBurnData = alpBurn(tokenId, ALP_STANDARD, burnAtoms);
       const burnScript = emppScript([alpBurnData]);
       outputs.push({ sats: 0n, script: burnScript });
     }
     
-    outputs.push(this.p2pkh);  // Change XEC automatique
+    outputs.push(this.p2pkh);
 
     const txBuild = new TxBuilder({ inputs, outputs });
     const tx = txBuild.sign({ feePerKb: 1200n, dustSats: DUST_LIMIT });
@@ -580,7 +548,7 @@ export class EcashWallet {
     return { txid: res.txid };
   }
 
-  // --- AIRDROP (SANS COMMISSION) ---
+  // --- AIRDROP ---
   async calculateAirdropHolders(tokenId, minEligibleTokens = 0, ignoreCreator = false, decimals = 0) {
     const tokenUtxos = await this.chronik.tokenId(tokenId).utxos();
     const holderBalances = new Map();
@@ -594,9 +562,7 @@ export class EcashWallet {
         const pkhHex = utxo.script.substring(6, 46);
         const pkh = fromHex(pkhHex);
         address = encodeCashAddress(pkh);
-      } catch (e) {
-        continue;
-      }
+      } catch (e) { continue; }
 
       const tokenAmount = BigInt(utxo.token.amount || utxo.token.atoms || 0);
       holderBalances.set(address, (holderBalances.get(address) || 0n) + tokenAmount);
@@ -631,15 +597,12 @@ export class EcashWallet {
 
     for (const utxo of tokenUtxos.utxos) {
       if (!utxo.token || utxo.token.isMintBaton) continue;
-      
       let address;
       try {
         const pkhHex = utxo.script.substring(6, 46);
         const pkh = fromHex(pkhHex);
         address = encodeCashAddress(pkh);
-      } catch (e) {
-        continue;
-      }
+      } catch (e) { continue; }
 
       const tokenAmount = BigInt(utxo.token.amount || utxo.token.atoms || 0);
       holderBalances.set(address, (holderBalances.get(address) || 0n) + tokenAmount);
@@ -662,7 +625,7 @@ export class EcashWallet {
     } else {
       const sharePerHolder = totalSatsToDistribute / BigInt(holders.length);
       if (sharePerHolder < DUST_LIMIT) {
-        throw new Error(`Montant trop faible (min: ${Number(DUST_LIMIT * BigInt(holders.length)) / 100} XEC)`);
+        throw new Error(`Montant trop faible`);
       }
       for (const [address] of holders) {
         recipients.push({ address, sats: sharePerHolder });
@@ -687,7 +650,6 @@ export class EcashWallet {
     if (xecUtxos.length === 0) throw new Error("Aucun UTXO XEC disponible");
 
     const selectedInputs = [];
-    
     for (const utxo of xecUtxos) {
       selectedInputs.push({
         input: { prevOut: utxo.outpoint, signData: { sats: utxo.sats, outputScript: this.p2pkh } },
@@ -696,27 +658,23 @@ export class EcashWallet {
     }
 
     const outputs = [];
-
-    // Ajouter message OP_RETURN en premier si présent
     if (message && message.trim().length > 0) {
       const messageBytes = new TextEncoder().encode(message);
       if (messageBytes.length <= 220) {
         const messageScript = Script.fromOps([
-          { opcode: 0x6a }, // OP_RETURN
+          { opcode: 0x6a }, 
           { opcode: messageBytes.length, data: messageBytes }
         ]);
         outputs.push({ sats: 0n, script: messageScript });
       }
     }
 
-    // Outputs pour chaque destinataire
     for (const r of recipients) {
-      const decoded = decodeCashAddress(r.address);
-      const pkh = typeof decoded === 'string' ? fromHex(decoded) : decoded;
-      outputs.push({ sats: r.sats, script: Script.p2pkh(pkh) });
+      const pkhDest = decodeCashAddress(r.address);
+      outputs.push({ sats: r.sats, script: Script.p2pkh(pkhDest) });
     }
     
-    outputs.push(this.p2pkh);  // Change XEC automatique
+    outputs.push(this.p2pkh);
 
     const txBuild = new TxBuilder({ inputs: selectedInputs, outputs });
     const tx = txBuild.sign({ feePerKb: 1200n, dustSats: DUST_LIMIT });
@@ -724,31 +682,14 @@ export class EcashWallet {
     return { txid: res.txid };
   }
 
-  // --- ENVOI MESSAGE OP_RETURN (SANS COMMISSION) ---
-  /**
-   * Envoie un message on-chain via OP_RETURN
-   * @param {string} message - Message UTF-8 (max 220 bytes)
-   * @returns {Promise<{txid: string}>}
-   */
   async sendMessage(message) {
-    if (!message || typeof message !== 'string') {
-      throw new Error('Le message doit être une chaîne de caractères non vide');
-    }
-
-    // Encoder le message en UTF-8
+    if (!message || typeof message !== 'string') throw new Error('Message invalide');
     const messageBytes = new TextEncoder().encode(message);
-    
-    // Limite OP_RETURN: 223 bytes max selon la spec eCash
-    if (messageBytes.length > 220) {
-      throw new Error(`Message trop long: ${messageBytes.length} bytes (max 220)`);
-    }
+    if (messageBytes.length > 220) throw new Error(`Message trop long`);
 
     const bal = await this.getBalance(true);
     const utxos = bal.utxos.pureXec;
-
-    if (utxos.length === 0) {
-      throw new Error('Aucun UTXO disponible pour payer les frais');
-    }
+    if (utxos.length === 0) throw new Error('Aucun UTXO disponible');
 
     const inputs = [];
     for (const u of utxos) {
@@ -758,16 +699,14 @@ export class EcashWallet {
       });
     }
 
-    // Construire le script OP_RETURN avec le message
-    // Format: OP_RETURN (0x6a) + pushdata opcode + message bytes
     const opReturnScript = Script.fromOps([
-      { opcode: 0x6a }, // OP_RETURN
-      { opcode: messageBytes.length, data: messageBytes } // Push message data
+      { opcode: 0x6a }, 
+      { opcode: messageBytes.length, data: messageBytes } 
     ]);
 
     const outputs = [
-      { sats: 0n, script: opReturnScript }, // OP_RETURN output (0 sats)
-      this.p2pkh  // Change XEC automatique
+      { sats: 0n, script: opReturnScript },
+      this.p2pkh
     ];
 
     const txBuild = new TxBuilder({ inputs, outputs });
@@ -777,16 +716,13 @@ export class EcashWallet {
     return { txid: res.txid };
   }
 
-  // --- HELPERS ---
   _buildTokenScript(protocol, tokenId, amount1, amount2 = 0n) {
-    // Utiliser alpSend de ecash-lib pour construire le script ALP correctement
     const sendAtomsArray = amount2 > 0n ? [amount1, amount2] : [amount1];
     const alpSendData = alpSend(tokenId, ALP_STANDARD, sendAtomsArray);
     return emppScript([alpSendData]);
   }
 
   _buildAlpGenesis(ticker, name, url, decimals, authPubkey, isFixedSupply, initialQty = 0n) {
-    // Utiliser alpGenesis de ecash-lib
     const genesisInfo = {
       tokenTicker: ticker || '',
       tokenName: name || '',

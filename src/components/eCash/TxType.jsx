@@ -1,9 +1,8 @@
-// TxType.jsx - Composant pour afficher le type de transaction (reçue, envoyée, interne) avec détails dans une liste de transactions.
-// Utilisé dans TokenPage pour afficher les transactions liées à un jeton spécifique.
-
 import React from 'react';
-import { Badge } from '../UI';
+import { Badge } from '../UI'; // Assure-toi que ce chemin est bon aussi (../UI ou ../../UI ?)
 import * as ecashaddrjs from 'ecashaddrjs';
+// 👇 CORRECTION DU CHEMIN : ../../ au lieu de ../
+import { APP_CONFIG } from '../../config/constants'; 
 
 const TxType = ({ 
   tx, 
@@ -17,18 +16,15 @@ const TxType = ({
       if (!tx || !address) return 'Adresse inconnue';
       
       if (tx.type === 'received') {
-        // Trouver l'adresse source (premier input)
         const firstInput = tx.inputs?.[0];
         if (firstInput?.outputScript) {
           try {
             return ecashaddrjs.encodeOutputScript(firstInput.outputScript);
           } catch (err) {
-            console.log('⚠️ Impossible de décoder outputScript input');
             return tx.txid?.substring(0, 16) + '...' || 'Inconnu';
           }
         }
       } else if (tx.type === 'sent') {
-        // Trouver l'adresse destination (premier output qui n'est pas notre adresse)
         try {
           const ourOutputScript = ecashaddrjs.getOutputScriptFromAddress(address);
           
@@ -40,118 +36,58 @@ const TxType = ({
             return ecashaddrjs.encodeOutputScript(recipientOutput.outputScript);
           }
         } catch (err) {
-          console.log('⚠️ Erreur décodage adresse envoi:', err);
           return tx.txid?.substring(0, 16) + '...' || 'Inconnu';
         }
       }
-      
-      // Fallback: afficher le txid comme identifiant
       return tx.txid?.substring(0, 16) + '...' || 'Inconnu';
     } catch (err) {
-      console.error('Erreur getOtherParty:', err);
       return 'Adresse inconnue';
     }
   };
 
   const otherParty = getOtherParty();
   const txDate = new Date(tx.timestamp * 1000);
-  const dateStr = txDate.toLocaleDateString('fr-FR', { 
-    day: '2-digit', 
-    month: '2-digit', 
-    year: 'numeric' 
-  });
-  const timeStr = txDate.toLocaleTimeString('fr-FR', { 
-    hour: '2-digit', 
-    minute: '2-digit' 
-  });
+  const dateStr = txDate.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const timeStr = txDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
-  // Calculer la valeur en fiat
   const fiatValue = price && typeof price.convert === 'function' 
     ? price.convert(parseFloat(tx.amount), currency)?.toFixed(2)
     : null;
 
+  // Construction de l'URL Explorer via Config
+  const explorerTxUrl = `${APP_CONFIG.EXPLORER_URL_TX}${tx.txid}`;
+
   return (
     <div className="tx-container">
-      {/* Colonne gauche : Type de transaction */}
       <div className="tx-icon-badge">
         <span style={{ fontSize: '1.5rem' }}>
           {tx.type === 'received' ? '📥' : tx.type === 'sent' ? '📤' : '🔄'}
         </span>
-        <Badge
-          variant={tx.type === 'received' ? 'success' : tx.type === 'sent' ? 'danger' : 'neutral'}
-          style={{ fontSize: '0.65rem', padding: '2px 6px' }}
-        >
+        <Badge variant={tx.type === 'received' ? 'success' : tx.type === 'sent' ? 'danger' : 'neutral'}>
           {tx.type === 'received' ? 'Reçu' : tx.type === 'sent' ? 'Envoyé' : 'Interne'}
         </Badge>
       </div>
 
-      {/* Colonne centrale : Détails de la transaction */}
       <div className="tx-details">
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          flexWrap: 'wrap'
-        }}>
-          <span className="tx-label">
-            {tx.type === 'received' ? 'De:' : tx.type === 'sent' ? 'À:' : 'Interne:'}
-          </span>
-          <a
-            href={`https://explorer.e.cash/address/${otherParty}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="tx-address"
-            style={{ flex: 1, minWidth: '120px' }}
-          >
-            {otherParty.length > 42 
-              ? `${otherParty.substring(0, 15)}...${otherParty.substring(otherParty.length - 15)}`
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+          <span className="tx-label">{tx.type === 'received' ? 'De:' : tx.type === 'sent' ? 'À:' : 'Interne:'}</span>
+          <span className="tx-address">
+            {otherParty.length > 20 
+              ? `${otherParty.substring(0, 8)}...${otherParty.substring(otherParty.length - 8)}`
               : otherParty
             }
-          </a>
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              // TODO: Implémenter l'ajout au carnet d'adresses
-              console.log('📒 Ajouter au carnet:', otherParty);
-            }}
-            className="icon-btn"
-            style={{ 
-              width: '28px', 
-              height: '28px', 
-              fontSize: '1.1rem',
-              padding: '2px'
-            }}
-            title="Ajouter au carnet d'adresses"
-          >
-            👤
-          </button>
+          </span>
         </div>
-
-        <div className="tx-date">
-          {dateStr} • {timeStr}
-        </div>
+        <div className="tx-date">{dateStr} • {timeStr}</div>
       </div>
 
-      {/* Colonne droite : Montant et lien explorer */}
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'flex-end',
-        gap: '8px'
-      }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
         <a
-          href={`https://explorer.e.cash/tx/${tx.txid}`}
+          href={explorerTxUrl} 
           target="_blank"
           rel="noopener noreferrer"
           className="inline-link"
-          style={{
-            fontSize: '1.25rem',
-            opacity: 0.7,
-            transition: 'opacity 0.2s'
-          }}
-          onMouseEnter={(e) => e.target.style.opacity = '1'}
-          onMouseLeave={(e) => e.target.style.opacity = '0.7'}
-          title="Voir sur explorer.e.cash"
+          title="Voir sur l'explorateur"
         >
           🔗
         </a>
@@ -160,11 +96,7 @@ const TxType = ({
           {tx.type === 'sent' ? '-' : '+'}{tx.amount} XEC
         </div>
 
-        {fiatValue && (
-          <div className="tx-fiat">
-            ≈ {fiatValue} {currency}
-          </div>
-        )}
+        {fiatValue && <div className="tx-fiat">≈ {fiatValue} {currency}</div>}
       </div>
     </div>
   );

@@ -1,8 +1,10 @@
 // src/services/storageService.js
 import { encryptWalletData, decryptWalletData } from '../utils/security';
+import { APP_CONFIG } from '../config/constants'; // ✅ Import de la configuration
 
-const STORAGE_KEY = 'jln_wallet_vault'; // Nom unique pour éviter les conflits
-const SETTINGS_KEY = 'jln_wallet_settings'; // Pour les trucs non sensibles (thème, etc.)
+// On récupère les clés depuis la configuration centralisée
+const STORAGE_KEY = APP_CONFIG.STORAGE_KEYS.VAULT; 
+// const SETTINGS_KEY = APP_CONFIG.STORAGE_KEYS.SETTINGS; // (Non utilisé ici pour l'instant, mais prêt)
 
 export const storageService = {
   /**

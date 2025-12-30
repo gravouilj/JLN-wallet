@@ -3,11 +3,11 @@ import { Card, CardContent, Button } from '../UI';
 import TxType from './TxType';
 import { useXecPrice } from '../../hooks/useXecPrice';
 import * as ecashaddrjs from 'ecashaddrjs';
+import { APP_CONFIG } from '../../config/constants'; // ✅ IMPORT CONFIG
 
 /**
  * AddressHistory - Affiche l'historique des transactions XEC de l'adresse
- * Par défaut affiche les 4 dernières avec option "Voir plus"
- * @param {boolean} compact - Mode compact (affiche seulement 2 transactions par défaut)
+ * Utilise la configuration centralisée pour la connexion Chronik
  */
 const AddressHistory = ({ address, currency = 'EUR', compact = false }) => {
   const price = useXecPrice();
@@ -16,7 +16,7 @@ const AddressHistory = ({ address, currency = 'EUR', compact = false }) => {
   const [error, setError] = useState(null);
   const [showAll, setShowAll] = useState(false);
   const [formattedAddress, setFormattedAddress] = useState('');
-  const [isCompact, setIsCompact] = useState(compact);
+  const [isCompact] = useState(compact); // isCompact ne change pas, pas besoin de setIsCompact
 
   useEffect(() => {
     if (!address) {
@@ -29,22 +29,18 @@ const AddressHistory = ({ address, currency = 'EUR', compact = false }) => {
       setError(null);
       
       try {
-        console.log('🔍 Chargement historique pour:', address);
-        
-        // Importer dynamiquement chronik-client
+        // Import dynamique de chronik-client
         const { ChronikClient } = await import('chronik-client');
-        const chronik = new ChronikClient(['https://chronik-native2.fabien.cash']);
         
-        // S'assurer que l'adresse a le bon préfixe
+        // ✅ UTILISATION DE LA CONFIGURATION CENTRALISÉE
+        const chronik = new ChronikClient(APP_CONFIG.CHRONIK_URLS);
+        
+        // Formatage adresse
         const formatted = address.includes(':') ? address : `ecash:${address}`;
         setFormattedAddress(formatted);
-        console.log('📍 Adresse formatée:', formatted);
         
-        // Récupérer l'historique de l'adresse (pas de premier paramètre 'ecash')
+        // Récupération historique
         const history = await chronik.address(formatted).history();
-        
-        console.log('✅ Historique reçu:', history);
-        console.log('📊 Nombre de transactions:', history?.txs?.length);
         
         if (!history || !history.txs || history.txs.length === 0) {
           setTransactions([]);
@@ -52,27 +48,15 @@ const AddressHistory = ({ address, currency = 'EUR', compact = false }) => {
           return;
         }
         
-        // Debug: afficher la première transaction COMPLÈTE
-        if (history.txs.length > 0) {
-          const firstTx = history.txs[0];
-          console.log('🔍 PREMIÈRE TRANSACTION COMPLÈTE:');
-          console.log('  - txid:', firstTx.txid);
-          console.log('  - inputs:', firstTx.inputs);
-          console.log('  - outputs:', firstTx.outputs);
-          console.log('  - Premier output sats:', firstTx.outputs?.[0]?.sats, 'type:', typeof firstTx.outputs?.[0]?.sats);
-        }
-        
-        // Obtenir l'outputScript de notre adresse pour comparer
+        // Script de notre adresse pour comparaison
         const ourOutputScript = ecashaddrjs.getOutputScriptFromAddress(formatted);
-        console.log('📝 Notre outputScript:', ourOutputScript);
         
-        // Transformer les transactions en format lisible
+        // Transformation des données
         const formattedTxs = history.txs.map(tx => {
-          // Déterminer si c'est envoyé ou reçu
           let hasInputFromAddress = false;
           let hasOutputToAddress = false;
           
-          // Vérifier les inputs
+          // Vérification Inputs
           for (const input of tx.inputs || []) {
             if (input.outputScript === ourOutputScript) {
               hasInputFromAddress = true;
@@ -80,7 +64,7 @@ const AddressHistory = ({ address, currency = 'EUR', compact = false }) => {
             }
           }
           
-          // Vérifier les outputs
+          // Vérification Outputs
           for (const output of tx.outputs || []) {
             if (output.outputScript === ourOutputScript) {
               hasOutputToAddress = true;
@@ -88,24 +72,16 @@ const AddressHistory = ({ address, currency = 'EUR', compact = false }) => {
             }
           }
           
-          // Calculer le montant en satoshis
+          // Calcul montant & type
           let amountSats = 0;
           let type = 'received';
           
           if (hasInputFromAddress && hasOutputToAddress) {
-            // Transaction interne
             type = 'internal';
-            const totalIn = tx.inputs?.reduce((sum, input) => {
-              const sats = Number(input.sats || input.value || 0);
-              return sum + sats;
-            }, 0) || 0;
-            const totalOut = tx.outputs?.reduce((sum, output) => {
-              const sats = Number(output.sats || output.value || 0);
-              return sum + sats;
-            }, 0) || 0;
+            const totalIn = tx.inputs?.reduce((sum, input) => sum + Number(input.sats || input.value || 0), 0) || 0;
+            const totalOut = tx.outputs?.reduce((sum, output) => sum + Number(output.sats || output.value || 0), 0) || 0;
             amountSats = Math.abs(totalIn - totalOut);
           } else if (hasInputFromAddress) {
-            // Envoyé
             type = 'sent';
             tx.outputs?.forEach(output => {
               if (output.outputScript !== ourOutputScript) {
@@ -113,7 +89,6 @@ const AddressHistory = ({ address, currency = 'EUR', compact = false }) => {
               }
             });
           } else if (hasOutputToAddress) {
-            // Reçu
             type = 'received';
             tx.outputs?.forEach(output => {
               if (output.outputScript === ourOutputScript) {
@@ -121,8 +96,6 @@ const AddressHistory = ({ address, currency = 'EUR', compact = false }) => {
               }
             });
           }
-          
-          console.log(`💰 TX ${tx.txid.substring(0, 8)}... - Type: ${type}, Montant: ${amountSats} sats = ${amountSats / 100} XEC`);
           
           return {
             txid: tx.txid,
@@ -136,11 +109,10 @@ const AddressHistory = ({ address, currency = 'EUR', compact = false }) => {
         });
         
         setTransactions(formattedTxs);
-        console.log('✅ Transactions formatées:', formattedTxs);
         
       } catch (err) {
         console.error('❌ Erreur chargement historique:', err);
-        setError(err.message || 'Erreur de chargement');
+        setError("Impossible de charger l'historique.");
       } finally {
         setLoading(false);
       }
@@ -158,9 +130,7 @@ const AddressHistory = ({ address, currency = 'EUR', compact = false }) => {
       <Card>
         <CardContent className="loading-state">
           <div className="loading-spinner">⏳</div>
-          <p className="loading-text">
-            Chargement de l'historique...
-          </p>
+          <p className="loading-text">Chargement de l'historique...</p>
         </CardContent>
       </Card>
     );
@@ -171,9 +141,7 @@ const AddressHistory = ({ address, currency = 'EUR', compact = false }) => {
       <Card>
         <CardContent className="empty-state">
           <div className="empty-state-icon">⚠️</div>
-          <p className="empty-state-text">
-            Erreur: {error}
-          </p>
+          <p className="empty-state-text">{error}</p>
         </CardContent>
       </Card>
     );
@@ -184,9 +152,7 @@ const AddressHistory = ({ address, currency = 'EUR', compact = false }) => {
       <Card>
         <CardContent className="empty-state">
           <div className="empty-state-icon">📭</div>
-          <p className="empty-state-text">
-            Aucune transaction trouvée
-          </p>
+          <p className="empty-state-text">Aucune transaction trouvée</p>
         </CardContent>
       </Card>
     );
