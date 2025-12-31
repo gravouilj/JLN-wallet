@@ -6,6 +6,8 @@ import { Card, CardContent, Button } from '../UI';
 import { useEcashWallet } from '../../hooks/useEcashWallet';
 import { addEntry, ACTION_TYPES } from '../../services/historyService';
 import { checkCreatorBlocked } from '../../services/antifraudService';
+// 👇 1. IMPORT STATIQUE ICI (Au lieu d'attendre dans la fonction)
+import { ProfilService } from '../../services/profilService';
 
 const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
   const navigate = useNavigate();
@@ -130,12 +132,13 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
       }
 
       // Vérifier si l'utilisateur a déjà un profil
-      const { ProfilService } = await import('../../services/profilService');
+      // 👇 MODIFICATION : Utilisation directe de ProfilService importé statiquement
       const existingProfile = await ProfilService.getMyProfil(address);
       setHasExistingFarm(!!existingProfile);
 
       // 🔒 NOUVEAU: Vérifier la disponibilité du token (sécurité anti-conflit)
       console.log('🔍 Vérification disponibilité token...');
+      // 👇 MODIFICATION : Utilisation directe de ProfilService
       const availability = await ProfilService.checkTokenAvailability(tokenId, address);
       
       if (!availability.isAvailable) {
@@ -244,7 +247,7 @@ const ImportTokenModal = ({ isOpen, onClose, onImportSuccess }) => {
 
     setIsImporting(true);
     try {
-      const { ProfilService } = await import('../../services/profilService');
+      // 👇 MODIFICATION : Utilisation directe de ProfilService (Plus d'import dynamique)
       
       // 🔒 NOUVEAU: Vérifier la disponibilité du token avant import
       console.log('🔍 Vérification disponibilité avant import rapide...');

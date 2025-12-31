@@ -1,14 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { ChronikClient } from 'chronik-client';
 import { Card, CardContent, Button } from '../UI';
 import TxType from './TxType';
 import { useXecPrice } from '../../hooks/useXecPrice';
 import * as ecashaddrjs from 'ecashaddrjs';
-import { APP_CONFIG } from '../../config/constants'; // ✅ IMPORT CONFIG
+import { APP_CONFIG } from '../../config/constants';
 
-/**
- * AddressHistory - Affiche l'historique des transactions XEC de l'adresse
- * Utilise la configuration centralisée pour la connexion Chronik
- */
 const AddressHistory = ({ address, currency = 'EUR', compact = false }) => {
   const price = useXecPrice();
   const [transactions, setTransactions] = useState([]);
@@ -16,7 +13,7 @@ const AddressHistory = ({ address, currency = 'EUR', compact = false }) => {
   const [error, setError] = useState(null);
   const [showAll, setShowAll] = useState(false);
   const [formattedAddress, setFormattedAddress] = useState('');
-  const [isCompact] = useState(compact); // isCompact ne change pas, pas besoin de setIsCompact
+  const [isCompact] = useState(compact);
 
   useEffect(() => {
     if (!address) {
@@ -29,10 +26,8 @@ const AddressHistory = ({ address, currency = 'EUR', compact = false }) => {
       setError(null);
       
       try {
-        // Import dynamique de chronik-client
-        const { ChronikClient } = await import('chronik-client');
         
-        // ✅ UTILISATION DE LA CONFIGURATION CENTRALISÉE
+        // Connexion Chronik
         const chronik = new ChronikClient(APP_CONFIG.CHRONIK_URLS);
         
         // Formatage adresse
@@ -48,15 +43,12 @@ const AddressHistory = ({ address, currency = 'EUR', compact = false }) => {
           return;
         }
         
-        // Script de notre adresse pour comparaison
         const ourOutputScript = ecashaddrjs.getOutputScriptFromAddress(formatted);
         
-        // Transformation des données
         const formattedTxs = history.txs.map(tx => {
           let hasInputFromAddress = false;
           let hasOutputToAddress = false;
           
-          // Vérification Inputs
           for (const input of tx.inputs || []) {
             if (input.outputScript === ourOutputScript) {
               hasInputFromAddress = true;
@@ -64,7 +56,6 @@ const AddressHistory = ({ address, currency = 'EUR', compact = false }) => {
             }
           }
           
-          // Vérification Outputs
           for (const output of tx.outputs || []) {
             if (output.outputScript === ourOutputScript) {
               hasOutputToAddress = true;
@@ -72,7 +63,6 @@ const AddressHistory = ({ address, currency = 'EUR', compact = false }) => {
             }
           }
           
-          // Calcul montant & type
           let amountSats = 0;
           let type = 'received';
           
@@ -120,7 +110,6 @@ const AddressHistory = ({ address, currency = 'EUR', compact = false }) => {
 
     loadHistory();
   }, [address]);
-
 
   const defaultLimit = isCompact ? 2 : 4;
   const displayedTxs = showAll ? transactions : transactions.slice(0, defaultLimit);

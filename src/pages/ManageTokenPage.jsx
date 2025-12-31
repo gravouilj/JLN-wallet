@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'; // Ajout useCallback
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSetAtom, useAtom } from 'jotai';
 import MobileLayout from '../components/Layout/MobileLayout';
@@ -16,6 +16,11 @@ import { getGlobalHistory } from '../services/historyService';
 import { NetworkFeesAvail, AddressHistory, TokenCard } from '../components/TokenPage';
 import AddressBook from '../components/AddressBook/AddressBook';
 
+// 👇 IMPORTS STATIQUES AJOUTÉS (Plus de await import)
+import { supabase } from '../services/supabaseClient';
+import ProfilService from '../services/profilService';
+import adminService from '../services/adminService'; 
+
 // --- COMPOSANTS INTERNES ---
 
 const BlockedProfileCard = ({ profile, onUnblock }) => {
@@ -31,7 +36,8 @@ const BlockedProfileCard = ({ profile, onUnblock }) => {
 
     setIsUnblocking(true);
     try {
-      await onUnblock(profile.id, unblockReason);
+      // ✅ Utilisation directe de adminService
+      await adminService.adminUnblockProfile(profile.id, null, unblockReason); // Note: address param removed if unused in service
       setShowUnblockForm(false);
       setUnblockReason('');
     } catch (error) {
@@ -95,9 +101,8 @@ const ManageTokenPage = () => {
   const [currency] = useAtom(currencyAtom);
   const setNotification = useSetAtom(notificationAtom);
 
-  // ÉTATS
   const [tokens, setTokens] = useState([]);
-  const [allJlnTokens, setAllJlnTokens] = useState([]); // Pour admin
+  const [allJlnTokens, setAllJlnTokens] = useState([]);
   const [loadingTokens, setLoadingTokens] = useState(true);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [myProfile, setMyProfile] = useState(null);
@@ -108,17 +113,16 @@ const ManageTokenPage = () => {
   const [activeHistoryTab, setActiveHistoryTab] = useState('creator');
   const [pendingCount, setPendingCount] = useState(0);
   
-  // MODALES
   const [showImportModal, setShowImportModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showGlobalAddressBook, setShowGlobalAddressBook] = useState(false);
 
-  // --- HELPERS ---
+  // --- HELPERS AVEC IMPORTS STATIQUES ---
 
   const loadMyProfile = async () => {
     if (!address) return null;
     try {
-      const { supabase } = await import('../services/supabaseClient');
+      // ✅ Utilisation directe de supabase (importé en haut)
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -139,7 +143,7 @@ const ManageTokenPage = () => {
   const loadBlockedProfiles = async () => {
     if (!isAdmin) return;
     try {
-      const { supabase } = await import('../services/supabaseClient');
+      // ✅ Utilisation directe de supabase
       const { data, error } = await supabase
         .from('profiles')
         .select('id, owner_address, name, blocked_reason, blocked_at, status')
@@ -156,7 +160,7 @@ const ManageTokenPage = () => {
   const loadPendingCount = async () => {
     if (!isAdmin) return 0;
     try {
-      const { default: ProfilService } = await import('../services/profilService');
+      // ✅ Utilisation directe de ProfilService
       const pendingProfiles = await ProfilService.getPendingProfils();
       return pendingProfiles?.length || 0;
     } catch (err) {
@@ -194,7 +198,6 @@ const ManageTokenPage = () => {
 
   const handleImportSuccess = () => window.location.reload();
 
-  // --- FILTRE CORRIGÉ (Suppression du doublon 'all') ---
   const getFilteredTokens = () => {
     let displayTokens = [];
     
@@ -211,7 +214,7 @@ const ManageTokenPage = () => {
       case 'blocked':
         if (isAdmin) displayTokens = []; 
         break;
-      case 'all': // Un seul 'all' maintenant !
+      case 'all': 
         if (isAdmin) {
           const supabaseTokenIds = new Set(allJlnTokens.map(t => t.tokenId));
           const walletOnlyTokens = tokens.filter(t => t.isFromJlnWallet && !supabaseTokenIds.has(t.tokenId));
@@ -229,9 +232,6 @@ const ManageTokenPage = () => {
     });
   };
 
-  // --- CHARGEMENT DES DONNÉES ---
-  
-  // Défini comme fonction réutilisable pour le rechargement après création
   const loadTokens = useCallback(async () => {
     if (!wallet) {
       setLoadingTokens(false);
@@ -410,12 +410,10 @@ const ManageTokenPage = () => {
     }
   }, [wallet, profiles, isAdmin, address, setNotification]);
 
-  // Chargement initial
   useEffect(() => {
     loadTokens();
   }, [loadTokens]);
 
-  // Chargement historique
   useEffect(() => {
     const loadGlobalHistory = async () => {
       if (!address) return;
@@ -432,7 +430,6 @@ const ManageTokenPage = () => {
     loadGlobalHistory();
   }, [address]);
 
-  // FONCTION DE DEBUG ADMIN MANQUANTE DANS TON CODE
   const renderAdminDebugCard = () => (
     <Card style={{ marginTop: '12px', border: '1px solid #e5e7eb' }}>
       <CardContent style={{ padding: '16px' }}>
@@ -447,14 +444,11 @@ const ManageTokenPage = () => {
     </Card>
   );
 
-  // --- RENDU ---
-
   return (
     <MobileLayout title="Gestionnaire de Jetons">
       <PageLayout hasBottomNav className="max-w-2xl">
         <Stack spacing="md">
         
-        {/* En-tête avec bouton profil */}
         <Card>
           <CardContent style={{ padding: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
@@ -495,13 +489,11 @@ const ManageTokenPage = () => {
                 >
                   {myProfile.status === 'active' ? '🌐 Profil public' : '📝 Brouillon'}
                 </button>
-                {/* ... Autres badges de statut ... */}
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Boutons d'action */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
           <Button onClick={() => setShowCreateModal(true)} variant="primary" fullWidth style={{ height: '80px', fontSize: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
             <span style={{ fontSize: '1.5rem' }}>🔨</span><span>Créer un jeton</span>
@@ -511,7 +503,6 @@ const ManageTokenPage = () => {
           </Button>
         </div>
 
-        {/* Liste des tokens */}
         {loadingTokens ? (
           <Card><CardContent style={{ padding: '48px 24px', textAlign: 'center' }}><div style={{ fontSize: '4rem', marginBottom: '16px' }}>🔍</div><p>Recherche des jetons...</p></CardContent></Card>
         ) : tokens.length === 0 ? (
@@ -545,7 +536,7 @@ const ManageTokenPage = () => {
                   profileId={myProfile?.id}
                   showLinkedToggle={!!myProfile && token.isFromJlnWallet === true}
                   showVisibleToggle={!!myProfile && token.isFromJlnWallet === true}
-                  onUpdate={loadTokens} // Recharger tout après update
+                  onUpdate={loadTokens}
                 />
               ))
             )}

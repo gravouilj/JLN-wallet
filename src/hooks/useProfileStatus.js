@@ -2,6 +2,9 @@ import { useState, useCallback } from 'react';
 import { useSetAtom } from 'jotai';
 import { notificationAtom } from '../atoms';
 import { ProfilService } from '../services/profilService';
+// 👇 AJOUTS (Imports statiques)
+import { supabase } from '../services/supabaseClient';
+import { createTicket, addMessageToTicket } from '../services/ticketService';
 
 /**
  * Hook personnalisé pour la gestion des statuts de profils
@@ -144,10 +147,11 @@ export const useProfileStatus = () => {
       // Si c'est un message de type 'report', créer aussi un ticket pour que le créateur puisse voir dans SupportTab
       if (messageType === 'report' || messageType === 'general') {
         try {
-          const { createTicket } = await import('../services/ticketService');
+          // 👇 MODIFICATION : Utilisation directe des fonctions importées statiquement
+          // import('../services/ticketService') SUPPRIMÉ
           
           // Chercher si un ticket admin_creator existe déjà pour ce profil
-          const { supabase } = await import('../services/supabaseClient');
+          // 👇 MODIFICATION : Utilisation directe de supabase
           const { data: existingTickets } = await supabase
             .from('tickets')
             .select('id')
@@ -158,7 +162,7 @@ export const useProfileStatus = () => {
           
           if (existingTickets && existingTickets.length > 0) {
             // Ajouter le message au ticket existant
-            const { addMessageToTicket } = await import('../services/ticketService');
+            // 👇 MODIFICATION : Utilisation directe de addMessageToTicket
             await addMessageToTicket(
               existingTickets[0].id,
               'admin',
@@ -168,6 +172,7 @@ export const useProfileStatus = () => {
             );
           } else {
             // Créer un nouveau ticket
+            // 👇 MODIFICATION : Utilisation directe de createTicket
             await createTicket({
               subject: messageType === 'report' ? `Signalement - ${profile.name}` : `Message admin - ${profile.name}`,
               description: messageText,
@@ -285,7 +290,7 @@ export const useProfileStatus = () => {
   /**
    * Ignorer les signalements d'un profil (admin)
    */
-  const ignoreReports = useCallback(async (profileId, supabase, onSuccess) => {
+  const ignoreReports = useCallback(async (profileId, supabaseInstance, onSuccess) => {
     if (!window.confirm(
       'Marquer les signalements comme traités sans action ?\n\n⚠️ Les signalements visibles seront automatiquement masqués au créateur.'
     )) {
@@ -294,7 +299,10 @@ export const useProfileStatus = () => {
 
     setProcessing(profileId);
     try {
-      await supabase
+      // 👇 MODIFICATION : Utilisation de supabase importé (ou celui passé en paramètre si nécessaire, mais globalement on peut utiliser l'import)
+      const client = supabaseInstance || supabase;
+      
+      await client
         .from('profile_reports')
         .update({
           admin_status: 'resolved',

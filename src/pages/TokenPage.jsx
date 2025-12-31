@@ -15,6 +15,8 @@ import { notificationAtom, currencyAtom } from '../atoms';
 import { syncTokenData, getCachedTokenData, cacheTokenData } from '../utils/tokenSync';
 import { profilService } from '../services/profilService';
 import { addEntry, getHistoryByToken, ACTION_TYPES } from '../services/historyService';
+// 👇 AJOUT (Import statique)
+import { supabase } from '../services/supabaseClient';
 
 // Import des composants d'actions
 import Send from '../components/eCash/TokenActions/Send';
@@ -594,7 +596,8 @@ const TokenPage = () => {
 
     setUploadingImage(true);
     try {
-      const { supabase } = await import('../services/supabaseClient');
+      // 👇 MODIFICATION : Utilisation directe de supabase (import statique)
+      // const { supabase } = await import('../services/supabaseClient'); ❌ SUPPRIMÉ
       
       // Générer un nom unique pour l'image
       const fileExt = imageFile.name.split('.').pop();
