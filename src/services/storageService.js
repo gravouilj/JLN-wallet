@@ -1,6 +1,6 @@
 // src/services/storageService.js
 import { encryptWalletData, decryptWalletData } from '../utils/security';
-import { APP_CONFIG } from '../config/constants'; // ✅ Import de la configuration
+import { APP_CONFIG } from '../config/constants'; 
 
 // On récupère les clés depuis la configuration centralisée
 const STORAGE_KEY = APP_CONFIG.STORAGE_KEYS.VAULT; 
