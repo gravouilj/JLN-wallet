@@ -1,8 +1,8 @@
 /**
- * adminService.js
- * 
+ * adminService.ts
+ *
  * Service pour la gestion des administrateurs/modérateurs (whitelist publique)
- * 
+ *
  * Philosophie :
  * - Blocages = Automatiques (système anti-arnaque)
  * - Déblocages = Manuels (validation humaine)
@@ -11,12 +11,37 @@
 
 import { supabase } from './supabaseClient';
 
+// Types
+interface AdminCheckResult {
+  isAdmin: boolean;
+  role: string | null;
+  adminName: string | null;
+}
+
+interface AdminRecord {
+  wallet_address: string;
+  admin_name: string;
+  admin_role: string;
+  is_active: boolean;
+  added_at: string;
+}
+
+interface AdminAction {
+  id: string;
+  created_at: string;
+  admin_wallet: string;
+  action_type: string;
+  reason: string;
+}
+
 /**
  * Vérifier si une adresse wallet est admin actif
- * @param {string} ownerAddress - Adresse wallet à vérifier
- * @returns {Promise<Object>} { isAdmin, role, adminName }
+ * @param ownerAddress - Adresse wallet à vérifier
+ * @returns Promise avec { isAdmin, role, adminName }
  */
-export const checkIsAdmin = async (ownerAddress) => {
+export const checkIsAdmin = async (
+  ownerAddress: string
+): Promise<AdminCheckResult> => {
   try {
     const { data, error } = await supabase
       .from('admin_whitelist')
@@ -35,16 +60,17 @@ export const checkIsAdmin = async (ownerAddress) => {
       adminName: data.admin_name
     };
   } catch (error) {
-    console.error('❌ Erreur vérification admin:', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error('❌ Erreur vérification admin:', errMsg);
     return { isAdmin: false, role: null, adminName: null };
   }
 };
 
 /**
  * Récupérer la liste publique des admins actifs
- * @returns {Promise<Array>} Liste des admins
+ * @returns Promise avec liste des admins
  */
-export const getAdminList = async () => {
+export const getAdminList = async (): Promise<AdminRecord[]> => {
   try {
     const { data, error } = await supabase
       .from('admin_whitelist')
@@ -53,19 +79,22 @@ export const getAdminList = async () => {
       .order('added_at', { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    return (data as AdminRecord[]) || [];
   } catch (error) {
-    console.error('❌ Erreur récupération liste admins:', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error('❌ Erreur récupération liste admins:', errMsg);
     return [];
   }
 };
 
 /**
  * Récupérer l'historique public des actions admin
- * @param {number} limit - Nombre d'actions à récupérer
- * @returns {Promise<Array>} Historique des actions
+ * @param limit - Nombre d'actions à récupérer
+ * @returns Promise avec historique des actions
  */
-export const getAdminActionsHistory = async (limit = 50) => {
+export const getAdminActionsHistory = async (
+  limit: number = 50
+): Promise<AdminAction[]> => {
   try {
     const { data, error } = await supabase
       .from('admin_actions')
@@ -74,21 +103,26 @@ export const getAdminActionsHistory = async (limit = 50) => {
       .limit(limit);
 
     if (error) throw error;
-    return data || [];
+    return (data as AdminAction[]) || [];
   } catch (error) {
-    console.error('❌ Erreur récupération historique admin:', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error('❌ Erreur récupération historique admin:', errMsg);
     return [];
   }
 };
 
 /**
  * Débloquer un profil (admin uniquement)
- * @param {string} profileId - UUID du profil
- * @param {string} adminWallet - Adresse wallet de l'admin
- * @param {string} reason - Raison du déblocage
- * @returns {Promise<boolean>} true si succès
+ * @param profileId - UUID du profil
+ * @param adminWallet - Adresse wallet de l'admin
+ * @param reason - Raison du déblocage
+ * @returns Promise<true> si succès
  */
-export const adminUnblockProfile = async (profileId, adminWallet, reason) => {
+export const adminUnblockProfile = async (
+  profileId: string,
+  adminWallet: string,
+  reason: string
+): Promise<boolean> => {
   try {
     // Vérifier d'abord que l'utilisateur est admin
     const { isAdmin } = await checkIsAdmin(adminWallet);
@@ -109,19 +143,24 @@ export const adminUnblockProfile = async (profileId, adminWallet, reason) => {
     console.log(`✅ Profil ${profileId} débloqué par admin`);
     return true;
   } catch (error) {
-    console.error('❌ Erreur déblocage admin:', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error('❌ Erreur déblocage admin:', errMsg);
     return false;
   }
 };
 
 /**
  * Bloquer manuellement un profil (cas exceptionnel, admin uniquement)
- * @param {string} profileId - UUID du profil
- * @param {string} adminWallet - Adresse wallet de l'admin
- * @param {string} reason - Raison du blocage
- * @returns {Promise<boolean>} true si succès
+ * @param profileId - UUID du profil
+ * @param adminWallet - Adresse wallet de l'admin
+ * @param reason - Raison du blocage
+ * @returns Promise<true> si succès
  */
-export const adminBlockProfile = async (profileId, adminWallet, reason) => {
+export const adminBlockProfile = async (
+  profileId: string,
+  adminWallet: string,
+  reason: string
+): Promise<boolean> => {
   try {
     // Vérifier que l'utilisateur est admin
     const { isAdmin } = await checkIsAdmin(adminWallet);
@@ -142,25 +181,33 @@ export const adminBlockProfile = async (profileId, adminWallet, reason) => {
     console.log(`✅ Profil ${profileId} bloqué manuellement par admin`);
     return true;
   } catch (error) {
-    console.error('❌ Erreur blocage admin:', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error('❌ Erreur blocage admin:', errMsg);
     return false;
   }
 };
 
 /**
  * Ajouter un nouvel admin (super_admin uniquement)
- * @param {string} newAdminWallet - Adresse du nouvel admin
- * @param {string} newAdminName - Nom public de l'admin
- * @param {string} newAdminRole - 'moderator' ou 'super_admin'
- * @param {string} addedByWallet - Adresse du super_admin qui ajoute
- * @returns {Promise<boolean>} true si succès
+ * @param newAdminWallet - Adresse du nouvel admin
+ * @param newAdminName - Nom public de l'admin
+ * @param newAdminRole - 'moderator' ou 'super_admin'
+ * @param addedByWallet - Adresse du super_admin qui ajoute
+ * @returns Promise<true> si succès
  */
-export const addAdmin = async (newAdminWallet, newAdminName, newAdminRole, addedByWallet) => {
+export const addAdmin = async (
+  newAdminWallet: string,
+  newAdminName: string,
+  newAdminRole: string,
+  addedByWallet: string
+): Promise<boolean> => {
   try {
     // Vérifier que l'utilisateur est super_admin
     const { role } = await checkIsAdmin(addedByWallet);
     if (role !== 'super_admin') {
-      console.error('❌ Accès refusé : seul un super_admin peut ajouter des admins');
+      console.error(
+        '❌ Accès refusé : seul un super_admin peut ajouter des admins'
+      );
       return false;
     }
 
@@ -176,24 +223,31 @@ export const addAdmin = async (newAdminWallet, newAdminName, newAdminRole, added
     console.log(`✅ Admin ${newAdminName} ajouté avec succès`);
     return true;
   } catch (error) {
-    console.error('❌ Erreur ajout admin:', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error('❌ Erreur ajout admin:', errMsg);
     return false;
   }
 };
 
 /**
  * Retirer un admin (super_admin uniquement)
- * @param {string} adminWalletToRemove - Adresse de l'admin à retirer
- * @param {string} removedByWallet - Adresse du super_admin qui retire
- * @param {string} reason - Raison du retrait
- * @returns {Promise<boolean>} true si succès
+ * @param adminWalletToRemove - Adresse de l'admin à retirer
+ * @param removedByWallet - Adresse du super_admin qui retire
+ * @param reason - Raison du retrait
+ * @returns Promise<true> si succès
  */
-export const removeAdmin = async (adminWalletToRemove, removedByWallet, reason) => {
+export const removeAdmin = async (
+  adminWalletToRemove: string,
+  removedByWallet: string,
+  reason: string
+): Promise<boolean> => {
   try {
     // Vérifier que l'utilisateur est super_admin
     const { role } = await checkIsAdmin(removedByWallet);
     if (role !== 'super_admin') {
-      console.error('❌ Accès refusé : seul un super_admin peut retirer des admins');
+      console.error(
+        '❌ Accès refusé : seul un super_admin peut retirer des admins'
+      );
       return false;
     }
 
@@ -208,7 +262,8 @@ export const removeAdmin = async (adminWalletToRemove, removedByWallet, reason) 
     console.log(`✅ Admin retiré avec succès`);
     return true;
   } catch (error) {
-    console.error('❌ Erreur retrait admin:', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error('❌ Erreur retrait admin:', errMsg);
     return false;
   }
 };

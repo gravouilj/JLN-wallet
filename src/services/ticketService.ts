@@ -1,27 +1,66 @@
 import { supabase } from './supabaseClient';
 
-/**
- * ticketService - Service CRUD pour la gestion des tickets
- * Utilise les fonctions PostgreSQL créées dans tickets_refactoring.sql
- */
+// Types
+interface TicketMessage {
+  id: string;
+  author: 'admin' | 'creator' | 'client';
+  author_address: string;
+  content: string;
+  timestamp: string;
+  attachments: Array<{ name: string; url: string; type: string }>;
+  read: boolean;
+}
+
+interface TicketData {
+  subject: string;
+  description: string;
+  type: 'admin_creator' | 'admin_client' | 'creator_client' | 'report';
+  category: string;
+  priority?: 'normal' | 'high' | 'urgent';
+  created_by_address: string;
+  created_by_role: 'admin' | 'creator' | 'client';
+  token_id?: string | null;
+  profile_id?: string | null;
+  client_address?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+interface Ticket {
+  id: string;
+  subject: string;
+  type: string;
+  category: string;
+  priority: string;
+  status: 'open' | 'awaiting_reply' | 'in_progress' | 'resolved' | 'closed';
+  created_by_address: string;
+  created_by_role: string;
+  token_id: string | null;
+  profile_id: string | null;
+  client_address: string | null;
+  conversation: TicketMessage[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+  resolved_at?: string | null;
+  closed_at?: string | null;
+  auto_close_at?: string | null;
+  unread_count?: number;
+}
+
+interface TicketFilters {
+  role?: 'admin' | 'creator' | 'client';
+  address?: string;
+  profileId?: string;
+  status?: string;
+  type?: string;
+  search?: string;
+}
 
 /**
  * Crée un nouveau ticket
- * @param {Object} ticketData - Données du ticket
- * @param {string} ticketData.subject - Sujet du ticket
- * @param {string} ticketData.description - Description initiale (premier message)
- * @param {string} ticketData.type - Type: 'admin_creator', 'admin_client', 'creator_client', 'report'
- * @param {string} ticketData.category - Catégorie
- * @param {string} ticketData.priority - Priorité: 'normal', 'high', 'urgent'
- * @param {string} ticketData.created_by_address - Adresse eCash du créateur
- * @param {string} ticketData.created_by_role - Rôle: 'admin', 'creator', 'client'
- * @param {string} [ticketData.token_id] - ID du token concerné (optionnel)
- * @param {string} [ticketData.profile_id] - ID du profil créateur (optionnel)
- * @param {string} [ticketData.client_address] - Adresse eCash du client (optionnel)
- * @param {Object} [ticketData.metadata] - Métadonnées additionnelles (tokenInfo, profileInfo, etc.)
- * @returns {Promise<Object>} Ticket créé
+ * @param ticketData - Données du ticket
+ * @returns Ticket créé
  */
-export const createTicket = async (ticketData) => {
+export const createTicket = async (ticketData: TicketData): Promise<Ticket> => {
   try {
     const {
       subject,
@@ -38,9 +77,9 @@ export const createTicket = async (ticketData) => {
     } = ticketData;
 
     // Message initial dans conversation
-    const initialMessage = {
+    const initialMessage: TicketMessage = {
       id: crypto.randomUUID(),
-      author: created_by_role,
+      author: created_by_role as 'admin' | 'creator' | 'client',
       author_address: created_by_address,
       content: description,
       timestamp: new Date().toISOString(),
@@ -69,26 +108,31 @@ export const createTicket = async (ticketData) => {
 
     if (error) throw error;
 
-    console.log('✅ Ticket créé:', data.id);
-    return data;
+    console.log('✅ Ticket créé:', (data as Ticket).id);
+    return data as Ticket;
   } catch (err) {
-    console.error('❌ Erreur création ticket:', err);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('❌ Erreur création ticket:', errMsg);
     throw err;
   }
 };
 
 /**
  * Ajoute un message à la conversation d'un ticket
- * Utilise la fonction PostgreSQL add_message_to_ticket()
- * 
- * @param {string} ticketId - UUID du ticket
- * @param {string} author - Rôle: 'admin', 'creator', 'client'
- * @param {string} authorAddress - Adresse eCash de l'auteur
- * @param {string} content - Contenu du message
- * @param {Array} attachments - Pièces jointes [{name, url, type}]
- * @returns {Promise<Object>} Ticket mis à jour
+ * @param ticketId - UUID du ticket
+ * @param author - Rôle: 'admin', 'creator', 'client'
+ * @param authorAddress - Adresse eCash de l'auteur
+ * @param content - Contenu du message
+ * @param attachments - Pièces jointes
+ * @returns Ticket mis à jour
  */
-export const addMessageToTicket = async (ticketId, author, authorAddress, content, attachments = []) => {
+export const addMessageToTicket = async (
+  ticketId: string,
+  author: 'admin' | 'creator' | 'client',
+  authorAddress: string,
+  content: string,
+  attachments: Array<{ name: string; url: string; type: string }> = []
+): Promise<Ticket> => {
   try {
     const { data, error } = await supabase.rpc('add_message_to_ticket', {
       p_ticket_id: ticketId,
@@ -101,22 +145,24 @@ export const addMessageToTicket = async (ticketId, author, authorAddress, conten
     if (error) throw error;
 
     console.log('✅ Message ajouté au ticket:', ticketId);
-    return data;
+    return data as Ticket;
   } catch (err) {
-    console.error('❌ Erreur ajout message:', err);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('❌ Erreur ajout message:', errMsg);
     throw err;
   }
 };
 
 /**
  * Marque les messages d'un ticket comme lus pour un rôle
- * Utilise la fonction PostgreSQL mark_messages_as_read()
- * 
- * @param {string} ticketId - UUID du ticket
- * @param {string} role - Rôle qui lit: 'admin', 'creator', 'client'
- * @returns {Promise<Object>} Ticket mis à jour
+ * @param ticketId - UUID du ticket
+ * @param role - Rôle qui lit: 'admin', 'creator', 'client'
+ * @returns Ticket mis à jour
  */
-export const markMessagesAsRead = async (ticketId, role) => {
+export const markMessagesAsRead = async (
+  ticketId: string,
+  role: 'admin' | 'creator' | 'client'
+): Promise<Ticket> => {
   try {
     const { data, error } = await supabase.rpc('mark_messages_as_read', {
       p_ticket_id: ticketId,
@@ -126,27 +172,30 @@ export const markMessagesAsRead = async (ticketId, role) => {
     if (error) throw error;
 
     console.log('✅ Messages marqués lus pour', role, 'sur ticket', ticketId);
-    return data;
+    return data as Ticket;
   } catch (err) {
-    console.error('❌ Erreur marquage messages lus:', err);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('❌ Erreur marquage messages lus:', errMsg);
     throw err;
   }
 };
 
 /**
  * Met à jour le statut d'un ticket
- * @param {string} ticketId - UUID du ticket
- * @param {string} newStatus - Nouveau statut: 'open', 'awaiting_reply', 'in_progress', 'resolved', 'closed'
- * @returns {Promise<Object>} Ticket mis à jour
+ * @param ticketId - UUID du ticket
+ * @param newStatus - Nouveau statut
+ * @returns Ticket mis à jour
  */
-export const updateTicketStatus = async (ticketId, newStatus) => {
+export const updateTicketStatus = async (
+  ticketId: string,
+  newStatus: 'open' | 'awaiting_reply' | 'in_progress' | 'resolved' | 'closed'
+): Promise<Ticket> => {
   try {
-    const updates = { status: newStatus };
+    const updates: Record<string, unknown> = { status: newStatus };
 
     // Gérer les timestamps selon le statut
     if (newStatus === 'resolved') {
       updates.resolved_at = new Date().toISOString();
-      // Le trigger set_auto_close_date() va calculer auto_close_at automatiquement
     } else if (newStatus === 'closed') {
       updates.closed_at = new Date().toISOString();
     } else if (newStatus === 'open' || newStatus === 'in_progress') {
@@ -166,50 +215,53 @@ export const updateTicketStatus = async (ticketId, newStatus) => {
     if (error) throw error;
 
     console.log('✅ Statut ticket mis à jour:', ticketId, '→', newStatus);
-    return data;
+    return data as Ticket;
   } catch (err) {
-    console.error('❌ Erreur mise à jour statut:', err);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('❌ Erreur mise à jour statut:', errMsg);
     throw err;
   }
 };
 
 /**
  * Résout un ticket (admin ou creator)
- * @param {string} ticketId - UUID du ticket
- * @returns {Promise<Object>} Ticket résolu
+ * @param ticketId - UUID du ticket
+ * @returns Ticket résolu
  */
-export const resolveTicket = async (ticketId) => {
+export const resolveTicket = async (ticketId: string): Promise<Ticket> => {
   return updateTicketStatus(ticketId, 'resolved');
 };
 
 /**
  * Réouvre un ticket résolu
- * @param {string} ticketId - UUID du ticket
- * @returns {Promise<Object>} Ticket réouvert
+ * @param ticketId - UUID du ticket
+ * @returns Ticket réouvert
  */
-export const reopenTicket = async (ticketId) => {
+export const reopenTicket = async (ticketId: string): Promise<Ticket> => {
   return updateTicketStatus(ticketId, 'open');
 };
 
 /**
  * Clôt définitivement un ticket (admin uniquement)
- * @param {string} ticketId - UUID du ticket
- * @returns {Promise<Object>} Ticket clôturé
+ * @param ticketId - UUID du ticket
+ * @returns Ticket clôturé
  */
-export const closeTicket = async (ticketId) => {
+export const closeTicket = async (ticketId: string): Promise<Ticket> => {
   return updateTicketStatus(ticketId, 'closed');
 };
 
 /**
  * Escalade un ticket creator_client vers admin
- * Crée un nouveau ticket admin_creator avec référence
- * 
- * @param {string} ticketId - UUID du ticket original
- * @param {string} reason - Raison de l'escalade
- * @param {string} creatorAddress - Adresse du créateur qui escalade
- * @returns {Promise<Object>} Nouveau ticket admin créé
+ * @param ticketId - UUID du ticket original
+ * @param reason - Raison de l'escalade
+ * @param creatorAddress - Adresse du créateur qui escalade
+ * @returns Nouveau ticket admin créé
  */
-export const escalateToAdmin = async (ticketId, reason, creatorAddress) => {
+export const escalateToAdmin = async (
+  ticketId: string,
+  reason: string,
+  creatorAddress: string
+): Promise<Ticket> => {
   try {
     // 1. Récupérer le ticket original
     const { data: originalTicket, error: fetchError } = await supabase
@@ -220,19 +272,21 @@ export const escalateToAdmin = async (ticketId, reason, creatorAddress) => {
 
     if (fetchError) throw fetchError;
 
+    const original = originalTicket as Ticket;
+
     // 2. Créer ticket admin_creator
     const escalatedTicket = await createTicket({
-      subject: `🚨 Escalade: ${originalTicket.subject}`,
-      description: `${reason}\n\n--- Ticket original ---\nID: ${ticketId}\nType: ${originalTicket.type}\nClient: ${originalTicket.client_address}`,
+      subject: `🚨 Escalade: ${original.subject}`,
+      description: `${reason}\n\n--- Ticket original ---\nID: ${ticketId}\nType: ${original.type}\nClient: ${original.client_address}`,
       type: 'admin_creator',
       category: 'escalation',
       priority: 'high',
       created_by_address: creatorAddress,
       created_by_role: 'creator',
-      profile_id: originalTicket.profile_id,
-      token_id: originalTicket.token_id,
+      profile_id: original.profile_id || undefined,
+      token_id: original.token_id || undefined,
       metadata: {
-        ...originalTicket.metadata,
+        ...original.metadata,
         escalated_from: ticketId,
         escalation_reason: reason
       }
@@ -243,7 +297,7 @@ export const escalateToAdmin = async (ticketId, reason, creatorAddress) => {
       .from('tickets')
       .update({
         metadata: {
-          ...originalTicket.metadata,
+          ...original.metadata,
           escalated: true,
           escalated_to: escalatedTicket.id,
           escalated_at: new Date().toISOString()
@@ -254,22 +308,18 @@ export const escalateToAdmin = async (ticketId, reason, creatorAddress) => {
     console.log('✅ Ticket escaladé vers admin:', escalatedTicket.id);
     return escalatedTicket;
   } catch (err) {
-    console.error('❌ Erreur escalade:', err);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('❌ Erreur escalade:', errMsg);
     throw err;
   }
 };
 
 /**
  * Récupère les tickets avec filtres
- * @param {Object} filters - Filtres de recherche
- * @param {string} [filters.role] - Filtrer par rôle: 'admin', 'creator', 'client'
- * @param {string} [filters.address] - Filtrer par adresse
- * @param {string} [filters.status] - Filtrer par statut
- * @param {string} [filters.type] - Filtrer par type
- * @param {string} [filters.search] - Recherche texte (subject)
- * @returns {Promise<Array>} Liste de tickets
+ * @param filters - Filtres de recherche
+ * @returns Liste de tickets
  */
-export const getTickets = async (filters = {}) => {
+export const getTickets = async (filters: TicketFilters = {}): Promise<Ticket[]> => {
   try {
     let query = supabase
       .from('tickets')
@@ -307,7 +357,7 @@ export const getTickets = async (filters = {}) => {
     }
 
     // S'assurer que conversation est toujours un array
-    const tickets = (data || []).map(ticket => ({
+    const tickets = ((data as Ticket[]) || []).map(ticket => ({
       ...ticket,
       conversation: ticket.conversation || [],
       unread_count: ticket.unread_count || 0
@@ -316,17 +366,18 @@ export const getTickets = async (filters = {}) => {
     console.log('✅ Tickets récupérés:', tickets.length);
     return tickets;
   } catch (err) {
-    console.error('❌ Erreur récupération tickets:', err);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('❌ Erreur récupération tickets:', errMsg);
     throw err;
   }
 };
 
 /**
  * Récupère un ticket par ID avec conversation complète
- * @param {string} ticketId - UUID du ticket
- * @returns {Promise<Object>} Ticket complet
+ * @param ticketId - UUID du ticket
+ * @returns Ticket complet
  */
-export const getTicketById = async (ticketId) => {
+export const getTicketById = async (ticketId: string): Promise<Ticket> => {
   try {
     const { data, error } = await supabase
       .from('tickets_with_context')
@@ -336,9 +387,10 @@ export const getTicketById = async (ticketId) => {
 
     if (error) throw error;
 
-    return data;
+    return data as Ticket;
   } catch (err) {
-    console.error('❌ Erreur récupération ticket:', err);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('❌ Erreur récupération ticket:', errMsg);
     throw err;
   }
 };

@@ -10,28 +10,42 @@ const STORAGE_KEY = 'jln_address_book';
  * {
  *   address: string,
  *   name: string,
- *   tokenId: string (optionnel - pour filtrage par token),
- *   createdAt: timestamp,
- *   updatedAt: timestamp
+ *   tokenId?: string,
+ *   createdAt: number,
+ *   updatedAt: number
  * }
  */
+
+interface Contact {
+  address: string;
+  name: string;
+  tokenId?: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+interface ContactsByToken {
+  [key: string]: Contact[];
+}
 
 class AddressBookService {
   /**
    * Récupérer tous les contacts (ou filtrés par tokenId)
    */
-  getContacts(tokenId = null) {
+  getContacts(tokenId: string | null = null): Contact[] {
     try {
       const data = localStorage.getItem(STORAGE_KEY);
-      const contacts = data ? JSON.parse(data) : [];
-      
+      const contacts = data ? (JSON.parse(data) as Contact[]) : [];
+
       if (tokenId) {
         return contacts.filter(c => c.tokenId === tokenId);
       }
-      
+
       return contacts;
     } catch (error) {
-      console.error('❌ Erreur lecture carnet d\'adresses:', error);
+      const errMsg =
+        error instanceof Error ? error.message : String(error);
+      console.error('❌ Erreur lecture carnet d\'adresses:', errMsg);
       return [];
     }
   }
@@ -39,7 +53,10 @@ class AddressBookService {
   /**
    * Récupérer un contact par adresse
    */
-  getContactByAddress(address, tokenId = null) {
+  getContactByAddress(
+    address: string,
+    tokenId: string | null = null
+  ): Contact | undefined {
     const contacts = this.getContacts(tokenId);
     return contacts.find(c => c.address === address);
   }
@@ -47,18 +64,23 @@ class AddressBookService {
   /**
    * Sauvegarder/Mettre à jour un contact
    */
-  saveContact(address, name, tokenId = null) {
+  saveContact(
+    address: string,
+    name: string,
+    tokenId: string | null = null
+  ): boolean {
     try {
       const contacts = this.getContacts();
       const existingIndex = contacts.findIndex(
         c => c.address === address && (!tokenId || c.tokenId === tokenId)
       );
 
-      const contactData = {
+      const contactData: Contact = {
         address,
         name: name.trim(),
-        tokenId: tokenId || null,
-        updatedAt: Date.now()
+        tokenId: tokenId || undefined,
+        updatedAt: Date.now(),
+        createdAt: 0 // sera défini si nouveau
       };
 
       if (existingIndex >= 0) {
@@ -79,7 +101,9 @@ class AddressBookService {
       console.log('✅ Contact sauvegardé:', { address, name, tokenId });
       return true;
     } catch (error) {
-      console.error('❌ Erreur sauvegarde contact:', error);
+      const errMsg =
+        error instanceof Error ? error.message : String(error);
+      console.error('❌ Erreur sauvegarde contact:', errMsg);
       return false;
     }
   }
@@ -87,7 +111,10 @@ class AddressBookService {
   /**
    * Supprimer un contact
    */
-  deleteContact(address, tokenId = null) {
+  deleteContact(
+    address: string,
+    tokenId: string | null = null
+  ): boolean {
     try {
       const contacts = this.getContacts();
       const filtered = contacts.filter(
@@ -98,7 +125,9 @@ class AddressBookService {
       console.log('✅ Contact supprimé:', address);
       return true;
     } catch (error) {
-      console.error('❌ Erreur suppression contact:', error);
+      const errMsg =
+        error instanceof Error ? error.message : String(error);
+      console.error('❌ Erreur suppression contact:', errMsg);
       return false;
     }
   }
@@ -106,9 +135,9 @@ class AddressBookService {
   /**
    * Récupérer tous les contacts groupés par token
    */
-  getAllContactsByToken() {
+  getAllContactsByToken(): ContactsByToken {
     const contacts = this.getContacts();
-    const grouped = {};
+    const grouped: ContactsByToken = {};
 
     contacts.forEach(contact => {
       const key = contact.tokenId || 'general';
@@ -124,41 +153,45 @@ class AddressBookService {
   /**
    * Rechercher des contacts par nom ou adresse
    */
-  searchContacts(query, tokenId = null) {
+  searchContacts(
+    query: string,
+    tokenId: string | null = null
+  ): Contact[] {
     const contacts = this.getContacts(tokenId);
     const lowerQuery = query.toLowerCase();
 
-    return contacts.filter(c => 
-      c.name.toLowerCase().includes(lowerQuery) ||
-      c.address.toLowerCase().includes(lowerQuery)
+    return contacts.filter(
+      c =>
+        c.name.toLowerCase().includes(lowerQuery) ||
+        c.address.toLowerCase().includes(lowerQuery)
     );
   }
 
   /**
    * Exporter le carnet d'adresses en JSON
    */
-  exportContacts() {
+  exportContacts(): void {
     const contacts = this.getContacts();
     const dataStr = JSON.stringify(contacts, null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    
+
     const link = document.createElement('a');
     link.href = url;
     link.download = `carnet_adresses_${Date.now()}.json`;
     link.click();
-    
+
     URL.revokeObjectURL(url);
   }
 
   /**
    * Importer des contacts depuis un fichier JSON
    */
-  async importContacts(file) {
+  async importContacts(file: File): Promise<boolean> {
     try {
       const text = await file.text();
-      const imported = JSON.parse(text);
-      
+      const imported = JSON.parse(text) as Contact[];
+
       if (!Array.isArray(imported)) {
         throw new Error('Format invalide: attendu un tableau');
       }
@@ -169,13 +202,17 @@ class AddressBookService {
       imported.forEach(contact => {
         if (contact.address && contact.name) {
           const existingIndex = merged.findIndex(
-            c => c.address === contact.address && c.tokenId === contact.tokenId
+            c =>
+              c.address === contact.address &&
+              c.tokenId === contact.tokenId
           );
 
           if (existingIndex >= 0) {
             // Remplacer si plus récent
-            if (!merged[existingIndex].updatedAt || 
-                contact.updatedAt > merged[existingIndex].updatedAt) {
+            if (
+              !merged[existingIndex].updatedAt ||
+              contact.updatedAt > merged[existingIndex].updatedAt
+            ) {
               merged[existingIndex] = contact;
             }
           } else {
@@ -188,7 +225,9 @@ class AddressBookService {
       console.log(`✅ ${imported.length} contacts importés`);
       return true;
     } catch (error) {
-      console.error('❌ Erreur import contacts:', error);
+      const errMsg =
+        error instanceof Error ? error.message : String(error);
+      console.error('❌ Erreur import contacts:', errMsg);
       return false;
     }
   }
@@ -196,15 +235,19 @@ class AddressBookService {
   /**
    * Obtenir le nombre total de contacts
    */
-  getContactsCount(tokenId = null) {
+  getContactsCount(tokenId: string | null = null): number {
     return this.getContacts(tokenId).length;
   }
 
   /**
    * Effacer tout le carnet d'adresses (avec confirmation)
    */
-  clearAll() {
-    if (confirm('⚠️ Êtes-vous sûr de vouloir effacer tout le carnet d\'adresses ?')) {
+  clearAll(): boolean {
+    if (
+      confirm(
+        '⚠️ Êtes-vous sûr de vouloir effacer tout le carnet d\'adresses ?'
+      )
+    ) {
       localStorage.removeItem(STORAGE_KEY);
       console.log('🗑️ Carnet d\'adresses effacé');
       return true;
