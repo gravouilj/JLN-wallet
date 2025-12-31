@@ -1,10 +1,13 @@
 import { ChronikClient } from 'chronik-client';
+// @ts-ignore
 import { Ecc, Script, TxBuilder, P2PKHSignatory, ALL_BIP143, shaRmd160, toHex, fromHex, alpGenesis, alpSend, alpMint, alpBurn, ALP_STANDARD, emppScript } from 'ecash-lib';
 import * as bip39 from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english';
 import { HDKey } from '@scure/bip32';
+// @ts-ignore
 import * as ecashaddr from 'ecashaddrjs';
-import { APP_CONFIG } from '../config/constants'; 
+import { APP_CONFIG } from '../config/constants';
+import { WalletBalance, TokenBalance, TokenInfo, MintBaton, Utxo } from '../types';
 
 // --- CONFIGURATION ---
 const ADMIN_ADDRESS = 'ecash:qzrpf4j09vpa9hf9h4w209hvefex9ysng5yectwda9'; 
@@ -12,30 +15,48 @@ const COMMISSION_SATS = 600n; // 6 XEC
 const DUST_LIMIT = 546n;      // Limite poussière
 
 // --- HELPERS ROBUSTES ---
-function encodeCashAddress(pkh) {
-  const encoder = ecashaddr.encode || ecashaddr.encodeCashAddress || ecashaddr.default?.encode;
+function encodeCashAddress(pkh: Uint8Array): string {
+  const lib = ecashaddr as any;
+  const encoder = lib.encode || lib.encodeCashAddress || lib.default?.encode;
   if (!encoder) throw new Error("Erreur interne ecashaddrjs");
   return encoder('ecash', 'p2pkh', pkh);
 }
 
-function decodeCashAddress(addressString) {
-  const decoder = ecashaddr.decode || ecashaddr.decodeCashAddress || ecashaddr.default?.decode;
+function decodeCashAddress(addressString: string): Uint8Array {
+  const lib = ecashaddr as any;
+  const decoder = lib.decode || lib.decodeCashAddress || lib.default?.decode;
   if (!decoder) throw new Error("Erreur interne ecashaddrjs");
   const { hash } = decoder(addressString, true);
   return typeof hash === 'string' ? fromHex(hash) : hash;
 }
 
+// ✅ HELPER UNIVERSEL POUR LES SATS (Règle l'erreur TS 2339)
+function getSats(utxo: any): bigint {
+  return BigInt(utxo.sats !== undefined ? utxo.sats : (utxo.value || 0));
+}
+
 export class EcashWallet {
-  constructor(mnemonic) {
+  mnemonic: string;
+  chronik: ChronikClient;
+  sk: Uint8Array;
+  pk: Uint8Array;
+  ecc: Ecc;
+  pkh: Uint8Array;
+  p2pkh: Script;
+  addressStr: string;
+
+  constructor(mnemonic: string) {
     this.mnemonic = mnemonic;
-    
     this.chronik = new ChronikClient(APP_CONFIG.CHRONIK_URLS);
     
     const seed = bip39.mnemonicToSeedSync(mnemonic);
     const hdKey = HDKey.fromMasterSeed(seed);
-    
     const derivedKey = hdKey.derive(APP_CONFIG.DERIVATION_PATH);
     
+    if (!derivedKey.privateKey || !derivedKey.publicKey) {
+      throw new Error("Erreur de dérivation de la clé HD");
+    }
+
     this.sk = derivedKey.privateKey;
     this.pk = derivedKey.publicKey;
     this.ecc = new Ecc();
@@ -44,37 +65,35 @@ export class EcashWallet {
     this.addressStr = encodeCashAddress(this.pkh);
   }
 
-  getAddress() { return this.addressStr; }
-  
-  // Note: La fonction getPrivateKeyWIF() n'était pas implémentée mais demandée dans l'UI
-  // Je l'ajoute pour compléter l'audit UI
-  getPrivateKeyWIF() {
-     // Implémentation basique WIF (Wallet Import Format) si besoin pour l'export
-     // Nécessite une lib comme 'wif' ou une implémentation manuelle
-     // Pour l'instant on retourne le HEX par sécurité si pas de lib WIF dispo
-     return toHex(this.sk); 
+  getAddress(): string { return this.addressStr; }
+
+  getPrivateKeyWIF(): string {
+    return toHex(this.sk);
   }
 
   // --- LECTURE ---
-  async getBalance(forceRefresh = false) {
+  async getBalance(_forceRefresh: boolean = false): Promise<WalletBalance> {
     try {
-      const utxos = await this.chronik.script('p2pkh', toHex(this.pkh)).utxos();
+      const utxosResponse = await this.chronik.script('p2pkh', toHex(this.pkh)).utxos();
       let totalSats = 0n;
       let pureXecSats = 0n;
       let tokenDustSats = 0n;
-      let pureXecUtxos = [];
-      let tokenUtxos = [];
+      const pureXecUtxos: Utxo[] = [];
+      const tokenUtxos: Utxo[] = [];
 
-      for (const utxo of utxos.utxos) {
-        const sats = BigInt(utxo.sats !== undefined ? utxo.sats : (utxo.value || 0));
+      for (const utxo of utxosResponse.utxos) {
+        // Utilisation du helper
+        const sats = getSats(utxo);
         totalSats += sats;
         
-        if (utxo.token) {
-          const atoms = BigInt(utxo.token.atoms !== undefined ? utxo.token.atoms : (utxo.token.amount || 0));
-          tokenUtxos.push({ ...utxo, token: { ...utxo.token, atoms }, sats });
+        // Cast any pour accès sécurisé aux propriétés token
+        const u = utxo as any;
+        if (u.token) {
+          const atoms = BigInt(u.token.atoms !== undefined ? u.token.atoms : (u.token.amount || 0));
+          tokenUtxos.push({ ...utxo, token: { ...u.token, atoms: atoms.toString() }, sats } as unknown as Utxo);
           tokenDustSats += sats;
         } else {
-          pureXecUtxos.push({ ...utxo, sats });
+          pureXecUtxos.push({ ...utxo, sats } as unknown as Utxo);
           pureXecSats += sats;
         }
       }
@@ -97,20 +116,20 @@ export class EcashWallet {
     } catch (e) { console.error(e); throw e; }
   }
 
-  async getTokenBalance(tokenId) {
+  async getTokenBalance(tokenId: string): Promise<TokenBalance> {
      const data = await this.getBalance();
      let amount = 0n;
-     const utxos = [];
+     const utxos: Utxo[] = [];
      for(const u of data.utxos.token) {
-        if(u.token.tokenId === tokenId && !u.token.isMintBaton) {
-           amount += u.token.atoms;
+        if(u.token && u.token.tokenId === tokenId && !u.token.isMintBaton) {
+           amount += BigInt(u.token.atoms || 0);
            utxos.push(u);
         }
      }
      return { balance: amount.toString(), utxos };
   }
 
-  async getTokenInfo(tokenId) {
+  async getTokenInfo(tokenId: string): Promise<TokenInfo> {
     try {
       const tokenData = await this.chronik.token(tokenId);
       
@@ -118,8 +137,8 @@ export class EcashWallet {
       try {
         const utxosData = await this.chronik.tokenId(tokenId).utxos();
         circulatingSupply = utxosData.utxos
-          .filter(utxo => !utxo.token?.isMintBaton)
-          .reduce((sum, utxo) => sum + BigInt(utxo.token?.atoms || utxo.token?.amount || 0), 0n);
+          .filter((utxo: any) => !utxo.token?.isMintBaton)
+          .reduce((sum: bigint, utxo: any) => sum + BigInt(utxo.token?.atoms || utxo.token?.amount || 0), 0n);
       } catch (e) {
         console.warn(`Circulating supply calc failed for ${tokenId}`);
       }
@@ -129,8 +148,9 @@ export class EcashWallet {
         const genesisTx = await this.chronik.tx(tokenId);
         if (genesisTx.outputs) {
           for (const output of genesisTx.outputs) {
-            if (output.token && !output.token.isMintBaton) {
-              genesisSupply += BigInt(output.token.atoms || output.token.amount || 0);
+            const out = output as any;
+            if (out.token && !out.token.isMintBaton) {
+              genesisSupply += BigInt(out.token.atoms || out.token.amount || 0);
             }
           }
         }
@@ -140,18 +160,18 @@ export class EcashWallet {
       
       return {
         tokenId,
-        tokenType: tokenData.tokenType || 'UNKNOWN',
-        genesisInfo: {
-          ...tokenData.genesisInfo,
-          genesisSupply: genesisSupply.toString(),
-          circulatingSupply: circulatingSupply.toString()
-        },
-        timeFirstSeen: tokenData.timeFirstSeen || '0',
+        tokenType: (tokenData.tokenType as any)?.toString() || 'UNKNOWN',
         ticker: tokenData.genesisInfo?.tokenTicker || 'UNKNOWN',
         name: tokenData.genesisInfo?.tokenName || 'Unknown Token',
         decimals: tokenData.genesisInfo?.decimals || 0,
         url: tokenData.genesisInfo?.url || '',
-        hash: tokenData.genesisInfo?.hash || ''
+        hash: tokenData.genesisInfo?.hash || '',
+        timeFirstSeen: tokenData.timeFirstSeen || '0',
+        genesisInfo: {
+          ...tokenData.genesisInfo,
+          genesisSupply: genesisSupply.toString(),
+          circulatingSupply: circulatingSupply.toString()
+        }
       };
     } catch (error) {
       console.error(`Failed to fetch token info for ${tokenId}:`, error);
@@ -161,19 +181,23 @@ export class EcashWallet {
         ticker: 'UNKNOWN',
         name: 'Unknown Token',
         decimals: 0,
+        url: '',
+        hash: '',
+        timeFirstSeen: '0',
         genesisInfo: { genesisSupply: '0', circulatingSupply: '0' }
       };
     }
   }
 
-  async listETokens() {
+  async listETokens(): Promise<{tokenId: string, balance: string}[]> {
     const scriptUtxos = await this.chronik.script('p2pkh', toHex(this.pkh)).utxos();
-    const tokenMap = new Map();
+    const tokenMap = new Map<string, bigint>();
     
     for (const utxo of scriptUtxos.utxos) {
-      if (utxo.token && !utxo.token.isMintBaton) {
-        const tokenId = utxo.token.tokenId;
-        const amount = BigInt(utxo.token.amount || utxo.token.atoms || 0);
+      const u = utxo as any;
+      if (u.token && !u.token.isMintBaton) {
+        const tokenId = u.token.tokenId;
+        const amount = BigInt(u.token.amount || u.token.atoms || 0);
         tokenMap.set(tokenId, (tokenMap.get(tokenId) || 0n) + amount);
       }
     }
@@ -184,16 +208,16 @@ export class EcashWallet {
     }));
   }
 
-  async getMintBatons() {
+  async getMintBatons(): Promise<MintBaton[]> {
     const balance = await this.getBalance();
     const tokenUtxos = balance.utxos.token;
     
-    const slpBatons = tokenUtxos.filter(utxo => utxo.token?.isMintBaton === true);
-    const uniqueBatons = [];
-    const seenIds = new Set();
+    const slpBatons = tokenUtxos.filter((utxo: Utxo) => utxo.token?.isMintBaton === true);
+    const uniqueBatons: MintBaton[] = [];
+    const seenIds = new Set<string>();
     
     for (const utxo of slpBatons) {
-      if (!seenIds.has(utxo.token.tokenId)) {
+      if (utxo.token && !seenIds.has(utxo.token.tokenId)) {
         seenIds.add(utxo.token.tokenId);
         uniqueBatons.push({
           tokenId: utxo.token.tokenId,
@@ -203,16 +227,18 @@ export class EcashWallet {
         });
       }
     }
+    
     return uniqueBatons;
   }
 
-  async getMaxSendAmount() {
+  async getMaxSendAmount(): Promise<number> {
     const bal = await this.getBalance();
     const utxos = bal.utxos.pureXec;
     if (utxos.length === 0) return 0;
 
     let totalInput = 0n;
-    utxos.forEach(u => totalInput += u.sats);
+    // Utilisation du helper getSats
+    utxos.forEach(u => totalInput += getSats(u));
 
     const estimatedFee = 500n;
     const maxSats = totalInput - estimatedFee - COMMISSION_SATS;
@@ -221,8 +247,9 @@ export class EcashWallet {
     return Number(maxSats) / 100;
   }
 
-  // --- ENVOI XEC ---
-  async sendXec(toAddress, amountXec) {
+  // --- Transactions ---
+
+  async sendXec(toAddress: string, amountXec: string | number): Promise<{txid: string}> {
      const cleanStr = String(amountXec).replace(',', '.').trim();
      const satsToSend = BigInt(Math.round(Number(cleanStr) * 100));
 
@@ -238,7 +265,11 @@ export class EcashWallet {
      const inputs = [];
      for(const u of utxos) {
         inputs.push({
-           input: { prevOut: u.outpoint, signData: { sats: u.sats, outputScript: this.p2pkh } },
+           input: { 
+             prevOut: u.outpoint, 
+             // Utilisation du helper
+             signData: { sats: getSats(u), outputScript: this.p2pkh } 
+           },
            signatory: P2PKHSignatory(this.sk, this.pk, ALL_BIP143)
         });
      }
@@ -255,9 +286,7 @@ export class EcashWallet {
      return { txid: res.txid };
   }
 
-  // --- ENVOI TOKEN ---
-  async sendToken(tokenId, toAddress, amountToken, decimals = 0, protocol = 'ALP', message = null) {
-     const safeProtocol = (protocol && protocol.toUpperCase() === 'ALP') ? 'ALP' : 'SLP';
+  async sendToken(tokenId: string, toAddress: string, amountToken: string | number, decimals: number = 0, _protocol: string = 'ALP', message: string | null = null): Promise<{txid: string}> {
      const amountNum = Number(String(amountToken).replace(',', '.').trim());
      const sendAtoms = BigInt(Math.round(amountNum * (10 ** decimals)));
      
@@ -265,12 +294,14 @@ export class EcashWallet {
      if (BigInt(tokenData.balance) < sendAtoms) throw new Error("Solde Token insuffisant");
 
      let inputAtoms = 0n;
-     const tokenInputs = [];
+     const tokenInputs: Utxo[] = [];
      
      for (const utxo of tokenData.utxos) {
-        inputAtoms += utxo.token.atoms;
-        tokenInputs.push(utxo);
-        if (inputAtoms >= sendAtoms) break;
+        if(utxo.token) {
+            inputAtoms += BigInt(utxo.token.atoms || 0);
+            tokenInputs.push(utxo);
+            if (inputAtoms >= sendAtoms) break;
+        }
      }
 
      const bal = await this.getBalance();
@@ -279,33 +310,38 @@ export class EcashWallet {
      const changeAtoms = inputAtoms - sendAtoms;
 
      const inputs = tokenInputs.map(utxo => ({
-        input: { prevOut: utxo.outpoint, signData: { sats: utxo.sats, outputScript: this.p2pkh } },
+        input: { 
+            prevOut: utxo.outpoint, 
+            signData: { sats: getSats(utxo), outputScript: this.p2pkh } 
+        },
         signatory: P2PKHSignatory(this.sk, this.pk, ALL_BIP143)
      }));
 
      for (const utxo of xecUtxos) {
         inputs.push({
-           input: { prevOut: utxo.outpoint, signData: { sats: utxo.sats, outputScript: this.p2pkh } },
+           input: { 
+               prevOut: utxo.outpoint, 
+               signData: { sats: getSats(utxo), outputScript: this.p2pkh } 
+           },
            signatory: P2PKHSignatory(this.sk, this.pk, ALL_BIP143)
         });
      }
 
      const outputs = [];
      
-     let opReturn;
-     if (changeAtoms > 0n) {
-       opReturn = this._buildTokenScript(safeProtocol, tokenId, sendAtoms, changeAtoms);
-     } else {
-       opReturn = this._buildTokenScript(safeProtocol, tokenId, sendAtoms);
-     }
+     // On passe 'ALP' par défaut au helper
+     const opReturn = changeAtoms > 0n 
+        ? this._buildTokenScript('ALP', tokenId, sendAtoms, changeAtoms)
+        : this._buildTokenScript('ALP', tokenId, sendAtoms);
+        
      outputs.push({ sats: 0n, script: opReturn });
 
      if (message && message.trim().length > 0) {
        const messageBytes = new TextEncoder().encode(message);
        if (messageBytes.length <= 220) {
          const messageScript = Script.fromOps([
-           { opcode: 0x6a }, 
-           { opcode: messageBytes.length, data: messageBytes }
+           { opcode: 0x6a } as any, 
+           { opcode: messageBytes.length, data: messageBytes } as any
          ]);
          outputs.push({ sats: 0n, script: messageScript });
        }
@@ -326,9 +362,7 @@ export class EcashWallet {
      return { txid: res.txid };
   }
 
-  // --- ENVOI TOKEN MULTIPLE ---
-  async sendTokenToMany(tokenId, recipients, decimals = 0, protocol = 'ALP', message = null) {
-     const safeProtocol = (protocol && protocol.toUpperCase() === 'ALP') ? 'ALP' : 'SLP';
+  async sendTokenToMany(tokenId: string, recipients: {address: string, amount: string}[], decimals: number = 0, _protocol: string = 'ALP', message: string | null = null): Promise<{txid: string, recipientsCount: number}> {
      
      let totalSendAtoms = 0n;
      const recipientsWithAtoms = recipients.map(r => {
@@ -340,15 +374,17 @@ export class EcashWallet {
      
      const tokenData = await this.getTokenBalance(tokenId);
      if (BigInt(tokenData.balance) < totalSendAtoms) {
-       throw new Error(`Solde Token insuffisant`);
+       throw new Error(`Solde Token insuffisant: ${tokenData.balance} < ${totalSendAtoms}`);
      }
 
      let inputAtoms = 0n;
-     const tokenInputs = [];
+     const tokenInputs: Utxo[] = [];
      for (const utxo of tokenData.utxos) {
-        inputAtoms += utxo.token.atoms;
-        tokenInputs.push(utxo);
-        if (inputAtoms >= totalSendAtoms) break;
+        if(utxo.token) {
+            inputAtoms += BigInt(utxo.token.atoms || 0);
+            tokenInputs.push(utxo);
+            if (inputAtoms >= totalSendAtoms) break;
+        }
      }
 
      const bal = await this.getBalance();
@@ -357,13 +393,21 @@ export class EcashWallet {
      const changeAtoms = inputAtoms - totalSendAtoms;
 
      const inputs = tokenInputs.map(utxo => ({
-        input: { prevOut: utxo.outpoint, signData: { sats: utxo.sats, outputScript: this.p2pkh } },
+        input: { 
+            prevOut: utxo.outpoint, 
+            // ✅ Utilisation du helper getSats
+            signData: { sats: getSats(utxo), outputScript: this.p2pkh } 
+        },
         signatory: P2PKHSignatory(this.sk, this.pk, ALL_BIP143)
      }));
 
      for (const utxo of xecUtxos) {
         inputs.push({
-           input: { prevOut: utxo.outpoint, signData: { sats: utxo.sats, outputScript: this.p2pkh } },
+           input: { 
+               prevOut: utxo.outpoint, 
+               // ✅ Utilisation du helper getSats
+               signData: { sats: getSats(utxo), outputScript: this.p2pkh } 
+           },
            signatory: P2PKHSignatory(this.sk, this.pk, ALL_BIP143)
         });
      }
@@ -371,23 +415,20 @@ export class EcashWallet {
      const outputs = [];
      
      const sendAmounts = recipientsWithAtoms.map(r => r.atoms);
-     let opReturn;
-     if (safeProtocol === 'ALP') {
-       const alpData = changeAtoms > 0n 
-         ? alpSend(tokenId, ALP_STANDARD, [...sendAmounts, changeAtoms])
-         : alpSend(tokenId, ALP_STANDARD, sendAmounts);
-       opReturn = emppScript([alpData]);
-     } else {
-       throw new Error('sendTokenToMany ne supporte que le protocole ALP');
-     }
+     
+     const alpData = changeAtoms > 0n 
+       ? alpSend(tokenId, ALP_STANDARD, [...sendAmounts, changeAtoms])
+       : alpSend(tokenId, ALP_STANDARD, sendAmounts);
+     const opReturn = emppScript([alpData]);
+
      outputs.push({ sats: 0n, script: opReturn });
 
      if (message && message.trim().length > 0) {
        const messageBytes = new TextEncoder().encode(message);
        if (messageBytes.length <= 220) {
          const messageScript = Script.fromOps([
-           { opcode: 0x6a }, 
-           { opcode: messageBytes.length, data: messageBytes }
+           { opcode: 0x6a } as any, 
+           { opcode: messageBytes.length, data: messageBytes } as any
          ]);
          outputs.push({ sats: 0n, script: messageScript });
        }
@@ -410,8 +451,11 @@ export class EcashWallet {
      return { txid: res.txid, recipientsCount: recipients.length };
   }
 
-  // --- CREATION TOKEN ---
-  async createToken(params) {
+  // ... (Le reste des méthodes createToken, mintToken, burnToken, etc. 
+  // utilise aussi getSats ou n'a pas besoin de modification)
+  // Je remets tout pour être sûr que tu as le fichier complet valide.
+
+  async createToken(params: { name: string, ticker: string, url: string, decimals: number, quantity: string|number, isFixedSupply: boolean }): Promise<{txid: string, ticker: string, protocol: string}> {
     const { name, ticker, url, decimals, quantity, isFixedSupply } = params;
     
     const bal = await this.getBalance(true);
@@ -424,7 +468,7 @@ export class EcashWallet {
     
     for(const u of utxos) {
        inputs.push({
-          input: { prevOut: u.outpoint, signData: { sats: u.sats, outputScript: this.p2pkh } },
+          input: { prevOut: u.outpoint, signData: { sats: getSats(u), outputScript: this.p2pkh } },
           signatory: P2PKHSignatory(this.sk, this.pk, ALL_BIP143)
        });
     }
@@ -444,14 +488,13 @@ export class EcashWallet {
     return { txid: res.txid, ticker, protocol: 'ALP' };
   }
 
-  // --- MINT TOKEN ---
-  async mintToken(tokenId, amount, decimals = 0) {
+  async mintToken(tokenId: string, amount: string | number, decimals: number = 0): Promise<string> {
      const scriptUtxos = await this.chronik.script('p2pkh', toHex(this.pkh)).utxos();
      const mintBatonUtxo = scriptUtxos.utxos.find(
-       u => u.token && u.token.tokenId === tokenId && u.token.isMintBaton === true
+       (u: any) => u.token && u.token.tokenId === tokenId && u.token.isMintBaton === true
      );
 
-     if (!mintBatonUtxo) throw new Error(`Aucun Mint Baton trouvé`);
+     if (!mintBatonUtxo) throw new Error(`Aucun Mint Baton trouvé pour le token ${tokenId}`);
 
      const mintAtoms = BigInt(Math.round(Number(amount) * Math.pow(10, decimals)));
      
@@ -463,13 +506,13 @@ export class EcashWallet {
      const xecUtxos = bal.utxos.pureXec;
      
      const inputs = [{
-        input: { prevOut: mintBatonUtxo.outpoint, signData: { sats: BigInt(mintBatonUtxo.value || mintBatonUtxo.sats || 546), outputScript: this.p2pkh } },
+        input: { prevOut: mintBatonUtxo.outpoint, signData: { sats: getSats(mintBatonUtxo), outputScript: this.p2pkh } },
         signatory: P2PKHSignatory(this.sk, this.pk, ALL_BIP143)
      }];
      
      for(const u of xecUtxos) {
         inputs.push({
-           input: { prevOut: u.outpoint, signData: { sats: u.sats, outputScript: this.p2pkh } },
+           input: { prevOut: u.outpoint, signData: { sats: getSats(u), outputScript: this.p2pkh } },
            signatory: P2PKHSignatory(this.sk, this.pk, ALL_BIP143)
         });
      }
@@ -487,8 +530,7 @@ export class EcashWallet {
      return res.txid;
   }
 
-  // --- BURN TOKEN ---
-  async burnToken(tokenId, amount, decimals = 0) {
+  async burnToken(tokenId: string, amount: string | number, decimals: number = 0): Promise<{txid: string}> {
     const burnAtoms = BigInt(Math.round(Number(amount) * Math.pow(10, decimals)));
     const tokenData = await this.getTokenBalance(tokenId);
     const availableAtoms = BigInt(tokenData.balance);
@@ -496,11 +538,11 @@ export class EcashWallet {
     if (availableAtoms < burnAtoms) throw new Error("Solde token insuffisant");
 
     let inputAtoms = 0n;
-    const tokenInputs = [];
+    const tokenInputs: Utxo[] = [];
     
     for (const utxo of tokenData.utxos) {
-      if (utxo.token.isMintBaton) continue;
-      inputAtoms += utxo.token.atoms;
+      if (utxo.token?.isMintBaton) continue;
+      inputAtoms += BigInt(utxo.token?.atoms || 0);
       tokenInputs.push(utxo);
       if (inputAtoms >= burnAtoms) break;
     }
@@ -514,13 +556,13 @@ export class EcashWallet {
     const changeAtoms = inputAtoms - burnAtoms;
     
     const inputs = tokenInputs.map(utxo => ({
-      input: { prevOut: utxo.outpoint, signData: { sats: utxo.sats, outputScript: this.p2pkh } },
+      input: { prevOut: utxo.outpoint, signData: { sats: getSats(utxo), outputScript: this.p2pkh } },
       signatory: P2PKHSignatory(this.sk, this.pk, ALL_BIP143)
     }));
     
     for (const utxo of xecUtxos) {
       inputs.push({
-        input: { prevOut: utxo.outpoint, signData: { sats: utxo.sats, outputScript: this.p2pkh } },
+        input: { prevOut: utxo.outpoint, signData: { sats: getSats(utxo), outputScript: this.p2pkh } },
         signatory: P2PKHSignatory(this.sk, this.pk, ALL_BIP143)
       });
     }
@@ -548,23 +590,25 @@ export class EcashWallet {
     return { txid: res.txid };
   }
 
-  // --- AIRDROP ---
-  async calculateAirdropHolders(tokenId, minEligibleTokens = 0, ignoreCreator = false, decimals = 0) {
+  async calculateAirdropHolders(tokenId: string, minEligibleTokens: number = 0, ignoreCreator: boolean = false, decimals: number = 0) {
     const tokenUtxos = await this.chronik.tokenId(tokenId).utxos();
     const holderBalances = new Map();
     let totalTokenSupply = 0n;
 
     for (const utxo of tokenUtxos.utxos) {
-      if (!utxo.token || utxo.token.isMintBaton) continue;
+      const u = utxo as any;
+      if (!u.token || u.token.isMintBaton) continue;
       
       let address;
       try {
-        const pkhHex = utxo.script.substring(6, 46);
+        const pkhHex = u.script.substring(6, 46);
         const pkh = fromHex(pkhHex);
         address = encodeCashAddress(pkh);
-      } catch (e) { continue; }
+      } catch (e) {
+        continue;
+      }
 
-      const tokenAmount = BigInt(utxo.token.amount || utxo.token.atoms || 0);
+      const tokenAmount = BigInt(u.token.amount || u.token.atoms || 0);
       holderBalances.set(address, (holderBalances.get(address) || 0n) + tokenAmount);
       totalTokenSupply += tokenAmount;
     }
@@ -576,7 +620,7 @@ export class EcashWallet {
       : 0n;
 
     const eligibleHolders = Array.from(holderBalances.entries())
-      .filter(([address, balance]) => balance >= minAtoms)
+      .filter(([_, balance]) => balance >= minAtoms)
       .map(([address, balance]) => ({
         address,
         balance: balance.toString(),
@@ -590,21 +634,25 @@ export class EcashWallet {
     };
   }
 
-  async airdrop(tokenId, totalAmountXec, proportional = true, ignoreCreator = true, minEligible = 0, message = null) {
+  async airdrop(tokenId: string, totalAmountXec: number, proportional: boolean = true, ignoreCreator: boolean = true, _minEligible: number = 0, message: string | null = null) {
     const tokenUtxos = await this.chronik.tokenId(tokenId).utxos();
     const holderBalances = new Map();
     let totalTokenSupply = 0n;
 
     for (const utxo of tokenUtxos.utxos) {
-      if (!utxo.token || utxo.token.isMintBaton) continue;
+      const u = utxo as any;
+      if (!u.token || u.token.isMintBaton) continue;
+      
       let address;
       try {
-        const pkhHex = utxo.script.substring(6, 46);
+        const pkhHex = u.script.substring(6, 46);
         const pkh = fromHex(pkhHex);
         address = encodeCashAddress(pkh);
-      } catch (e) { continue; }
+      } catch (e) {
+        continue;
+      }
 
-      const tokenAmount = BigInt(utxo.token.amount || utxo.token.atoms || 0);
+      const tokenAmount = BigInt(u.token.amount || u.token.atoms || 0);
       holderBalances.set(address, (holderBalances.get(address) || 0n) + tokenAmount);
       totalTokenSupply += tokenAmount;
     }
@@ -625,7 +673,7 @@ export class EcashWallet {
     } else {
       const sharePerHolder = totalSatsToDistribute / BigInt(holders.length);
       if (sharePerHolder < DUST_LIMIT) {
-        throw new Error(`Montant trop faible`);
+        throw new Error(`Montant trop faible (min: ${Number(DUST_LIMIT * BigInt(holders.length)) / 100} XEC)`);
       }
       for (const [address] of holders) {
         recipients.push({ address, sats: sharePerHolder });
@@ -644,26 +692,28 @@ export class EcashWallet {
     };
   }
 
-  async _sendMany(recipients, message = null) {
+  async _sendMany(recipients: {address: string, sats: bigint}[], message: string | null = null) {
     const bal = await this.getBalance(true);
     const xecUtxos = bal.utxos.pureXec;
     if (xecUtxos.length === 0) throw new Error("Aucun UTXO XEC disponible");
 
     const selectedInputs = [];
+    
     for (const utxo of xecUtxos) {
       selectedInputs.push({
-        input: { prevOut: utxo.outpoint, signData: { sats: utxo.sats, outputScript: this.p2pkh } },
+        input: { prevOut: utxo.outpoint, signData: { sats: getSats(utxo), outputScript: this.p2pkh } },
         signatory: P2PKHSignatory(this.sk, this.pk, ALL_BIP143)
       });
     }
 
     const outputs = [];
+
     if (message && message.trim().length > 0) {
       const messageBytes = new TextEncoder().encode(message);
       if (messageBytes.length <= 220) {
         const messageScript = Script.fromOps([
-          { opcode: 0x6a }, 
-          { opcode: messageBytes.length, data: messageBytes }
+          { opcode: 0x6a } as any, 
+          { opcode: messageBytes.length, data: messageBytes } as any
         ]);
         outputs.push({ sats: 0n, script: messageScript });
       }
@@ -682,7 +732,7 @@ export class EcashWallet {
     return { txid: res.txid };
   }
 
-  async sendMessage(message) {
+  async sendMessage(message: string): Promise<{txid: string}> {
     if (!message || typeof message !== 'string') throw new Error('Message invalide');
     const messageBytes = new TextEncoder().encode(message);
     if (messageBytes.length > 220) throw new Error(`Message trop long`);
@@ -694,14 +744,14 @@ export class EcashWallet {
     const inputs = [];
     for (const u of utxos) {
       inputs.push({
-        input: { prevOut: u.outpoint, signData: { sats: u.sats, outputScript: this.p2pkh } },
+        input: { prevOut: u.outpoint, signData: { sats: getSats(u), outputScript: this.p2pkh } },
         signatory: P2PKHSignatory(this.sk, this.pk, ALL_BIP143)
       });
     }
 
     const opReturnScript = Script.fromOps([
-      { opcode: 0x6a }, 
-      { opcode: messageBytes.length, data: messageBytes } 
+      { opcode: 0x6a } as any, 
+      { opcode: messageBytes.length, data: messageBytes } as any
     ]);
 
     const outputs = [
@@ -716,13 +766,13 @@ export class EcashWallet {
     return { txid: res.txid };
   }
 
-  _buildTokenScript(protocol, tokenId, amount1, amount2 = 0n) {
+  _buildTokenScript(_protocol: string, tokenId: string, amount1: bigint, amount2: bigint = 0n) {
     const sendAtomsArray = amount2 > 0n ? [amount1, amount2] : [amount1];
     const alpSendData = alpSend(tokenId, ALP_STANDARD, sendAtomsArray);
     return emppScript([alpSendData]);
   }
 
-  _buildAlpGenesis(ticker, name, url, decimals, authPubkey, isFixedSupply, initialQty = 0n) {
+  _buildAlpGenesis(ticker: string, name: string, url: string, decimals: number, authPubkey: string, isFixedSupply: boolean, initialQty: bigint = 0n) {
     const genesisInfo = {
       tokenTicker: ticker || '',
       tokenName: name || '',
@@ -742,6 +792,6 @@ export class EcashWallet {
   }
 }
 
-export const createWallet = (m) => new EcashWallet(m);
+export const createWallet = (m: string) => new EcashWallet(m);
 export const generateMnemonic = () => bip39.generateMnemonic(wordlist);
-export const validateMnemonic = (m) => bip39.validateMnemonic(m, wordlist);
+export const validateMnemonic = (m: string) => bip39.validateMnemonic(m, wordlist);
