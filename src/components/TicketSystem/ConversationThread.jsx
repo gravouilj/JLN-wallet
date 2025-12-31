@@ -27,6 +27,18 @@ export const ConversationThread = ({
 }) => {
   const { t } = useTranslation();
 
+  // Marquer comme lus automatiquement si callback fourni
+  React.useEffect(() => {
+    if (messages && messages.length > 0 && onMarkAsRead && currentUserRole) {
+      const unreadMessages = messages.filter(m => 
+        !m.read && m.author !== currentUserRole
+      );
+      if (unreadMessages.length > 0) {
+        onMarkAsRead(currentUserRole);
+      }
+    }
+  }, [messages, currentUserRole, onMarkAsRead]);
+
   if (!messages || messages.length === 0) {
     return (
       <div style={{
@@ -40,18 +52,6 @@ export const ConversationThread = ({
       </div>
     );
   }
-
-  // Marquer comme lus automatiquement si callback fourni
-  React.useEffect(() => {
-    if (onMarkAsRead && currentUserRole) {
-      const unreadMessages = messages.filter(m => 
-        !m.read && m.author !== currentUserRole
-      );
-      if (unreadMessages.length > 0) {
-        onMarkAsRead(currentUserRole);
-      }
-    }
-  }, [messages, currentUserRole, onMarkAsRead]);
 
   const getRoleLabel = (role) => {
     switch(role) {

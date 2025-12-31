@@ -276,7 +276,11 @@ const ManageTokenPage = () => {
       
       const enriched = await Promise.all(batons.map(async (b) => {
         let info = { genesisInfo: { tokenName: 'Inconnu', tokenTicker: '???' } };
-        try { info = await wallet.getTokenInfo(b.tokenId); } catch(e) {}
+        try { 
+          info = await wallet.getTokenInfo(b.tokenId); 
+        } catch(e) {
+          // Token info not available on chain
+        }
         
         const profileInfo = profiles.find(f => f.tokenId === b.tokenId);
         let tokenDetails = null;
@@ -294,13 +298,17 @@ const ManageTokenPage = () => {
         try {
           const balanceData = await wallet.getTokenBalance(b.tokenId);
           balance = balanceData.balance || '0';
-        } catch (e) {}
+        } catch (e) {
+          // Balance fetch failed, using default 0
+        }
         
         let holdersCount = 0;
         try {
           const airdropData = await wallet.calculateAirdropHolders(b.tokenId, 0);
           holdersCount = airdropData?.count || 0;
-        } catch (e) {}
+        } catch (e) {
+          // Airdrop calculation failed, using default 0
+        }
         
         const circulatingSupply = info.genesisInfo?.circulatingSupply || '0';
         const genesisSupply = info.genesisInfo?.genesisSupply || '0';
@@ -398,7 +406,9 @@ const ManageTokenPage = () => {
             isVisible: tokenDetails?.isVisible !== false,
             isLinked: tokenDetails?.isLinked !== false
           });
-        } catch (err) {}
+        } catch (err) {
+          // Profile token enrichment failed, skipping this token
+        }
       }
       
       setTokens([...validTokens, ...fixedSupplyTokens]);

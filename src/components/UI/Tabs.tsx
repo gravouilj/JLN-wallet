@@ -20,7 +20,7 @@ export const Tabs: React.FC<TabsProps> = ({ tabs, activeTab, onChange, className
       width: '100%', 
       borderBottom: '1px solid #e5e7eb',
       overflowX: 'auto',        
-      // @ts-ignore - Propriétés CSS non standard mais valides
+      // @ts-expect-error - Non-standard CSS properties for scrollbar styling
       scrollbarWidth: 'none',
       msOverflowStyle: 'none'
     }}

@@ -99,7 +99,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, type = 'verifi
   
   const style = styles[status] || { bg: '#f3f4f6', text: '#6b7280', label: status };
   
-  // @ts-ignore - TS bug avec style objet direct, on passe par props
+  // @ts-expect-error - Badge component expects different style prop type
   return <Badge className={className} style={{ backgroundColor: style.bg, color: style.text }}>{style.label}</Badge>;
 };
 

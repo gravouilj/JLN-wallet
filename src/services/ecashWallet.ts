@@ -1,10 +1,10 @@
 import { ChronikClient } from 'chronik-client';
-// @ts-ignore
+// @ts-expect-error - ecash-lib doesn't have TypeScript definitions
 import { Ecc, Script, TxBuilder, P2PKHSignatory, ALL_BIP143, shaRmd160, toHex, fromHex, alpGenesis, alpSend, alpMint, alpBurn, ALP_STANDARD, emppScript } from 'ecash-lib';
 import * as bip39 from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english';
 import { HDKey } from '@scure/bip32';
-// @ts-ignore
+// @ts-expect-error - ecashaddrjs doesn't have TypeScript definitions
 import * as ecashaddr from 'ecashaddrjs';
 import { APP_CONFIG } from '../config/constants';
 import { WalletBalance, TokenBalance, TokenInfo, MintBaton, Utxo } from '../types';
