@@ -5,6 +5,8 @@ import { notificationAtom } from '../atoms';
 import { useEcashWallet } from '../hooks/useEcashWallet';
 import MobileLayout from '../components/Layout/MobileLayout';
 import { Card, CardContent, Button, PageLayout, Stack, PageHeader } from '../components/UI';
+// 👇 IMPORT STATIQUE (Correction du dernier warning)
+import { ProfilService } from '../services/profilService'; 
 
 /**
  * CompleteTokenImportPage - Page pour compléter l'import d'un token existant
@@ -92,11 +94,12 @@ const CompleteTokenImportPage = () => {
     setIsSubmitting(true);
 
     try {
-      const { profilService } = await import('../services/profilService');
+      // 👇 UTILISATION DIRECTE (Plus de await import)
+      // const { profilService } = await import('../services/profilService'); ❌
       
       // 🔒 NOUVEAU: Vérifier la disponibilité du token avant import
       console.log('🔍 Vérification disponibilité token...');
-      const availability = await profilService.checkTokenAvailability(tokenData.tokenId, address);
+      const availability = await ProfilService.checkTokenAvailability(tokenData.tokenId, address);
       
       if (!availability.isAvailable) {
         setNotification({
@@ -112,7 +115,7 @@ const CompleteTokenImportPage = () => {
       }
       
       // Vérifier si l'utilisateur a déjà une profile 
-      const existingProfile = await profilService.getMyProfile(address);
+      const existingProfile = await ProfilService.getMyProfile(address);
       
       const newTokenData = {
         tokenId: tokenData.tokenId,
@@ -147,7 +150,7 @@ const CompleteTokenImportPage = () => {
           tokens: [...existingTokens, newTokenData]
         };
 
-        await profilService.saveProfil(updatedProfile, address);
+        await ProfilService.saveProfil(updatedProfile, address);
 
         setNotification({
           type: 'success',
@@ -194,7 +197,7 @@ const CompleteTokenImportPage = () => {
           }
         };
 
-        await profilService.saveProfil(profileData, address);
+        await ProfilService.saveProfil(profileData, address);
 
         setNotification({
           type: 'success',

@@ -96,11 +96,7 @@ function App() {
       setWalletModalOpen(false);
     }
   }, [mnemonic]);
-
-  // Init i18n
-  useEffect(() => {
-    import('./i18n').then(() => console.log('i18n initialized'));
-  }, []);
+  // 3. Gestion de la langue
 
   useEffect(() => {
     if (locale && i18n.language !== locale) {
