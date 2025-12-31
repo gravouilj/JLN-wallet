@@ -1,15 +1,15 @@
 /**
- * antifraudService.js
- * 
+ * antifraudService.ts
+ *
  * Service centralisé pour la gestion du système anti-arnaque de JLN Wallet.
- * 
+ *
  * Fonctionnalités :
  * - Détection des signalements actifs
  * - Comptage des détenteurs actifs d'un jeton
  * - Vérification des profils dupliqués (réinscription frauduleuse)
  * - Blocage/déblocage automatique de la création/importation de jetons
  * - Archivage des profils supprimés
- * 
+ *
  * Règles anti-arnaque :
  * 1. Si créateur a des signalements actifs ET modifie isLinked/isVisible → blocage auto
  * 2. Détenteurs actuels voient toujours le jeton même si isVisible=false ou isLinked=false
@@ -19,13 +19,37 @@
 
 import { supabase } from './supabaseClient';
 import adminService from './adminService';
+import { EcashWallet } from './ecashWallet';
+
+// Types
+interface CreatorBlockStatus {
+  isBlocked: boolean;
+  reason: string | null;
+  blockedAt: string | null;
+}
+
+interface DuplicateCheckResult {
+  isDuplicate: boolean;
+  matchedFields: string[];
+  lastDeletionDate: string | null;
+  hadFraudHistory: boolean;
+}
+
+interface ToggleValidationResult {
+  canToggle: boolean;
+  blockReason: string | null;
+  activeReports: number;
+  activeHolders: number;
+  shouldBlock?: boolean;
+  showWarning?: boolean;
+}
 
 /**
  * Compter les signalements actifs (non résolus) pour un profil
- * @param {string} profileId - UUID du profil
- * @returns {Promise<number>} Nombre de signalements actifs
+ * @param profileId - UUID du profil
+ * @returns Nombre de signalements actifs
  */
-export const getActiveReportsCount = async (profileId) => {
+export const getActiveReportsCount = async (profileId: string): Promise<number> => {
   try {
     const { count, error } = await supabase
       .from('profile_reports')
@@ -35,17 +59,20 @@ export const getActiveReportsCount = async (profileId) => {
     if (error) throw error;
     return count || 0;
   } catch (error) {
-    console.error('❌ Erreur lors du comptage des signalements:', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error('❌ Erreur lors du comptage des signalements:', errMsg);
     return 0;
   }
 };
 
 /**
  * Compter les tickets non résolus pour un profil
- * @param {string} profileId - UUID du profil
- * @returns {Promise<number>} Nombre de tickets non résolus
+ * @param profileId - UUID du profil
+ * @returns Nombre de tickets non résolus
  */
-export const getUnresolvedTicketsCount = async (profileId) => {
+export const getUnresolvedTicketsCount = async (
+  profileId: string
+): Promise<number> => {
   try {
     const { count, error } = await supabase
       .from('tickets')
@@ -56,36 +83,44 @@ export const getUnresolvedTicketsCount = async (profileId) => {
     if (error) throw error;
     return count || 0;
   } catch (error) {
-    console.error('❌ Erreur lors du comptage des tickets:', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error('❌ Erreur lors du comptage des tickets:', errMsg);
     return 0;
   }
 };
 
 /**
  * Compter les détenteurs actifs d'un jeton (balance > 0)
- * @param {Object} wallet - Instance EcashWallet
- * @param {string} tokenId - ID du jeton
- * @returns {Promise<number>} Nombre de détenteurs actifs
+ * @param wallet - Instance EcashWallet
+ * @param tokenId - ID du jeton
+ * @returns Nombre de détenteurs actifs
  */
-export const getActiveHoldersCount = async (wallet, tokenId) => {
+export const getActiveHoldersCount = async (
+  wallet: EcashWallet | null,
+  tokenId: string
+): Promise<number> => {
   try {
     if (!wallet || !tokenId) return 0;
-    
+
     // Utiliser calculateAirdropHolders avec minEligible=0 pour avoir tous les détenteurs
+    // @ts-expect-error calculateAirdropHolders return type not fully typed
     const holders = await wallet.calculateAirdropHolders(tokenId, 0);
-    return holders?.length || 0;
+    return (holders?.length || 0) as number;
   } catch (error) {
-    console.error('❌ Erreur lors du comptage des détenteurs:', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error('❌ Erreur lors du comptage des détenteurs:', errMsg);
     return 0;
   }
 };
 
 /**
  * Vérifier si le créateur est bloqué pour création/importation
- * @param {string} ownerAddress - Adresse du wallet du créateur
- * @returns {Promise<Object>} { isBlocked, reason, blockedAt }
+ * @param ownerAddress - Adresse du wallet du créateur
+ * @returns Status du blocage
  */
-export const checkCreatorBlocked = async (ownerAddress) => {
+export const checkCreatorBlocked = async (
+  ownerAddress: string
+): Promise<CreatorBlockStatus> => {
   try {
     const { data, error } = await supabase
       .from('profiles')
@@ -96,23 +131,27 @@ export const checkCreatorBlocked = async (ownerAddress) => {
     if (error) throw error;
 
     return {
-      isBlocked: data?.is_blocked_from_creating || false,
-      reason: data?.blocked_reason || null,
-      blockedAt: data?.blocked_at || null
+      isBlocked: (data as any)?.is_blocked_from_creating || false,
+      reason: (data as any)?.blocked_reason || null,
+      blockedAt: (data as any)?.blocked_at || null
     };
   } catch (error) {
-    console.error('❌ Erreur lors de la vérification du blocage:', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error('❌ Erreur lors de la vérification du blocage:', errMsg);
     return { isBlocked: false, reason: null, blockedAt: null };
   }
 };
 
 /**
  * Bloquer automatiquement un créateur
- * @param {string} profileId - UUID du profil
- * @param {string} reason - Raison du blocage
- * @returns {Promise<boolean>} true si succès
+ * @param profileId - UUID du profil
+ * @param reason - Raison du blocage
+ * @returns true si succès
  */
-export const blockCreator = async (profileId, reason) => {
+export const blockCreator = async (
+  profileId: string,
+  reason: string
+): Promise<boolean> => {
   try {
     const { error } = await supabase
       .from('profiles')
@@ -137,44 +176,71 @@ export const blockCreator = async (profileId, reason) => {
     console.log(`🚫 Créateur bloqué : ${reason}`);
     return true;
   } catch (error) {
-    console.error('❌ Erreur lors du blocage du créateur:', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error('❌ Erreur lors du blocage du créateur:', errMsg);
     return false;
   }
 };
 
 /**
  * Débloquer manuellement un créateur (admin uniquement)
- * @param {string} profileId - UUID du profil
- * @param {string} adminWallet - Adresse wallet de l'admin
- * @param {string} unblockReason - Raison du déblocage
- * @returns {Promise<boolean>} true si succès
+ * @param profileId - UUID du profil
+ * @param adminWallet - Adresse wallet de l'admin
+ * @param unblockReason - Raison du déblocage
+ * @returns true si succès
  */
-export const unblockCreator = async (profileId, adminWallet, unblockReason) => {
+export const unblockCreator = async (
+  profileId: string,
+  adminWallet: string,
+  unblockReason: string
+): Promise<boolean> => {
   // Déléguer à adminService qui vérifie la whitelist
-  return await adminService.adminUnblockProfile(profileId, adminWallet, unblockReason);
+  return await adminService.adminUnblockProfile(
+    profileId,
+    adminWallet,
+    unblockReason
+  );
 };
 
 /**
  * Vérifier si des données correspondent à un profil supprimé (détection de doublons)
- * @param {Object} profileData - { email, phone, businessReg, postalCode, streetAddress }
- * @returns {Promise<Object>} { isDuplicate, matchedFields, lastDeletionDate, hadFraudHistory }
+ * @param profileData - Données du profil à vérifier
+ * @returns Résultat du test de duplication
  */
-export const checkDuplicateProfileData = async (profileData) => {
+export const checkDuplicateProfileData = async (
+  profileData: Partial<{
+    email: string;
+    phone: string;
+    businessReg: string;
+    postalCode: string;
+    streetAddress: string;
+  }>
+): Promise<DuplicateCheckResult> => {
   try {
-    const { email, phone, businessReg, postalCode, streetAddress } = profileData;
+    const {
+      email,
+      phone,
+      businessReg,
+      postalCode,
+      streetAddress
+    } = profileData;
 
-    const { data, error } = await supabase.rpc('check_duplicate_profile_data', {
-      p_email: email || null,
-      p_phone: phone || null,
-      p_business_reg: businessReg || null,
-      p_postal_code: postalCode || null,
-      p_street_address: streetAddress || null
-    });
+    // @ts-expect-error Supabase RPC not fully typed
+    const { data, error } = await supabase.rpc(
+      'check_duplicate_profile_data',
+      {
+        p_email: email || null,
+        p_phone: phone || null,
+        p_business_reg: businessReg || null,
+        p_postal_code: postalCode || null,
+        p_street_address: streetAddress || null
+      }
+    );
 
     if (error) throw error;
 
     if (data && data.length > 0) {
-      const result = data[0];
+      const result = data[0] as any;
       return {
         isDuplicate: result.is_duplicate,
         matchedFields: result.matched_fields || [],
@@ -183,25 +249,40 @@ export const checkDuplicateProfileData = async (profileData) => {
       };
     }
 
-    return { isDuplicate: false, matchedFields: [], lastDeletionDate: null, hadFraudHistory: false };
+    return {
+      isDuplicate: false,
+      matchedFields: [],
+      lastDeletionDate: null,
+      hadFraudHistory: false
+    };
   } catch (error) {
-    console.error('❌ Erreur lors de la vérification des doublons:', error);
-    return { isDuplicate: false, matchedFields: [], lastDeletionDate: null, hadFraudHistory: false };
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error('❌ Erreur lors de la vérification des doublons:', errMsg);
+    return {
+      isDuplicate: false,
+      matchedFields: [],
+      lastDeletionDate: null,
+      hadFraudHistory: false
+    };
   }
 };
 
 /**
  * Valider si le toggle isVisible/isLinked est autorisé
- * @param {string} profileId - UUID du profil
- * @param {Object} wallet - Instance EcashWallet
- * @param {string} tokenId - ID du jeton
- * @returns {Promise<Object>} { canToggle, blockReason, activeReports, activeHolders }
+ * @param profileId - UUID du profil
+ * @param wallet - Instance EcashWallet
+ * @param tokenId - ID du jeton
+ * @returns Résultat de la validation
  */
-export const validateTokenToggle = async (profileId, wallet, tokenId) => {
+export const validateTokenToggle = async (
+  profileId: string,
+  wallet: EcashWallet | null,
+  tokenId: string
+): Promise<ToggleValidationResult> => {
   try {
     // 1. Vérifier les signalements actifs
     const activeReports = await getActiveReportsCount(profileId);
-    
+
     // 2. Compter les détenteurs actifs
     const activeHolders = await getActiveHoldersCount(wallet, tokenId);
 
@@ -236,7 +317,8 @@ export const validateTokenToggle = async (profileId, wallet, tokenId) => {
       showWarning: false
     };
   } catch (error) {
-    console.error('❌ Erreur lors de la validation du toggle:', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error('❌ Erreur lors de la validation du toggle:', errMsg);
     // En cas d'erreur, bloquer par précaution
     return {
       canToggle: false,
@@ -249,9 +331,9 @@ export const validateTokenToggle = async (profileId, wallet, tokenId) => {
 
 /**
  * Récupérer la liste des profils bloqués (admin uniquement)
- * @returns {Promise<Array>} Liste des profils bloqués
+ * @returns Liste des profils bloqués
  */
-export const getBlockedProfiles = async () => {
+export const getBlockedProfiles = async (): Promise<unknown[]> => {
   try {
     const { data, error } = await supabase
       .from('blocked_profiles_view')
@@ -261,25 +343,34 @@ export const getBlockedProfiles = async () => {
     if (error) throw error;
     return data || [];
   } catch (error) {
-    console.error('❌ Erreur lors de la récupération des profils bloqués:', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error('❌ Erreur lors de la récupération des profils bloqués:', errMsg);
     return [];
   }
 };
 
 /**
  * Vérifier si un détenteur a accès à un jeton (même si isVisible=false ou isLinked=false)
- * @param {Object} wallet - Instance EcashWallet
- * @param {string} tokenId - ID du jeton
- * @returns {Promise<boolean>} true si le détenteur a des jetons
+ * @param wallet - Instance EcashWallet
+ * @param tokenId - ID du jeton
+ * @returns true si le détenteur a des jetons
  */
-export const isTokenHolder = async (wallet, tokenId) => {
+export const isTokenHolder = async (
+  wallet: EcashWallet | null,
+  tokenId: string
+): Promise<boolean> => {
   try {
     if (!wallet || !tokenId) return false;
-    
+
+    // @ts-expect-error getTokenBalance return type not fully typed
     const balance = await wallet.getTokenBalance(tokenId);
     return BigInt(balance || 0) > 0n;
   } catch (error) {
-    console.error('❌ Erreur lors de la vérification du statut de détenteur:', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error(
+      '❌ Erreur lors de la vérification du statut de détenteur:',
+      errMsg
+    );
     return false;
   }
 };
