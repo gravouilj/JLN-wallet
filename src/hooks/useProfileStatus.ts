@@ -2,9 +2,9 @@ import { useState, useCallback } from 'react';
 import { useSetAtom } from 'jotai';
 import { notificationAtom } from '../atoms';
 import { ProfilService } from '../services/profilService';
-// 👇 AJOUTS (Imports statiques)
 import { supabase } from '../services/supabaseClient';
 import { createTicket, addMessageToTicket } from '../services/ticketService';
+import type { UserProfile } from '../types';
 
 /**
  * Hook personnalisé pour la gestion des statuts de profils
@@ -14,12 +14,12 @@ import { createTicket, addMessageToTicket } from '../services/ticketService';
  */
 export const useProfileStatus = () => {
   const setNotification = useSetAtom(notificationAtom);
-  const [processing, setProcessing] = useState(null);
+  const [processing, setProcessing] = useState<string | null>(null);
 
   /**
    * Mettre à jour le statut d'un profil (admin)
    */
-  const updateStatus = useCallback(async (profileId, newStatus, message = '', onSuccess) => {
+  const updateStatus = useCallback(async (profileId: string, newStatus: string, message = '', onSuccess?: () => Promise<void>) => {
     // Cas spéciaux avec confirmation
     if (newStatus === 'rejected') {
       const reason = window.prompt(
@@ -114,7 +114,7 @@ export const useProfileStatus = () => {
   /**
    * Envoyer un message dans l'historique de communication (admin)
    */
-  const sendMessage = useCallback(async (profile, messageText, messageType = 'verification', onSuccess) => {
+  const sendMessage = useCallback(async (profile: UserProfile, messageText: string, messageType = 'verification', onSuccess?: () => Promise<void>) => {
     if (!messageText || !messageText.trim()) {
       setNotification({
         type: 'error',
@@ -133,7 +133,7 @@ export const useProfileStatus = () => {
         timestamp: new Date().toISOString()
       };
       
-      const updateData = {
+      const updateData: Partial<UserProfile> = {
         communication_history: [...currentHistory, newMessage]
       };
       
@@ -142,7 +142,7 @@ export const useProfileStatus = () => {
         updateData.verification_status = 'info_requested';
       }
       
-      await ProfilService.updateProfile(profile.owner_address, updateData);
+      await ProfilService.updateProfil(profile.owner_address, updateData);
 
       // Si c'est un message de type 'report', créer aussi un ticket pour que le créateur puisse voir dans SupportTab
       if (messageType === 'report' || messageType === 'general') {
@@ -217,7 +217,7 @@ export const useProfileStatus = () => {
   /**
    * Clôturer une conversation (admin)
    */
-  const closeConversation = useCallback(async (profile, onSuccess) => {
+  const closeConversation = useCallback(async (profile: UserProfile, onSuccess?: () => Promise<void>) => {
     if (!window.confirm('Clôturer cet échange ? Un message système sera ajouté.')) {
       return;
     }
@@ -232,8 +232,8 @@ export const useProfileStatus = () => {
         timestamp: new Date().toISOString()
       };
       
-      await ProfilService.updateProfile(profile.owner_address, {
-        communication_history: [...currentHistory, systemMessage],
+      await ProfilService.updateProfil(profile.owner_address, {
+        communication_history: [...currentHistory, systemMessage] as any,
         conversation_closed: true // Marquer la conversation comme clôturée
       });
 
@@ -257,7 +257,7 @@ export const useProfileStatus = () => {
   /**
    * Envoyer un message en tant que créateur de profil (avec type de message)
    */
-  const sendCreatorMessage = useCallback(async (ownerAddress, messageText, messageType = 'verification', onSuccess) => {
+  const sendCreatorMessage = useCallback(async (ownerAddress: string, messageText: string, messageType = 'verification', onSuccess?: () => Promise<void>) => {
     if (!messageText || !messageText.trim()) {
       setNotification({
         type: 'error',
@@ -290,7 +290,7 @@ export const useProfileStatus = () => {
   /**
    * Ignorer les signalements d'un profil (admin)
    */
-  const ignoreReports = useCallback(async (profileId, supabaseInstance, onSuccess) => {
+  const ignoreReports = useCallback(async (profileId: string, supabaseInstance: any, onSuccess?: () => Promise<void>) => {
     if (!window.confirm(
       'Marquer les signalements comme traités sans action ?\n\n⚠️ Les signalements visibles seront automatiquement masqués au créateur.'
     )) {
@@ -332,7 +332,7 @@ export const useProfileStatus = () => {
   /**
    * Basculer la visibilité d'un signalement
    */
-  const toggleReportVisibility = useCallback(async (reportId, newValue, onSuccess) => {
+  const toggleReportVisibility = useCallback(async (reportId: string, newValue: boolean, onSuccess?: () => Promise<void>) => {
     setProcessing(reportId);
     try {
       await ProfilService.toggleReportVisibility(reportId, newValue);
@@ -359,7 +359,7 @@ export const useProfileStatus = () => {
   /**
    * Obtenir les actions disponibles selon le statut actuel
    */
-  const getAvailableActions = useCallback((profile) => {
+  const getAvailableActions = useCallback((profile: UserProfile) => {
     const status = profile.verification_status;
     const profileStatus = profile.status;
 

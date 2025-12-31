@@ -17,7 +17,7 @@ export const checkActiveTicketsForToken = async (tokenId, profilId = null) => {
     // Statuts considérés comme "non traités"
     const activeStatuses = ['open', 'in_progress'];
     
-    let query = supabase
+    const query = supabase
       .from('tickets')
       .select('id, type, status, subject, created_at')
       .eq('token_id', tokenId)

@@ -215,7 +215,7 @@ export const sortTickets = (tickets, sortBy = 'date', order = 'desc') => {
       });
       break;
 
-    case 'priority':
+    case 'priority': {
       const priorityOrder = { urgent: 4, high: 3, normal: 2, low: 1 };
       sorted.sort((a, b) => {
         const priorityA = priorityOrder[a.priority] || 2;
@@ -223,8 +223,9 @@ export const sortTickets = (tickets, sortBy = 'date', order = 'desc') => {
         return order === 'asc' ? priorityA - priorityB : priorityB - priorityA;
       });
       break;
+    }
 
-    case 'status':
+    case 'status': {
       const statusOrder = { open: 1, awaiting_reply: 2, in_progress: 3, resolved: 4, closed: 5 };
       sorted.sort((a, b) => {
         const statusA = statusOrder[a.status] || 1;
@@ -232,6 +233,7 @@ export const sortTickets = (tickets, sortBy = 'date', order = 'desc') => {
         return order === 'asc' ? statusA - statusB : statusB - statusA;
       });
       break;
+    }
 
     case 'unread':
       sorted.sort((a, b) => {

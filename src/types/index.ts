@@ -92,9 +92,26 @@ export interface UserProfile {
   owner_address: string;
   name: string;
   description?: string;
-  status?: 'active' | 'banned' | 'deleted';
-  verification_status?: 'none' | 'pending' | 'verified' | 'rejected';
+  status?: 'active' | 'banned' | 'deleted' | 'suspended' | 'draft';
+  verification_status?: 'none' | 'pending' | 'verified' | 'rejected' | 'info_requested';
   verified?: boolean;
   tokens?: TokenDataFromProfile[];
-  // Ajoute les champs sociaux si besoin
+  communication_history?: Array<{
+    author: string;
+    message: string;
+    type?: string;
+    timestamp?: string;
+  }>;
+  conversation_closed?: boolean;
+  admin_message?: string;
+  admin_status?: string;
+  banned_at?: string;
+  suspended_at?: string;
+  deleted_at?: string;
+  suspension_reason?: string;
+  deletion_reason?: string;
+  verified_at?: string | null;
+  updated_at?: string;
+  created_at?: string;
+  profile_reports?: Array<any>;
 }

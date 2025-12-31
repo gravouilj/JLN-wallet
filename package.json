@@ -15,7 +15,7 @@
     "test:headed": "playwright test --headed",
     "test:debug": "playwright test --debug",
     "test:report": "playwright show-report",
-    "sync-profiles": "node scripts/sync-profiles-data.js",  
+    "sync-profiles": "node scripts/sync-profiles-data.js",
     "test:unit": "vitest"
   },
   "dependencies": {
@@ -61,6 +61,7 @@
     "globals": "^15.14.0",
     "prettier": "^3.7.4",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.51.0",
     "vite": "^6.0.5",
     "vitest": "^4.0.16"
   }

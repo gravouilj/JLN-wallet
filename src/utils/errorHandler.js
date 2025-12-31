@@ -15,7 +15,7 @@ export const handleError = (error, context = '') => {
   const originalMessage = error?.message || error?.toString() || 'An error occurred';
 
   // Remove sensitive patterns
-  let sanitizedMessage = originalMessage
+  const sanitizedMessage = originalMessage
     // Remove private keys (WIF format: L/K followed by 51 chars)
     .replace(/[LK][1-9A-HJ-NP-Za-km-z]{51}/g, '[PRIVATE_KEY_REMOVED]')
     // Remove potential mnemonics (12+ words)
