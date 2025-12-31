@@ -49,4 +49,12 @@ export const APP_CONFIG = {
   GITHUB_REPO: 'https://github.com/gravouilj/JLN-wallet'
 
   },
+
+  // === SUPABASE (Backend Database) ===
+  SUPABASE: {
+    URL: 'https://vmlozrwjjatqcjvdqkxu.supabase.co',
+    // Idéalement, cette clé devrait venir de import.meta.env.VITE_SUPABASE_KEY
+    // Mais pour l'instant, on la centralise ici.
+    ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZtbG96cndqamF0cWNqdmRxa3h1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUyNjA0OTAsImV4cCI6MjA4MDgzNjQ5MH0.KkPEbDAbtDIMGjPTTMqAARhJ4LYUYVdsrhFhA6V4Iqg'
+  },
 };
