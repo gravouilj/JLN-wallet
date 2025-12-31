@@ -1,20 +1,22 @@
 import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 import { storageService } from './services/storageService'; 
-import { APP_CONFIG } from './config/constants'; // ✅ Import de la config
+import { APP_CONFIG } from './config/constants';
+import { EcashWallet } from './services/ecashWallet';
+import { BalanceBreakdown } from './types';
 
 // ============================================
-// LANGUAGE & AUTO-DETECTION
+// LANGUAGE
 // ============================================
 
-const getBrowserLanguage = () => {
+const getBrowserLanguage = (): string => {
   if (typeof window === 'undefined') return 'fr';
-  const lang = (navigator.language || navigator.userLanguage || 'fr').toLowerCase();
+  const lang = (navigator.language || 'fr').toLowerCase();
   if (lang.includes('fr')) return 'fr';
   return 'en';
 };
 
-const getInitialLocale = () => {
+const getInitialLocale = (): string => {
   if (typeof window !== 'undefined') {
     const saved = localStorage.getItem(APP_CONFIG.STORAGE_KEYS.LANGUAGE);
     return saved || getBrowserLanguage();
@@ -22,11 +24,11 @@ const getInitialLocale = () => {
   return getBrowserLanguage();
 };
 
-const _localeAtom = atom(getInitialLocale());
+const _localeAtom = atom<string>(getInitialLocale());
 
 export const localeAtom = atom(
   (get) => get(_localeAtom),
-  (get, set, newLocale) => {
+  (_get, set, newLocale: string) => {
     if (typeof window !== 'undefined') {
       localStorage.setItem(APP_CONFIG.STORAGE_KEYS.LANGUAGE, newLocale);
     }
@@ -37,22 +39,27 @@ localeAtom.debugLabel = 'localeAtom';
 export const languageAtom = localeAtom;
 
 // ============================================
-// JLN WALLET PLATFORM
+// PROFILES
 // ============================================
 
-const getInitialSelectedProfile = () => {
+interface ProfileData {
+  tokenId: string;
+  [key: string]: any;
+}
+
+const getInitialSelectedProfile = (): ProfileData | null => {
   if (typeof window !== 'undefined') {
-    const saved = localStorage.getItem('jlnwallet-selected-profile');
+    const saved = localStorage.getItem('jlnwallet-selected-profile'); // À mettre dans constants si possible
     return saved ? JSON.parse(saved) : null;
   }
   return null;
 };
 
-const _selectedProfileAtom = atom(getInitialSelectedProfile());
+const _selectedProfileAtom = atom<ProfileData | null>(getInitialSelectedProfile());
 
 export const selectedProfileAtom = atom(
   (get) => get(_selectedProfileAtom),
-  (get, set, newProfile) => {
+  (_get, set, newProfile: ProfileData | null) => {
     if (typeof window !== 'undefined') {
       if (newProfile) {
         localStorage.setItem('jlnwallet-selected-profile', JSON.stringify(newProfile));
@@ -64,18 +71,17 @@ export const selectedProfileAtom = atom(
   }
 );
 
-export const currentTokenIdAtom = atom((get) => {
+export const currentTokenIdAtom = atom<string>((get) => {
   const selectedProfile = get(selectedProfileAtom);
   return selectedProfile?.tokenId || '';
 });
 export const tokenIdAtom = currentTokenIdAtom;
 
 // ============================================
-// CORE WALLET CONFIG
+// WALLET CORE STATE
 // ============================================
 
-// ✅ Utilisation de la constante pour le chemin de dérivation
-export const hdPathAtom = atom(APP_CONFIG.DERIVATION_PATH);
+export const hdPathAtom = atom<string>(APP_CONFIG.DERIVATION_PATH);
 
 export const optionsAtom = atom((get) => {
   const hdPath = get(hdPathAtom);
@@ -85,14 +91,16 @@ export const optionsAtom = atom((get) => {
   };
 });
 
-export const walletConnectedAtom = atom(false);
-export const walletAtom = atom(null);
-export const tokenAtom = atom(null);
-export const priceAtom = atom(0);
-export const balanceAtom = atom(0);
-export const totalBalanceAtom = atom(0);
+export const walletConnectedAtom = atom<boolean>(false);
+// Ici on type explicitement l'instance de la classe
+export const walletAtom = atom<EcashWallet | null>(null);
 
-export const balanceBreakdownAtom = atom({
+export const tokenAtom = atom<any>(null); // TODO: Typer TokenData plus tard
+export const priceAtom = atom<number | any>(0); // TODO: Typer l'objet prix
+export const balanceAtom = atom<number>(0); // XEC amount
+export const totalBalanceAtom = atom<number>(0);
+
+export const balanceBreakdownAtom = atom<BalanceBreakdown>({
   spendableBalance: 0,
   totalBalance: 0,
   tokenDustValue: 0,
@@ -100,23 +108,23 @@ export const balanceBreakdownAtom = atom({
   tokenUtxos: 0
 });
 
-export const balanceRefreshTriggerAtom = atom(0);
-export const tokenRefreshTriggerAtom = atom(0);
+export const balanceRefreshTriggerAtom = atom<number>(0);
+export const tokenRefreshTriggerAtom = atom<number>(0);
 
 // ============================================
 // UI STATE
 // ============================================
 
-export const busyAtom = atom(false);
-export const notificationAtom = atom(null);
-export const scriptLoadedAtom = atom(false);
-export const scriptErrorAtom = atom(null);
+export const busyAtom = atom<boolean>(false);
+export const notificationAtom = atom<any>(null); // TODO: Typer Notification { type, message }
+export const scriptLoadedAtom = atom<boolean>(false);
+export const scriptErrorAtom = atom<any>(null);
 
 // ============================================
-// THEME MANAGEMENT
+// THEME
 // ============================================
 
-const getInitialTheme = () => {
+const getInitialTheme = (): string => {
   if (typeof window !== 'undefined') {
     const savedTheme = localStorage.getItem(APP_CONFIG.STORAGE_KEYS.THEME);
     return savedTheme || 'light';
@@ -124,9 +132,9 @@ const getInitialTheme = () => {
   return 'light';
 };
 
-export const themeAtom = atom(getInitialTheme());
+export const themeAtom = atom<string>(getInitialTheme());
 
-export const themeSetterAtom = atom(null, (get, set, newTheme) => {
+export const themeSetterAtom = atom(null, (_get, set, newTheme: string) => {
   set(themeAtom, newTheme);
   if (typeof window !== 'undefined') {
     localStorage.setItem(APP_CONFIG.STORAGE_KEYS.THEME, newTheme);
@@ -134,7 +142,15 @@ export const themeSetterAtom = atom(null, (get, set, newTheme) => {
   }
 });
 
-export const blockchainStatusAtom = atom({
+interface BlockchainStatus {
+  connected: boolean;
+  blockHeight: number;
+  checking: boolean;
+  error: any;
+  lastChecked: number | null;
+}
+
+export const blockchainStatusAtom = atom<BlockchainStatus>({
   connected: false,
   blockHeight: 0,
   checking: true,
@@ -146,7 +162,7 @@ export const blockchainStatusAtom = atom({
 // MNEMONIC & SECURITY
 // ============================================
 
-const getInitialMnemonicCollapsed = () => {
+const getInitialMnemonicCollapsed = (): boolean => {
   if (typeof window !== 'undefined') {
     const saved = localStorage.getItem('jlnwallet-mnemonic-collapsed');
     return saved === 'true';
@@ -154,11 +170,11 @@ const getInitialMnemonicCollapsed = () => {
   return false;
 };
 
-const _mnemonicCollapsedAtom = atom(getInitialMnemonicCollapsed());
+const _mnemonicCollapsedAtom = atom<boolean>(getInitialMnemonicCollapsed());
 
 export const mnemonicCollapsedAtom = atom(
   (get) => get(_mnemonicCollapsedAtom),
-  (get, set, collapsed) => {
+  (_get, set, collapsed: boolean) => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('jlnwallet-mnemonic-collapsed', collapsed.toString());
     }
@@ -166,19 +182,19 @@ export const mnemonicCollapsedAtom = atom(
   }
 );
 
-export const coinSelectionStrategyAtom = atom('efficient');
+export const coinSelectionStrategyAtom = atom<string>('efficient');
 
 // 1. IN-MEMORY MNEMONIC (Non-persistant)
-export const mnemonicAtom = atom(null);
+export const mnemonicAtom = atom<string | null>(null);
 
 // 2. CHECK ENCRYPTED VAULT
-export const hasEncryptedWalletAtom = atom(storageService.hasWallet());
+export const hasEncryptedWalletAtom = atom<boolean>(storageService.hasWallet());
 
 // ============================================
 // FAVORITES
 // ============================================
 
-const getInitialFavoriteProfiles = () => {
+const getInitialFavoriteProfiles = (): string[] => {
   if (typeof window !== 'undefined') {
     const saved = localStorage.getItem('jlnwallet-favorite-profiles');
     return saved ? JSON.parse(saved) : [];
@@ -186,11 +202,11 @@ const getInitialFavoriteProfiles = () => {
   return [];
 };
 
-const _favoriteProfilesAtom = atom(getInitialFavoriteProfiles());
+const _favoriteProfilesAtom = atom<string[]>(getInitialFavoriteProfiles());
 
 export const favoriteProfilesAtom = atom(
   (get) => get(_favoriteProfilesAtom),
-  (get, set, newFavorites) => {
+  (_get, set, newFavorites: string[]) => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('jlnwallet-favorite-profiles', JSON.stringify(newFavorites));
     }
@@ -198,14 +214,14 @@ export const favoriteProfilesAtom = atom(
   }
 );
 
-export const isProfileFavoriteAtom = atom((get) => (profileId) => {
+export const isProfileFavoriteAtom = atom((get) => (profileId: string) => {
   const favorites = get(favoriteProfilesAtom);
   return favorites.includes(profileId);
 });
 
 export const toggleProfileFavoriteAtom = atom(
   null,
-  (get, set, profileId) => {
+  (get, set, profileId: string) => {
     const favorites = get(favoriteProfilesAtom);
     if (favorites.includes(profileId)) {
       set(favoriteProfilesAtom, favorites.filter(id => id !== profileId));
@@ -216,15 +232,15 @@ export const toggleProfileFavoriteAtom = atom(
 );
 
 // Wallet Modal Open State
-export const walletModalOpenAtom = atom(false);
+export const walletModalOpenAtom = atom<boolean>(false);
 
 // ============================================
 // CURRENCY
 // ============================================
 
-const getBrowserCurrency = () => {
+const getBrowserCurrency = (): string => {
   if (typeof window === 'undefined') return 'EUR';
-  const lang = (navigator.language || navigator.userLanguage || 'fr').toLowerCase();
+  const lang = (navigator.language || 'fr').toLowerCase();
   
   if (lang.includes('en-us')) return 'USD';
   if (lang.includes('en-gb')) return 'GBP';
@@ -233,4 +249,4 @@ const getBrowserCurrency = () => {
   return 'EUR';
 };
 
-export const currencyAtom = atomWithStorage('app_currency', getBrowserCurrency());
+export const currencyAtom = atomWithStorage<string>('app_currency', getBrowserCurrency());
