@@ -108,7 +108,11 @@
     );
   }
 
-  {/* 🔗 CTA: ASSOCIER LE JETON À LA FERME */}
+  return (
+    <MobileLayout title={tokenData?.ticker || 'Jeton'}>
+      <PageLayout hasBottomNav className="max-w-2xl">
+        <Stack spacing="md">
+          {/* 🔗 CTA: ASSOCIER LE JETON À LA FERME */}
           {isCreator && !profileInfo && (
             <Card className="border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/30">
               <CardContent className="p-6">
@@ -195,3 +199,7 @@
               </CardContent>
             </Card>
           )}
+        </Stack>
+      </PageLayout>
+    </MobileLayout>
+  );

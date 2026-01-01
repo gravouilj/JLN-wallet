@@ -18,7 +18,7 @@ if (!args.length) {
 }
 
 const pattern = args[0];
-let files = [];
+const files = [];
 
 // Handle glob patterns
 if (pattern.includes('*')) {
@@ -56,7 +56,7 @@ files.forEach(file => {
 
   try {
     // Read original file
-    let content = fs.readFileSync(file, 'utf-8');
+    const content = fs.readFileSync(file, 'utf-8');
 
     // Simple heuristic: if file imports React FC patterns or has props destructuring, add types
     // For now, just rename and let TypeScript check it

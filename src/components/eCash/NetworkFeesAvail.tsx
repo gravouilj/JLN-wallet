@@ -212,22 +212,6 @@ const NetworkFeesAvail = ({
           <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
             💎 Frais Réseau
           </h3>
-          {false && showActions && (
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="text-sm px-3 py-1 rounded hover-lift"
-              style={{
-                backgroundColor: 'var(--bg-secondary)',
-                border: '1px solid var(--border-primary)',
-                color: 'var(--text-primary)',
-                cursor: refreshing ? 'not-allowed' : 'pointer',
-                opacity: refreshing ? 0.6 : 1
-              }}
-            >
-              {refreshing ? '⏳' : '🔄'} Actualiser
-            </button>
-          )}
         </div>
 
         {/* Solde principal */}
