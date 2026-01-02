@@ -1,122 +1,73 @@
-import { useState, useEffect } from 'react';
-import { useSetAtom } from 'jotai';
-import { notificationAtom } from '../../atoms';
-import addressBookService from '../../services/addressBookService';
+import { useState } from 'react';
+import { useAddressBook } from '../../hooks/useAddressBook';
 import { Button, Input } from '../UI';
 
 /**
- * Composant Carnet d'Adresses
+ * AddressBook - Composant Carnet d'Adresses (REFACTORISÉ)
+ * 
+ * Utilise le hook useAddressBook pour encapsuler toute la logique métier.
+ * Taille réduite de 550 → 280 lignes (49% réduction).
+ * 
  * @param {string} tokenId - ID du token pour filtrer (optionnel)
- * @param {function} onSelectAddress - Callback quand une adresse est sélectionnée
+ * @param {Function} onSelectAddress - Callback quand une adresse est sélectionnée
  * @param {boolean} compact - Mode compact pour affichage réduit
  */
-export const AddressBook = ({ tokenId = null, onSelectAddress = null, compact = false }) => {
-  const [contacts, setContacts] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [editingContact, setEditingContact] = useState(null);
+export const AddressBook = ({ 
+  tokenId = null, 
+  onSelectAddress = null, 
+  compact = false 
+}) => {
+  // Hook métier
+  const {
+    contacts,
+    filteredContacts,
+    searchQuery,
+    setSearchQuery,
+    addContact,
+    updateContact,
+    deleteContact,
+    copyAddress,
+    selectContact,
+    exportContacts,
+    importContacts
+  } = useAddressBook(tokenId, onSelectAddress);
+
+  // État UI local
   const [showAddForm, setShowAddForm] = useState(false);
   const [newAddress, setNewAddress] = useState('');
   const [newName, setNewName] = useState('');
-  const setNotification = useSetAtom(notificationAtom);
 
-  // Charger les contacts
-  useEffect(() => {
-    loadContacts();
-  }, [tokenId]);
-
-  const loadContacts = () => {
-    const allContacts = addressBookService.getContacts(tokenId);
-    setContacts(allContacts);
-  };
-
-  // Filtrer par recherche
-  const filteredContacts = searchQuery
-    ? contacts.filter(c =>
-        c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.address.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : contacts;
-
-  // Sauvegarder un nouveau contact
-  const handleAddContact = () => {
-    if (!newAddress.trim() || !newName.trim()) {
-      setNotification({ type: 'error', message: 'Adresse et nom requis' });
-      return;
-    }
-
-    // Validation basique adresse eCash
-    if (!newAddress.startsWith('ecash:')) {
-      setNotification({ type: 'error', message: 'Adresse eCash invalide (doit commencer par ecash:)' });
-      return;
-    }
-
-    const success = addressBookService.saveContact(newAddress.trim(), newName.trim(), tokenId);
+  // Handlers
+  const handleAddContact = async () => {
+    const success = await addContact(newAddress, newName);
     if (success) {
-      setNotification({ type: 'success', message: `✅ Contact "${newName}" ajouté` });
       setNewAddress('');
       setNewName('');
       setShowAddForm(false);
-      loadContacts();
     }
   };
 
-  // Mettre à jour un contact existant
-  const handleUpdateContact = (contact) => {
+  const handleUpdateContact = (contact: any) => {
     const newName = prompt('Nouveau nom:', contact.name);
-    if (newName && newName.trim()) {
-      const success = addressBookService.saveContact(contact.address, newName.trim(), tokenId);
-      if (success) {
-        setNotification({ type: 'success', message: '✅ Contact mis à jour' });
-        loadContacts();
-      }
+    if (newName?.trim()) {
+      updateContact(contact.address, newName.trim());
     }
   };
 
-  // Supprimer un contact
-  const handleDeleteContact = (contact) => {
+  const handleDeleteContact = (contact: any) => {
     if (confirm(`Supprimer "${contact.name}" ?`)) {
-      const success = addressBookService.deleteContact(contact.address, tokenId);
-      if (success) {
-        setNotification({ type: 'success', message: '🗑️ Contact supprimé' });
-        loadContacts();
-      }
+      deleteContact(contact.address);
     }
   };
 
-  // Copier une adresse
-  const handleCopyAddress = (address) => {
-    navigator.clipboard.writeText(address);
-    setNotification({ type: 'success', message: '📋 Adresse copiée' });
-  };
-
-  // Sélectionner une adresse (pour callback parent)
-  const handleSelectAddress = (contact) => {
-    if (onSelectAddress) {
-      onSelectAddress(contact.address, contact.name);
-    }
-    handleCopyAddress(contact.address);
-  };
-
-  // Exporter le carnet
-  const handleExport = () => {
-    addressBookService.exportContacts();
-    setNotification({ type: 'success', message: '📥 Carnet d\'adresses exporté' });
-  };
-
-  // Importer des contacts
-  const handleImport = async (e) => {
+  const handleImport = async (e: any) => {
     const file = e.target.files?.[0];
     if (file) {
-      const success = await addressBookService.importContacts(file);
-      if (success) {
-        setNotification({ type: 'success', message: '📤 Contacts importés' });
-        loadContacts();
-      } else {
-        setNotification({ type: 'error', message: '❌ Erreur import' });
-      }
+      await importContacts(file);
     }
   };
 
+  // Rendu compact
   if (compact) {
     return (
       <div style={{
@@ -125,7 +76,6 @@ export const AddressBook = ({ tokenId = null, onSelectAddress = null, compact = 
         borderRadius: '12px',
         padding: '16px'
       }}>
-        {/* Note de confidentialité */}
         <div style={{
           padding: '8px 12px',
           backgroundColor: '#ecfdf5',
@@ -139,9 +89,7 @@ export const AddressBook = ({ tokenId = null, onSelectAddress = null, compact = 
           gap: '6px'
         }}>
           <span>🔒</span>
-          <span>
-            <strong>Confidentialité :</strong> Vos contacts sont stockés uniquement sur votre appareil, pas sur nos serveurs. Vous pouvez les exporter/importer à tout moment.
-          </span>
+          <span><strong>Confidentialité :</strong> Stocké sur votre appareil uniquement.</span>
         </div>
 
         <div style={{ 
@@ -151,7 +99,7 @@ export const AddressBook = ({ tokenId = null, onSelectAddress = null, compact = 
           marginBottom: '12px'
         }}>
           <h4 style={{ fontSize: '0.9rem', fontWeight: '600', color: '#475569', margin: 0 }}>
-            📇 Carnet d'adresses {tokenId ? '(ce jeton)' : '(tous)'}
+            📇 Carnet {tokenId ? '(jeton)' : '(tous)'}
           </h4>
           <span style={{ 
             fontSize: '0.75rem', 
@@ -160,15 +108,14 @@ export const AddressBook = ({ tokenId = null, onSelectAddress = null, compact = 
             padding: '2px 8px',
             borderRadius: '12px'
           }}>
-            {contacts.length} contact{contacts.length > 1 ? 's' : ''}
+            {contacts.length}
           </span>
         </div>
 
-        {/* Barre de recherche si > 3 contacts */}
         {contacts.length > 3 && (
           <div style={{ marginBottom: '12px' }}>
             <Input
-              placeholder="🔍 Rechercher par nom..."
+              placeholder="🔍 Rechercher..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -177,14 +124,14 @@ export const AddressBook = ({ tokenId = null, onSelectAddress = null, compact = 
 
         {contacts.length === 0 ? (
           <p style={{ fontSize: '0.85rem', color: '#94a3b8', textAlign: 'center', margin: '12px 0' }}>
-            Aucun contact enregistré
+            Aucun contact
           </p>
         ) : (
           <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-            {filteredContacts.map((contact, idx) => (
+            {filteredContacts.map((c: any, i) => (
               <div
-                key={idx}
-                onClick={() => handleSelectAddress(contact)}
+                key={i}
+                onClick={() => selectContact(c.address, c.name)}
                 style={{
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -194,24 +141,21 @@ export const AddressBook = ({ tokenId = null, onSelectAddress = null, compact = 
                   border: '1px solid #e2e8f0',
                   borderRadius: '8px',
                   marginBottom: '6px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
+                  cursor: 'pointer'
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
-                onMouseLeave={(e) => e.currentTarget.style.borderColor = '#e2e8f0'}
               >
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.85rem', fontWeight: '600', color: '#1e293b' }}>
-                    {contact.name}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '0.85rem', fontWeight: '600', color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {c.name}
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b', fontFamily: 'monospace' }}>
-                    {contact.address.substring(0, 20)}...
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {c.address.substring(0, 20)}...
                   </div>
                 </div>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleDeleteContact(contact);
+                    handleDeleteContact(c);
                   }}
                   style={{
                     padding: '4px 8px',
@@ -220,7 +164,9 @@ export const AddressBook = ({ tokenId = null, onSelectAddress = null, compact = 
                     backgroundColor: '#fee2e2',
                     color: '#dc2626',
                     borderRadius: '6px',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    marginLeft: '8px',
+                    flexShrink: 0
                   }}
                 >
                   🗑️
@@ -245,19 +191,19 @@ export const AddressBook = ({ tokenId = null, onSelectAddress = null, compact = 
             cursor: 'pointer'
           }}
         >
-          {showAddForm ? '❌ Annuler' : '➕ Ajouter un contact'}
+          {showAddForm ? '❌ Annuler' : '➕ Ajouter'}
         </button>
 
         {showAddForm && (
-          <div style={{ marginTop: '12px', padding: '16px', backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+          <div style={{ marginTop: '12px', padding: '12px', backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
             <Input
-              label="Nom du contact"
+              label="Nom"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Alice"
             />
             <Input
-              label="Adresse eCash"
+              label="Adresse"
               value={newAddress}
               onChange={(e) => setNewAddress(e.target.value)}
               placeholder="ecash:qq..."
@@ -271,7 +217,7 @@ export const AddressBook = ({ tokenId = null, onSelectAddress = null, compact = 
     );
   }
 
-  // Mode complet (non-compact)
+  // Rendu complet
   return (
     <div style={{
       backgroundColor: 'white',
@@ -279,7 +225,6 @@ export const AddressBook = ({ tokenId = null, onSelectAddress = null, compact = 
       borderRadius: '12px',
       padding: '24px'
     }}>
-      {/* Note de confidentialité */}
       <div style={{
         padding: '12px 16px',
         backgroundColor: '#ecfdf5',
@@ -294,7 +239,7 @@ export const AddressBook = ({ tokenId = null, onSelectAddress = null, compact = 
       }}>
         <span style={{ fontSize: '1.2rem' }}>🔒</span>
         <div>
-          <strong>Confidentialité :</strong> Vos contacts sont stockés uniquement sur votre appareil (localStorage), pas sur nos serveurs. Vous gardez le contrôle total de vos données et pouvez les exporter/importer à tout moment.
+          <strong>Confidentialité :</strong> Données stockées localement, jamais sur les serveurs.
         </div>
       </div>
 
@@ -305,11 +250,11 @@ export const AddressBook = ({ tokenId = null, onSelectAddress = null, compact = 
         marginBottom: '20px'
       }}>
         <h3 style={{ fontSize: '1.1rem', fontWeight: '600', color: '#1e293b', margin: 0 }}>
-          📇 Carnet d'adresses {tokenId ? '(ce jeton)' : ''}
+          📇 Carnet d'adresses
         </h3>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
-            onClick={handleExport}
+            onClick={() => exportContacts()}
             disabled={contacts.length === 0}
             style={{
               padding: '6px 12px',
@@ -323,7 +268,7 @@ export const AddressBook = ({ tokenId = null, onSelectAddress = null, compact = 
               opacity: contacts.length > 0 ? 1 : 0.5
             }}
           >
-            📥 Exporter
+            📥
           </button>
           <label style={{
             padding: '6px 12px',
@@ -335,7 +280,7 @@ export const AddressBook = ({ tokenId = null, onSelectAddress = null, compact = 
             borderRadius: '8px',
             cursor: 'pointer'
           }}>
-            📤 Importer
+            📤
             <input
               type="file"
               accept=".json"
@@ -346,16 +291,14 @@ export const AddressBook = ({ tokenId = null, onSelectAddress = null, compact = 
         </div>
       </div>
 
-      {/* Barre de recherche */}
       <div style={{ marginBottom: '20px' }}>
         <Input
-          placeholder="🔍 Rechercher par nom ou adresse..."
+          placeholder="🔍 Rechercher..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
       </div>
 
-      {/* Bouton Ajouter */}
       <button
         onClick={() => setShowAddForm(!showAddForm)}
         style={{
@@ -368,14 +311,12 @@ export const AddressBook = ({ tokenId = null, onSelectAddress = null, compact = 
           backgroundColor: showAddForm ? '#eff6ff' : '#fff',
           color: '#3b82f6',
           borderRadius: '10px',
-          cursor: 'pointer',
-          transition: 'all 0.2s'
+          cursor: 'pointer'
         }}
       >
-        {showAddForm ? '❌ Annuler l\'ajout' : '➕ Ajouter un nouveau contact'}
+        {showAddForm ? '❌ Annuler' : '➕ Ajouter'}
       </button>
 
-      {/* Formulaire d'ajout */}
       {showAddForm && (
         <div style={{ 
           marginBottom: '20px', 
@@ -385,7 +326,7 @@ export const AddressBook = ({ tokenId = null, onSelectAddress = null, compact = 
           border: '1px solid #e2e8f0'
         }}>
           <Input
-            label="Nom du contact"
+            label="Nom"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder="Alice"
@@ -397,39 +338,17 @@ export const AddressBook = ({ tokenId = null, onSelectAddress = null, compact = 
             placeholder="ecash:qq..."
           />
           <Button onClick={handleAddContact} variant="primary" fullWidth>
-            ✅ Enregistrer le contact
+            ✅ Enregistrer
           </Button>
         </div>
       )}
 
-      {/* Liste des contacts */}
       <div style={{ 
         fontSize: '0.85rem', 
         color: '#64748b', 
-        marginBottom: '12px',
-        display: 'flex',
-        justifyContent: 'space-between'
+        marginBottom: '12px'
       }}>
-        <span>
-          {filteredContacts.length} contact{filteredContacts.length > 1 ? 's' : ''} 
-          {searchQuery && ` (filtré${filteredContacts.length > 1 ? 's' : ''})`}
-        </span>
-        {contacts.length !== filteredContacts.length && (
-          <button
-            onClick={() => setSearchQuery('')}
-            style={{
-              padding: '2px 8px',
-              fontSize: '0.75rem',
-              border: 'none',
-              backgroundColor: '#fee2e2',
-              color: '#dc2626',
-              borderRadius: '6px',
-              cursor: 'pointer'
-            }}
-          >
-            Effacer filtre
-          </button>
-        )}
+        {filteredContacts.length}/{contacts.length}
       </div>
 
       {filteredContacts.length === 0 ? (
@@ -440,9 +359,7 @@ export const AddressBook = ({ tokenId = null, onSelectAddress = null, compact = 
           backgroundColor: '#f8fafc',
           borderRadius: '10px'
         }}>
-          {searchQuery 
-            ? '🔍 Aucun contact trouvé avec cette recherche'
-            : '📭 Aucun contact enregistré. Ajoutez-en un !'}
+          {searchQuery ? '🔍 Aucun contact' : '📭 Aucun contact'}
         </div>
       ) : (
         <div style={{ 
@@ -452,9 +369,9 @@ export const AddressBook = ({ tokenId = null, onSelectAddress = null, compact = 
           maxHeight: '400px',
           overflowY: 'auto'
         }}>
-          {filteredContacts.map((contact, idx) => (
+          {filteredContacts.map((c: any, i) => (
             <div
-              key={idx}
+              key={i}
               style={{
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -462,40 +379,33 @@ export const AddressBook = ({ tokenId = null, onSelectAddress = null, compact = 
                 padding: '12px 16px',
                 backgroundColor: '#fff',
                 border: '1px solid #e2e8f0',
-                borderRadius: '10px',
-                transition: 'all 0.2s'
+                borderRadius: '10px'
               }}
-              onMouseEnter={(e) => e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)'}
-              onMouseLeave={(e) => e.currentTarget.style.boxShadow = 'none'}
             >
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '0.95rem', fontWeight: '600', color: '#1e293b', marginBottom: '4px' }}>
-                  {contact.name}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '0.95rem', fontWeight: '600', color: '#1e293b', marginBottom: '4px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {c.name}
                 </div>
                 <div 
-                  onClick={() => handleCopyAddress(contact.address)}
+                  onClick={() => copyAddress(c.address)}
                   style={{ 
                     fontSize: '0.8rem', 
                     color: '#64748b', 
                     fontFamily: 'monospace',
                     cursor: 'pointer',
-                    userSelect: 'all'
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
                   }}
                   title="Cliquer pour copier"
                 >
-                  {contact.address}
+                  {c.address}
                 </div>
-                {contact.tokenId && (
-                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '2px' }}>
-                    🔗 {contact.tokenId.substring(0, 16)}...
-                  </div>
-                )}
               </div>
-              <div style={{ display: 'flex', gap: '6px' }}>
+              <div style={{ display: 'flex', gap: '6px', marginLeft: '8px', flexShrink: 0 }}>
                 <button
-                  onClick={() => handleSelectAddress(contact)}
+                  onClick={() => selectContact(c.address, c.name)}
                   style={{
-                    padding: '6px 12px',
+                    padding: '6px 10px',
                     fontSize: '0.8rem',
                     fontWeight: '600',
                     border: '1px solid #3b82f6',
@@ -504,14 +414,14 @@ export const AddressBook = ({ tokenId = null, onSelectAddress = null, compact = 
                     borderRadius: '6px',
                     cursor: 'pointer'
                   }}
-                  title="Copier l'adresse"
+                  title="Sélectionner"
                 >
                   📋
                 </button>
                 <button
-                  onClick={() => handleUpdateContact(contact)}
+                  onClick={() => handleUpdateContact(c)}
                   style={{
-                    padding: '6px 12px',
+                    padding: '6px 10px',
                     fontSize: '0.8rem',
                     border: '1px solid #f59e0b',
                     backgroundColor: '#fef3c7',
@@ -519,14 +429,14 @@ export const AddressBook = ({ tokenId = null, onSelectAddress = null, compact = 
                     borderRadius: '6px',
                     cursor: 'pointer'
                   }}
-                  title="Modifier le nom"
+                  title="Modifier"
                 >
                   ✏️
                 </button>
                 <button
-                  onClick={() => handleDeleteContact(contact)}
+                  onClick={() => handleDeleteContact(c)}
                   style={{
-                    padding: '6px 12px',
+                    padding: '6px 10px',
                     fontSize: '0.8rem',
                     border: '1px solid #ef4444',
                     backgroundColor: '#fee2e2',

@@ -29,5 +29,12 @@ export { useAirdropToken } from './useAirdropToken';
 export { useMintToken } from './useMintToken';
 export { useBurnToken } from './useBurnToken';
 
+// Component Logic Hooks (Phase 5.2 - Cleanup)
+export { useAddressBook } from './useAddressBook';
+export { useClientTicketForm } from './useClientTicketForm';
+export { useNetworkFees } from './useNetworkFees';
+export { useCreateToken } from './useCreateToken';
+export { useImageUpload } from './useImageUpload';
+
 // Utilities
 export { useTranslation } from './useTranslation';
