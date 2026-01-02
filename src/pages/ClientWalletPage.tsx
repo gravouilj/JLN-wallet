@@ -8,6 +8,7 @@ import AddressBook from '../components/AddressBook/AddressBook';
 import { useTranslation } from '../hooks/useTranslation';
 import { useProfiles } from '../hooks/useProfiles';
 import { useEcashBalance, useEcashToken, useEcashWallet } from '../hooks/useEcashWallet';
+import { useWalletScan } from '../hooks/useWalletScan';
 import { useXecPrice } from '../hooks/useXecPrice';
 import { sanitizeInput, isValidXECAddress, isValidAmount } from '../utils/validation';
 import { 
@@ -53,11 +54,14 @@ interface MyToken extends Profile {
   balance?: string;
 }
 
+interface TokenBalances {
+  [tokenId: string]: string;
+}
+
 const ClientWalletPage = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'receive' | 'send' | 'addressbook'>('receive');
-  const [showScanner, setShowScanner] = useState(false);
+  const [activeTab, setActiveTab] = useState<'receive' | 'addressbook'>('receive');
   
   // Page title
   const pageTitle = '💼 Mon Portefeuille';
@@ -68,19 +72,11 @@ const ClientWalletPage = () => {
   const price = useXecPrice();
   const [currency] = useAtom(currencyAtom);
   
-  // Send form state
-  const [sendForm, setSendForm] = useState<SendFormState>({ address: '', amount: '' });
-  const [sendLoading, setSendLoading] = useState(false);
+  // ✅ HOOK PRINCIPAL: Scan du wallet avec dépendances optimisées
+  const { myTokens, tokenBalances, scanLoading } = useWalletScan();
+  
+  // Token-selected view
   const [activeTokenBalance, setActiveTokenBalance] = useState<string | null>(null);
-  
-  // Token balances for hub view
-  const [tokenBalances, setTokenBalances] = useState<TokenBalances>({});
-  
-  // My tokens: profiles with positive balance (auto-detected)
-  const [myTokens, setMyTokens] = useState<MyToken[]>([]);
-  
-  // Scan loading state
-  const [scanLoading, setScanLoading] = useState(false);
   
   // Atoms
   const [walletConnected] = useAtom(walletConnectedAtom);
@@ -99,132 +95,8 @@ const ClientWalletPage = () => {
     tokenBalance, 
     loading: tokenLoading 
   } = useEcashToken(currentTokenId);
-  
   // Get favorite profiles
   const favoriteProfiles: Profile[] = Array.isArray(profiles) ? profiles.filter((profile: Profile) => favoriteProfileIds.includes(profile.id)) : [];
-  
-  // Setter for favorite profiles
-  const setFavoriteProfileIds = useSetAtom(favoriteProfilesAtom);
-
-  // Load all token balances for hub view (SCAN GLOBAL - Source: wallet.listETokens())
-  useEffect(() => {
-    if (!wallet || !walletConnected || selectedProfile !== null) return;
-    
-    const loadAllTokenBalances = async () => {
-      setScanLoading(true);
-      console.log('🔍 SCAN GLOBAL: Scan des jetons dans le wallet...');
-      
-      try {
-        // 1. Source de vérité: tous les tokens possédés dans le wallet
-        const walletTokens = await wallet.listETokens();
-        console.log(`📦 ${walletTokens.length} jeton(s) détecté(s) dans le wallet`);
-        
-        const balances: TokenBalances = {};
-        const tokensWithBalance: MyToken[] = [];
-        const newFavoritesToAdd: string[] = [];
-        
-        // 2. Pour chaque token trouvé dans le wallet
-        for (const walletToken of walletTokens) {
-          const { tokenId, balance: rawBalance } = walletToken;
-          
-          // Ignorer les soldes nuls
-          const balanceNum = BigInt(rawBalance || '0');
-          if (balanceNum === 0n) continue;
-          
-          // 3. Récupérer les métadonnées blockchain (ticker, decimals TOUJOURS depuis blockchain)
-          let tokenInfo: TokenInfo = { genesisInfo: { tokenName: 'Inconnu', tokenTicker: '???', decimals: 0 } };
-          try {
-            const info = await wallet.getTokenInfo(tokenId);
-            if (info?.genesisInfo) {
-              tokenInfo = {
-                genesisInfo: {
-                  tokenName: info.genesisInfo.tokenName || 'Inconnu',
-                  tokenTicker: info.genesisInfo.tokenTicker || '???',
-                  decimals: info.genesisInfo.decimals || 0
-                }
-              };
-            }
-          } catch (e) {
-            console.warn(`⚠️ Impossible de récupérer infos blockchain pour ${tokenId}:`, e);
-          }
-          
-          const ticker = tokenInfo.genesisInfo?.tokenTicker || 'UNK';
-          const decimals = tokenInfo.genesisInfo?.decimals || 0;
-          const blockchainName = tokenInfo.genesisInfo?.tokenName || 'Token Inconnu';
-          
-          // 4. Chercher si le token existe dans profiles.json (pour image, description, vérification)
-          const profileMatch = profiles.find((p: Profile) => p.tokenId === tokenId);
-          
-          if (profileMatch) {
-            // ✅ Token référencé dans profiles.json
-            const formattedBalance = formatTokenBalance(rawBalance, decimals);
-            balances[tokenId] = formattedBalance;
-            
-            console.log(`✅ Jeton référencé: ${profileMatch.name} (${ticker}) - Solde: ${formattedBalance}`);
-            
-            // Utiliser les infos du JSON (image, description) + blockchain (ticker, decimals)
-            tokensWithBalance.push({
-              ...profileMatch,
-              ticker: ticker, // OVERRIDE: toujours blockchain
-              decimals: decimals, // OVERRIDE: toujours blockchain
-              verified: true,
-              balance: formattedBalance
-            });
-            
-            // Auto-ajout aux favoris si pas déjà présent
-            if (!favoriteProfileIds.includes(profileMatch.id)) {
-              console.log(`⭐ Auto-ajout aux favoris: ${profileMatch.name}`);
-              newFavoritesToAdd.push(profileMatch.id);
-            }
-          } else {
-            // ⚠️ Token NON référencé - utiliser infos blockchain uniquement
-            console.log(`⚠️ Jeton non-référencé détecté: ${tokenId}`);
-            
-            const formattedBalance = formatTokenBalance(rawBalance, decimals);
-            balances[tokenId] = formattedBalance;
-            
-            console.log(`📡 Infos blockchain: ${blockchainName} (${ticker})`);
-            
-            // Créer un objet "profile" synthétique avec infos blockchain
-            tokensWithBalance.push({
-              id: tokenId,
-              tokenId: tokenId,
-              name: blockchainName,
-              ticker: ticker,
-              decimals: decimals,
-              description: 'Jeton non référencé dans l\'annuaire',
-              verified: false, // Marquer comme non-vérifié
-              balance: formattedBalance,
-              // Image par défaut
-              image: null,
-              region: 'Inconnu',
-              country: 'Inconnu'
-            });
-          }
-        }
-        
-        setTokenBalances(balances);
-        setMyTokens(tokensWithBalance);
-        
-        // Mise à jour des favoris (seulement pour les tokens référencés)
-        if (newFavoritesToAdd.length > 0) {
-          console.log(`💾 Ajout de ${newFavoritesToAdd.length} ferme(s) référencée(s) aux favoris`);
-          setFavoriteProfileIds([...favoriteProfileIds, ...newFavoritesToAdd]);
-        }
-        
-        console.log(`📊 RÉSULTAT SCAN: ${tokensWithBalance.length} jeton(s) avec solde positif`);
-        console.log(`   - Référencés: ${tokensWithBalance.filter(t => t.verified).length}`);
-        console.log(`   - Non-référencés: ${tokensWithBalance.filter(t => !t.verified).length}`);
-        
-      } catch (error) {
-        console.error('❌ Erreur lors du scan des jetons:', error);
-      } finally {
-        setScanLoading(false);
-      }
-    };
-    
-    loadAllTokenBalances();
-  }, [wallet, walletConnected, profiles, selectedProfile]);
 
   // Calculate active token balance for detailed view
   useEffect(() => {
@@ -298,86 +170,6 @@ const ClientWalletPage = () => {
   };
 
   // Handle send form submit
-  const handleSendSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
-    e.preventDefault();
-    
-    // VALIDATION STRICTE AU DÉBUT
-    if (!sendForm.address || !sendForm.amount) {
-      setNotification({ type: 'error', message: 'Veuillez renseigner un destinataire et un montant.' });
-      return;
-    }
-    
-    if (!wallet || !walletConnected) {
-      setNotification({ type: 'error', message: 'Wallet non connecté' });
-      return;
-    }
-
-    // Validation des champs vides
-    if (!sendForm.address || !sendForm.address.trim()) {
-      setNotification({ type: 'error', message: 'Veuillez remplir le destinataire et le montant.' });
-      return;
-    }
-
-    if (!sendForm.amount || sendForm.amount.trim() === '') {
-      setNotification({ type: 'error', message: 'Veuillez remplir le destinataire et le montant.' });
-      return;
-    }
-
-    const sanitizedAddress = sanitizeInput(sendForm.address, 'address');
-    const sanitizedAmount = sanitizeInput(sendForm.amount, 'amount');
-
-    if (!sanitizedAddress || !isValidXECAddress(sanitizedAddress)) {
-      setNotification({ type: 'error', message: 'Adresse invalide' });
-      return;
-    }
-
-    if (!sanitizedAmount || !isValidAmount(sanitizedAmount, 'etoken')) {
-      setNotification({ type: 'error', message: 'Montant invalide' });
-      return;
-    }
-
-    const amount = parseFloat(sanitizedAmount);
-    if (amount <= 0) {
-      setNotification({ type: 'error', message: 'Le montant doit être positif' });
-      return;
-    }
-
-    setSendLoading(true);
-    try {
-      const cleanAmount = String(amount).replace(',', '.');
-      
-      let result;
-      if (selectedProfile) {
-        // ENVOI DE TOKEN
-        console.log(`Envoi Token ${selectedProfile.ticker} (${selectedProfile.protocol})`);
-        result = await wallet.sendToken(
-          selectedProfile.tokenId,
-          sanitizedAddress,
-          cleanAmount,
-          tokenInfo.genesisInfo?.decimals || 0,
-          selectedProfile.protocol || 'SLP'
-        );
-      } else {
-        // ENVOI XEC
-        result = await wallet.sendXec(sanitizedAddress, cleanAmount);
-      }
-      
-      setNotification({ 
-        type: 'success', 
-        message: `Transaction envoyée ! TXID: ${result.txid.substring(0, 8)}...` 
-      });
-      
-      // Reset form
-      setSendForm({ address: '', amount: '' });
-      
-    } catch (error) {
-      console.error('Erreur envoi:', error);
-      const errorMsg = error instanceof Error ? error.message : 'Échec de l\'envoi';
-      setNotification({ type: 'error', message: errorMsg });
-    } finally {
-      setSendLoading(false);
-    }
-  };
 
   // Set max amount
   const setMaxAmount = () => {
@@ -688,7 +480,7 @@ const ClientWalletPage = () => {
                 </div>
               )}
 
-              {/* XEC Balance Footer */}
+              {/* Network Fuel Indicator (Hub View) */}
               <div 
                 onClick={() => navigate('/settings')}
                 style={{ 
@@ -699,15 +491,17 @@ const ClientWalletPage = () => {
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  border: '1px solid var(--border-color, #ddd)'
                 }}
+                title="Carburant réseau nécessaire pour envoyer des jetons"
               >
                 <div>
-                  <div style={{ fontSize: '13px', color: '#666', marginBottom: '4px' }}>
-                    💎 {t('wallet.ecashAvailable') || '💎CreaeCash (XEC) disponible'}
+                  <div style={{ fontSize: '13px', color: '#666', marginBottom: '4px', fontWeight: '600' }}>
+                    ⛽ Carburant Réseau
                   </div>
                   <div style={{ fontSize: '11px', color: '#999' }}>
-                    {t('wallet.networkFees') || 'Frais réseau'}
+                    XEC · Nécessaire pour les transactions
                   </div>
                 </div>
                 <div style={{ fontSize: '18px', fontWeight: '600' }}>
@@ -741,13 +535,14 @@ const ClientWalletPage = () => {
               {/* Vertical Separator */}
               <div className="balance-separator"></div>
 
-              {/* Right: XEC Balance (30%) */}
+              {/* Right: Network Fuel (Carburant Réseau) - Token-First Design */}
               <div 
                 className="balance-right clickable-balance" 
                 onClick={() => navigate('/settings')}
                 style={{ cursor: 'pointer' }}
+                title="Carburant réseau (XEC) - Nécessaire pour envoyer des jetons"
               >
-                <div className="balance-xec-label">{t('wallet.ecashAvailable') || '💎 eCash(XEC) disponible'}</div>
+                <div className="balance-xec-label">⛽ {t('wallet.networkFuel') || 'Carburant Réseau'}</div>
                 <div className="balance-xec-amount">
                   {balanceLoading ? (
                     <span className="loading-pulse">...</span>
@@ -763,23 +558,17 @@ const ClientWalletPage = () => {
                     </div>
                   ) : null;
                 })()}
-                <div className="balance-xec-sublabel">{t('wallet.networkFees') || 'Frais réseau'}</div>
+                <div className="balance-xec-sublabel">XEC</div>
               </div>
             </div>
 
-            {/* Action Tabs */}
+            {/* Action Tabs - Token-First: pas d'onglet "Envoyer XEC" */}
             <div className="action-tabs">
               <button 
                 className={`tab-button ${activeTab === 'receive' ? 'active' : ''}`}
                 onClick={() => setActiveTab('receive')}
               >
                 📥 {t('wallet.receive') || 'Recevoir'}
-              </button>
-              <button 
-                className={`tab-button ${activeTab === 'send' ? 'active' : ''}`}
-                onClick={() => setActiveTab('send')}
-              >
-                📤 {t('wallet.send') || 'Envoyer eCash (XEC)'}
               </button>
               <button 
                 className={`tab-button ${activeTab === 'addressbook' ? 'active' : ''}`}
@@ -852,211 +641,6 @@ const ClientWalletPage = () => {
                       <p>Chargement de l'adresse...</p>
                     </div>
                   )}
-                </div>
-              )}
-
-              {activeTab === 'send' && (
-                <div className="send-content">
-                  <form onSubmit={handleSendSubmit} style={{ maxWidth: '400px', margin: '0 auto' }}>
-                    {/* Destinataire */}
-                    <div style={{ marginBottom: '12px' }}>
-                      <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500' }}>
-                        {t('xec.recipient') || 'Destinataire'}
-                      </label>
-                      <div style={{ position: 'relative' }}>
-                        <input
-                          type="text"
-                          value={sendForm.address}
-                          onChange={(e) => setSendForm(prev => ({ ...prev, address: e.target.value }))}
-                          placeholder={t('xec.recipientPlaceholder') || 'ecash:qp...'}
-                          disabled={sendLoading}
-                          style={{
-                            width: '100%',
-                            height: '48px',
-                            padding: '0 48px 0 16px',
-                            fontSize: '14px',
-                            border: '1px solid var(--border-color, #ddd)',
-                            borderRadius: '8px',
-                            backgroundColor: 'var(--bg-primary, #fff)',
-                            boxSizing: 'border-box'
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowScanner(true)}
-                          disabled={sendLoading}
-                          style={{
-                            position: 'absolute',
-                            right: '8px',
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                            padding: '8px',
-                            fontSize: '18px',
-                            border: 'none',
-                            borderRadius: '6px',
-                            backgroundColor: 'transparent',
-                            color: 'var(--text-secondary, #666)',
-                            cursor: sendLoading ? 'not-allowed' : 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: 'color 0.2s'
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary-color, #0074e4)'}
-                          onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary, #666)'}
-                          title={t('common.qrScan') || 'Scanner QR'}
-                        >
-                          <svg
-                            width="20"
-                            height="20"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <rect x="3" y="3" width="7" height="7" />
-                            <rect x="14" y="3" width="7" height="7" />
-                            <rect x="14" y="14" width="7" height="7" />
-                            <rect x="3" y="14" width="7" height="7" />
-                          </svg>
-                        </button>
-                      </div>
-                      
-                      {/* QR Scanner Modal */}
-                      {showScanner && (
-                        <div style={{
-                          position: 'fixed',
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          backgroundColor: 'rgba(0, 0, 0, 0.9)',
-                          zIndex: 9999,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          padding: '20px'
-                        }}>
-                          <button
-                            type="button"
-                            onClick={() => setShowScanner(false)}
-                            style={{
-                              position: 'absolute',
-                              top: '20px',
-                              right: '20px',
-                              padding: '10px 20px',
-                              fontSize: '14px',
-                              fontWeight: '500',
-                              border: 'none',
-                              borderRadius: '8px',
-                              backgroundColor: '#fff',
-                              color: '#000',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            ✕ {t('common.close') || 'Fermer'}
-                          </button>
-                          <QrCodeScanner onAddressDetected={handleAddressDetected} />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Montant */}
-                    <div style={{ marginBottom: '12px' }}>
-                      <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500' }}>
-                        {t('xec.amount') || 'Montant'}
-                      </label>
-                      <div style={{ position: 'relative' }}>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={sendForm.amount}
-                          onChange={(e) => setSendForm(prev => ({ ...prev, amount: e.target.value }))}
-                          placeholder="0.00"
-                          disabled={sendLoading}
-                          style={{
-                            width: '100%',
-                            height: '48px',
-                            padding: '0 70px 0 16px',
-                            fontSize: '14px',
-                            border: '1px solid var(--border-color, #ddd)',
-                            borderRadius: '8px',
-                            backgroundColor: 'var(--bg-primary, #fff)',
-                            boxSizing: 'border-box'
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={setMaxAmount}
-                          disabled={sendLoading}
-                          style={{
-                            position: 'absolute',
-                            right: '8px',
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                            padding: '6px 12px',
-                            fontSize: '12px',
-                            fontWeight: '600',
-                            border: '1px solid var(--primary-color, #0074e4)',
-                            borderRadius: '6px',
-                            backgroundColor: 'var(--bg-primary, #fff)',
-                            color: 'var(--primary-color, #0074e4)',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          MAX
-                        </button>
-                      </div>
-                      <small style={{ display: 'block', marginTop: '8px', color: '#666', fontSize: '12px' }}>
-                        {t('wallet.available') || 'Solde'}: {activeTokenBalance !== null ? activeTokenBalance : '...'} {selectedProfile.ticker}
-                      </small>
-                      {!selectedProfile && price && typeof price.convert === 'function' && sendForm.amount && (() => {
-                        const converted = price.convert(Number(sendForm.amount || 0), currency);
-                        return converted !== null ? (
-                          <small style={{ display: 'block', marginTop: '4px', color: '#999', fontSize: '11px', fontStyle: 'italic' }}>
-                            ≈ {converted.toFixed(4)} {currency}
-                          </small>
-                        ) : null;
-                      })()}
-                    </div>
-
-                    {/* Info Frais */}
-                    <div style={{ 
-                      padding: '10px', 
-                      marginBottom: '12px',
-                      backgroundColor: 'var(--bg-secondary, #f5f5f5)',
-                      borderRadius: '8px',
-                      fontSize: '13px',
-                      color: '#666'
-                    }}>
-                      💡 Frais de réseau estimés : ~5 XEC {price && typeof price.convert === 'function' && (() => {
-                        const converted = price.convert(5, currency);
-                        return converted !== null ? `(≈ ${converted.toFixed(4)} ${currency})` : '';
-                      })()}
-                    </div>
-
-                    {/* Bouton Confirmer */}
-                    <button
-                      type="submit"
-                      disabled={sendLoading || !sendForm.address || !sendForm.amount}
-                      style={{
-                        width: '100%',
-                        padding: '14px',
-                        fontSize: '16px',
-                        fontWeight: '600',
-                        border: 'none',
-                        borderRadius: '8px',
-                        backgroundColor: sendLoading ? '#ccc' : 'var(--primary-color, #0074e4)',
-                        color: '#fff',
-                        cursor: sendLoading ? 'not-allowed' : 'pointer'
-                      }}
-                    >
-                      {sendLoading ? '⌛ Envoi en cours...' : `✔️ ${t('common.confirmSend') || 'Confirmer l’envoi'}`}
-                    </button>
-                  </form>
                 </div>
               )}
 

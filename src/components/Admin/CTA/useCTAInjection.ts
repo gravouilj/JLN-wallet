@@ -10,7 +10,7 @@ import { CTA_CONFIG, getActiveCTAs } from './ctaConfig';
  * @param {Object} config - Configuration optionnelle pour surcharger CTA_CONFIG
  * @returns {Array} Liste des profils avec CTA injectés
  */
-export const useCTAInjection = (profiles, userContext, filterContext, config = {}) => {
+export const useCTAInjection = (profiles: unknown, userContext: unknown, filterContext: unknown, config = {}) => {
   const finalConfig = { ...CTA_CONFIG, ...config };
   
   return useMemo(() => {
@@ -46,7 +46,7 @@ export const useCTAInjection = (profiles, userContext, filterContext, config = {
 /**
  * Déterminer si les CTA doivent être affichés
  */
-const determineShouldShowCTAs = (profiles, filterContext, config) => {
+const determineShouldShowCTAs = (profiles: string | any[], filterContext: any, config: { insertionFrequency?: number; firstCTAPosition?: number; minProfilesThreshold: any; showOnFilterActive: any; showOnNoResults?: boolean; }) => {
   // Afficher si moins ou égal au seuil de profils
   if (profiles.length <= config.minProfilesThreshold) {
     return true;
@@ -63,7 +63,7 @@ const determineShouldShowCTAs = (profiles, filterContext, config) => {
 /**
  * Vérifier si des filtres sont actifs
  */
-const isFilterActive = (filterContext) => {
+const isFilterActive = (filterContext: { searchQuery: any; selectedCountry: any; selectedRegion: any; selectedDepartment: any; selectedProduct: any; selectedService: any; }) => {
   const {
     searchQuery,
     selectedCountry,
@@ -86,14 +86,14 @@ const isFilterActive = (filterContext) => {
 /**
  * Injecter les CTA dans la liste de profils selon la configuration
  */
-const injectCTAsIntoProfiles = (profiles, activeCTAs, config) => {
-  const result = [];
+const injectCTAsIntoProfiles = (profiles: any[], activeCTAs: string | any[], config: { insertionFrequency: any; firstCTAPosition: any; minProfilesThreshold?: number; showOnFilterActive?: boolean; showOnNoResults?: boolean; }) => {
+  const result: { id: any; isCTA: boolean; ctaType: any; ctaConfig: any; }[] = [];
   let ctaIndex = 0;
   
   const { insertionFrequency, firstCTAPosition } = config;
   
   // Insérer les profils avec CTA aux positions appropriées
-  profiles.forEach((profile, index) => {
+  profiles.forEach((profile: any, index: number) => {
     result.push(profile);
     
     // Insérer le premier CTA à la position configurée

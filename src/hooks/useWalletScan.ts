@@ -1,8 +1,39 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAtom } from 'jotai';
 import { useEcashWallet } from './useEcashWallet';
-import { walletConnectedAtom, favoriteProfilesAtom } from '../atoms';
+import { walletConnectedAtom, selectedProfileAtom, favoriteProfilesAtom } from '../atoms';
 import { useProfiles } from './useProfiles';
+
+// Type definitions
+interface Profile {
+  id: string;
+  name: string;
+  tokenId: string;
+  verified?: boolean;
+  ticker?: string;
+  creatorProfileId?: string;
+  description?: string;
+  image?: string | null;
+  region?: string;
+  country?: string;
+  [key: string]: any;
+}
+
+interface MyToken extends Profile {
+  balance?: string;
+}
+
+interface TokenBalances {
+  [tokenId: string]: string;
+}
+
+interface UseWalletScanReturn {
+  myTokens: MyToken[];
+  tokenBalances: TokenBalances;
+  scanLoading: boolean;
+  scanError: string | null;
+  formatTokenBalance: (balance: string | bigint, decimals?: number) => string;
+}
 
 /**
  * useWalletScan Hook
@@ -13,19 +44,20 @@ import { useProfiles } from './useProfiles';
  * - Formater les soldes avec les bonnes décimales
  * - Auto-ajouter aux favoris les tokens référencés
  */
-export const useWalletScan = () => {
+export const useWalletScan = (): UseWalletScanReturn => {
   const { wallet } = useEcashWallet();
   const [walletConnected] = useAtom(walletConnectedAtom);
-  const { profiles } = useProfiles();
+  const [selectedProfile] = useAtom(selectedProfileAtom);
+  const { profiles } = useProfiles() as { profiles: Profile[] };
   const [favoriteProfileIds, setFavoriteProfileIds] = useAtom(favoriteProfilesAtom);
   
-  const [myTokens, setMyTokens] = useState([]);
-  const [tokenBalances, setTokenBalances] = useState({});
+  const [myTokens, setMyTokens] = useState<MyToken[]>([]);
+  const [tokenBalances, setTokenBalances] = useState<TokenBalances>({});
   const [scanLoading, setScanLoading] = useState(false);
-  const [scanError, setScanError] = useState(null);
+  const [scanError, setScanError] = useState<string | null>(null);
 
   // Format token balance with proper decimals handling
-  const formatTokenBalance = (balance, decimals = 0) => {
+  const formatTokenBalance = useCallback((balance: string | bigint, decimals: number = 0): string => {
     if (!balance) return '0';
     const balanceNum = typeof balance === 'string' ? BigInt(balance) : BigInt(balance.toString());
     const divisor = BigInt(Math.pow(10, decimals));
@@ -38,11 +70,16 @@ export const useWalletScan = () => {
     
     const decimalPart = remainder.toString().padStart(decimals, '0');
     return `${wholePart}.${decimalPart}`.replace(/\.?0+$/, '');
-  };
+  }, []);
 
-  // Main scan effect
+  // Main scan effect - ONLY in hub view (when selectedProfile is null)
   useEffect(() => {
-    if (!wallet || !walletConnected) return;
+    // Reset data if not in hub view
+    if (!wallet || !walletConnected || selectedProfile !== null) {
+      setMyTokens([]);
+      setTokenBalances({});
+      return;
+    }
     
     const runScan = async () => {
       setScanLoading(true);
@@ -88,7 +125,7 @@ export const useWalletScan = () => {
           
           // 4. Search if token exists in profiles.json
           const profileMatch = Array.isArray(profiles) 
-            ? profiles.find(p => p.tokenId === tokenId)
+            ? profiles.find((p: Profile) => p.tokenId === tokenId)
             : null;
           
           const formattedBalance = formatTokenBalance(rawBalance, decimals);
@@ -142,19 +179,20 @@ export const useWalletScan = () => {
         }
         
         console.log(`📊 RÉSULTAT SCAN: ${tokensWithBalance.length} jeton(s) avec solde positif`);
-        console.log(`   - Référencés: ${tokensWithBalance.filter(t => t.verified).length}`);
-        console.log(`   - Non-référencés: ${tokensWithBalance.filter(t => !t.verified).length}`);
+        console.log(`   - Référencés: ${tokensWithBalance.filter((t: MyToken) => t.verified).length}`);
+        console.log(`   - Non-référencés: ${tokensWithBalance.filter((t: MyToken) => !t.verified).length}`);
         
       } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Erreur lors du scan';
         console.error('❌ Erreur lors du scan des jetons:', error);
-        setScanError(error.message || 'Erreur lors du scan');
+        setScanError(errorMsg);
       } finally {
         setScanLoading(false);
       }
     };
     
     runScan();
-  }, [wallet, walletConnected, profiles, favoriteProfileIds, setFavoriteProfileIds]);
+  }, [wallet, walletConnected, selectedProfile, profiles, favoriteProfileIds, setFavoriteProfileIds, formatTokenBalance]);
 
   return {
     myTokens,
