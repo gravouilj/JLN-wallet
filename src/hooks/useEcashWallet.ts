@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useAtom, useAtomValue } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import {
   walletAtom,
   walletConnectedAtom,
@@ -10,7 +10,8 @@ import {
   balanceBreakdownAtom,
   balanceRefreshTriggerAtom,
   scriptLoadedAtom,
-  tokenRefreshTriggerAtom
+  tokenRefreshTriggerAtom,
+  clearWalletAtom
 } from '../atoms';
 import { createWallet, EcashWallet } from '../services/ecashWallet';
 import { storageService } from '../services/storageService';
@@ -87,6 +88,7 @@ export const useEcashWallet = (): UseEcashWalletReturn => {
   const [walletConnected, setWalletConnected] = useAtom(walletConnectedAtom);
   const [hdPath] = useAtom(hdPathAtom);
   const [, setScriptLoaded] = useAtom(scriptLoadedAtom);
+  const clearWallet = useSetAtom(clearWalletAtom);
   
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -133,12 +135,18 @@ export const useEcashWallet = (): UseEcashWalletReturn => {
     init();
   }, [mnemonic, hdPath, wallet, setWallet, setWalletConnected, setScriptLoaded]);
 
-  // Déconnexion (Logout logique)
+  // ✅ SECURITY FIX #5: Logout with secure atom clearing
   const disconnectWallet = useCallback((): void => {
+    // Clear all sensitive data from memory
+    clearWallet();
+    
+    // Also clear local state
     setWallet(null);
     setWalletConnected(false);
     setScriptLoaded(false);
-  }, [setWallet, setWalletConnected, setScriptLoaded]);
+    
+    console.log('🔐 Wallet sécurisé et déconnecté');
+  }, [clearWallet, setWallet, setWalletConnected, setScriptLoaded]);
 
   // Reset complet (Suppression des données chiffrées)
   const resetWallet = useCallback((): void => {

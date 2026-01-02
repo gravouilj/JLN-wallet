@@ -326,3 +326,97 @@ export const getValidationErrorMessage = (
 
   return messages[type] || 'Erreur de validation';
 };
+
+// ============================================
+// DYNAMIC FEE CALCULATION (SECURITY FIX #2)
+// ============================================
+
+/**
+ * Calculates transaction size in bytes
+ * ✅ SECURITY FIX: Dynamic fees based on actual TX size
+ * 
+ * Formula:
+ *   - Input: ~180 bytes each (P2PKH unlock)
+ *   - Output: ~34 bytes each (P2PKH lock)
+ *   - OP_RETURN: message bytes + 10 (OP_RETURN prefix)
+ *   - Overhead: ~10 bytes (version + locktime)
+ * 
+ * @param inputCount - Number of inputs (UTXOs)
+ * @param outputCount - Number of outputs
+ * @param messageBytes - Optional OP_RETURN message size in UTF-8 bytes
+ * @returns Transaction size in bytes
+ */
+export const calculateTransactionSize = (
+  inputCount: number,
+  outputCount: number,
+  messageBytes: number = 0
+): number => {
+  // Standard P2PKH transaction components
+  const inputSize = inputCount * 180;        // ~180 bytes per input (unlock script)
+  const outputSize = outputCount * 34;       // ~34 bytes per output (lock script)
+  const opReturnSize = messageBytes > 0 ? (messageBytes + 10) : 0; // OP_RETURN + varint + data
+  const overhead = 10;                       // Version (4) + locktime (4) + other (2)
+  
+  const totalSize = inputSize + outputSize + opReturnSize + overhead;
+  
+  return totalSize;
+};
+
+/**
+ * Calculates recommended transaction fee
+ * ✅ SECURITY FIX: Prevents under-fee rejections from mempool
+ * 
+ * Standard eCash network: 1 sat/byte minimum
+ * With safety buffer: 1.5 sat/byte recommended
+ * 
+ * @param inputCount - Number of inputs
+ * @param outputCount - Number of outputs
+ * @param satPerByte - Sats per byte (default: 1)
+ * @param messageBytes - Optional OP_RETURN message size
+ * @param withBuffer - Add 50% safety buffer (default: true)
+ * @returns Recommended fee as BigInt (in satoshis)
+ */
+export const calculateDynamicFee = (
+  inputCount: number,
+  outputCount: number,
+  satPerByte: number = 1,
+  messageBytes: number = 0,
+  withBuffer: boolean = true
+): bigint => {
+  const txSize = calculateTransactionSize(inputCount, outputCount, messageBytes);
+  let fee = BigInt(txSize) * BigInt(satPerByte);
+  
+  // Add 50% safety buffer if requested
+  if (withBuffer) {
+    fee = (fee * 150n) / 100n;
+  }
+  
+  // Minimum fee: 300 sats (to be safe)
+  const minFee = 300n;
+  return fee > minFee ? fee : minFee;
+};
+
+/**
+ * Validates sufficient balance for transaction including fees
+ * @param senderBalance - Balance in satoshis (BigInt)
+ * @param sendAmount - Amount to send in satoshis (BigInt)
+ * @param estimatedFee - Estimated fee in satoshis (BigInt)
+ * @returns { valid: boolean; error?: string; requiredBalance?: bigint }
+ */
+export const validateBalanceWithFees = (
+  senderBalance: bigint,
+  sendAmount: bigint,
+  estimatedFee: bigint
+): { valid: boolean; error?: string; requiredBalance?: bigint } => {
+  const requiredBalance = sendAmount + estimatedFee;
+  
+  if (senderBalance < requiredBalance) {
+    return {
+      valid: false,
+      error: `Solde insuffisant. Requis: ${bigIntToAmount(requiredBalance)} XEC, Disponible: ${bigIntToAmount(senderBalance)} XEC`,
+      requiredBalance
+    };
+  }
+  
+  return { valid: true };
+};

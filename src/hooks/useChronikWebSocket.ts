@@ -36,6 +36,7 @@ export const useChronikWebSocket = () => {
 
   /**
    * Handle incoming WebSocket messages
+   * ✅ SECURITY FIX #4: Added BlockDisconnected listener for reorg handling
    */
   const handleMessage = useCallback((msg) => {
     log('📨 Chronik WebSocket message:', msg);
@@ -62,6 +63,22 @@ export const useChronikWebSocket = () => {
       setTimeout(() => {
         setBalanceRefreshTrigger(Date.now());
       }, 300);
+      
+    } else if (msg.type === 'BlockDisconnected') {
+      // ✅ NEW: Handle blockchain reorganization (reorg)
+      log('⚠️ Blockchain reorg detected! Balance may need update...');
+      
+      setNotification({
+        type: 'warning',
+        message: '⚠️ Réorganisation blockchain - solde mis à jour'
+      });
+      
+      // Wait for blockchain to stabilize before refresh
+      // Reorgs can cause multiple disconnects in quick succession
+      setTimeout(() => {
+        log('🔄 Triggering balance refresh after reorg (2s delay)...');
+        setBalanceRefreshTrigger(Date.now());
+      }, 2000);
     }
   }, [setBalanceRefreshTrigger, setNotification]);
 

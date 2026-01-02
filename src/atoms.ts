@@ -187,6 +187,23 @@ export const coinSelectionStrategyAtom = atom<string>('efficient');
 // 1. IN-MEMORY MNEMONIC (Non-persistant)
 export const mnemonicAtom = atom<string | null>(null);
 
+// ✅ SECURITY FIX #5: Clear wallet atoms on logout
+// Prevents sensitive data (keys, wallet instance) from remaining in memory
+export const clearWalletAtom = atom(null, (_get, set) => {
+  // Clear sensitive data from memory
+  set(mnemonicAtom, null);        // Clear mnemonic from RAM
+  set(walletAtom, null);          // Clear wallet instance
+  set(walletConnectedAtom, false); // Mark as disconnected
+  
+  // Log for security monitoring
+  console.log('🔒 Wallet atoms cleared from memory');
+  
+  // Request garbage collection if available (V8 only, with --expose-gc flag)
+  if (typeof global !== 'undefined' && global.gc) {
+    global.gc();
+  }
+});
+
 // 2. CHECK ENCRYPTED VAULT
 export const hasEncryptedWalletAtom = atom<boolean>(storageService.hasWallet());
 
