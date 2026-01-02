@@ -23,5 +23,11 @@ export { useIsCreator } from './useIsCreator';
 export { useChronikWebSocket } from './useChronikWebSocket';
 export { useXecPrice } from './useXecPrice';
 
+// Transaction Hooks (Phase 5 Refactoring)
+export { useSendToken } from './useSendToken';
+export { useAirdropToken } from './useAirdropToken';
+export { useMintToken } from './useMintToken';
+export { useBurnToken } from './useBurnToken';
+
 // Utilities
 export { useTranslation } from './useTranslation';
