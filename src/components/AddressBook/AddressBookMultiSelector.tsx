@@ -28,10 +28,13 @@ export const AddressBookMultiSelector = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedContacts, setSelectedContacts] = useState<Contact[]>([]);
 
+  // ✅ CRITICAL FIX: tokenId dependency - must requery contacts when token changes
   useEffect(() => {
     // On assume que getContacts retourne un Contact[]
     const allContacts = addressBookService.getContacts(tokenId) as Contact[];
     setContacts(allContacts);
+    // Reset selection when switching tokens to avoid cross-token issues
+    setSelectedContacts([]);
   }, [tokenId]);
 
   const filteredContacts = searchQuery

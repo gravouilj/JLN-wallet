@@ -5,8 +5,9 @@ import HistoryCollapse from '../../HistoryCollapse';
 import NetworkFeesAvail from '../NetworkFeesAvail';
 import ActionFeeEstimate from './ActionFeeEstimate';
 import { notificationAtom } from '../../../atoms';
-import { addEntry, ACTION_TYPES } from '../../../services/historyService';
 import { useMintToken } from '../../../hooks/useMintToken';
+import { useActionSuccess } from '../../../hooks/useActionSuccess';
+import { validateTokenSendAmount } from '../../../utils/validation';
 
 interface MintProps {
   activeTab: string;
@@ -48,43 +49,43 @@ export const Mint: React.FC<MintProps> = ({
   const [batonRecipient, setBatonRecipient] = useState('');
   const [dynamicFee, setDynamicFee] = useState(546);
 
-  // Hook métier
+  // Hook métier + action success handler
   const decimals = tokenInfo?.genesisInfo?.decimals || 0;
   const { isLoading, error, txId, success, mint, reset } = useMintToken(tokenId, decimals);
-
+  const handleActionSuccess = useActionSuccess();
   const setNotification = useSetAtom(notificationAtom);
 
   const handleMint = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // ✅ FIXED: Validate amount using token decimals
+    const validation = validateTokenSendAmount(mintAmount, decimals);
+    if (!validation.valid) {
+      setNotification({ type: 'error', message: validation.error });
+      return;
+    }
+
     const txid = await mint(mintAmount, batonRecipient || undefined);
 
     if (txid) {
-      setNotification({
-        type: 'success',
-        message: `✅ ${mintAmount} jetons émis ! TXID: ${txid.substring(0, 8)}...`,
+      // ✅ FIXED: Use centralized action success handler
+      await handleActionSuccess({
+        txid,
+        amount: mintAmount,
+        ticker,
+        actionType: 'mint',
+        tokenId,
+        ownerAddress: wallet?.getAddress?.() || wallet?.address || '',
+        details: batonRecipient ? { batonRecipient } : null
       });
 
-      // Enregistrer historique
-      try {
-        const safeTicker = tokenInfo?.genesisInfo?.tokenTicker || ticker || 'UNK';
-        const safeOwner = wallet?.getAddress?.() || wallet?.address || '';
-
-        await addEntry({
-          owner_address: safeOwner,
-          token_id: tokenId,
-          token_ticker: safeTicker,
-          action_type: ACTION_TYPES.MINT,
-          amount: mintAmount,
-          tx_id: txid,
-          details: batonRecipient ? { batonRecipient } : null,
-        });
-
-        if (onHistoryUpdate) {
+      // Bonus: onHistoryUpdate callback optionnel
+      if (onHistoryUpdate) {
+        try {
           await onHistoryUpdate();
+        } catch (err) {
+          console.warn('⚠️ onHistoryUpdate erreur:', err);
         }
-      } catch (histErr) {
-        console.warn('⚠️ Erreur enregistrement historique:', histErr);
       }
 
       // Reset

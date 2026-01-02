@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useAtom } from 'jotai';
 import { walletAtom } from '../atoms';
-import { isValidXECAddress } from '../utils/validation';
+import { isValidXECAddress, validateXecSendAmount, validateTokenSendAmount } from '../utils/validation';
 
 interface SendTokenState {
   isLoading: boolean;
@@ -21,8 +21,10 @@ interface SendTokenParams {
  * Custom Hook pour gérer l'envoi de tokens
  * Centralise la validation, l'appel wallet et la gestion d'erreurs
  * 
- * Respecte l'architecture RAM-only de JLN-Wallet
- * Utilise walletAtom pour accéder au wallet
+ * ✅ FIXED:
+ * - validateXecSendAmount() for XEC (no dust limit)
+ * - validateTokenSendAmount() for ALP tokens (respects decimals)
+ * - BigInt usage throughout
  */
 export const useSendToken = () => {
   const [wallet] = useAtom(walletAtom);
@@ -35,22 +37,23 @@ export const useSendToken = () => {
 
   /**
    * Validation locale des inputs
-   * - Adresse: doit être une adresse eCash valide
-   * - Montant: positif, dépasse le dust limit (546 sats = 5.46 XEC)
+   * - XEC: Adresse + montant (pas de dust limit pour send XEC)
+   * - Token: Adresse + montant + respect des decimals
    */
   const validateInputs = useCallback((params: SendTokenParams): string | null => {
     if (!params.address.trim()) return 'Adresse requise';
     if (!isValidXECAddress(params.address)) return 'Adresse eCash invalide';
     if (!params.amount.trim()) return 'Montant requis';
 
-    const amountNum = parseFloat(params.amount);
-    if (isNaN(amountNum) || amountNum <= 0) return 'Montant invalide';
-
-    // Dust limit check (546 sats = 5.46 XEC pour eCash avec 2 décimales)
-    const sats = Math.round(amountNum * 100);
-    if (sats < 546) return 'Minimum 5.46 XEC (limite de poussière)';
-
-    return null;
+    // ✅ FIXED: Use dedicated validators
+    if (params.tokenId) {
+      const decimals = params.decimals || 0;
+      const result = validateTokenSendAmount(params.amount, decimals);
+      return result.valid ? null : result.error || 'Montant invalide';
+    } else {
+      const result = validateXecSendAmount(params.amount);
+      return result.valid ? null : result.error || 'Montant invalide';
+    }
   }, []);
 
   /**

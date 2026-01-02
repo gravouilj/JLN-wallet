@@ -5,8 +5,9 @@ import HistoryCollapse from '../../HistoryCollapse';
 import NetworkFeesAvail from '../NetworkFeesAvail';
 import ActionFeeEstimate from './ActionFeeEstimate';
 import { notificationAtom } from '../../../atoms';
-import { addEntry, ACTION_TYPES } from '../../../services/historyService';
 import { useBurnToken } from '../../../hooks/useBurnToken';
+import { useActionSuccess } from '../../../hooks/useActionSuccess';
+import { validateTokenSendAmount } from '../../../utils/validation';
 
 interface BurnProps {
   activeTab: string;
@@ -55,9 +56,9 @@ export const Burn: React.FC<BurnProps> = ({
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState('');
 
-  // Hook métier
+  // Hook métier + action success handler
   const { isLoading, error, txId, success, burn, reset } = useBurnToken(tokenId, decimals);
-
+  const handleActionSuccess = useActionSuccess();
   const setNotification = useSetAtom(notificationAtom);
 
   const handleSetMax = () => {
@@ -67,28 +68,31 @@ export const Burn: React.FC<BurnProps> = ({
   const handleBurn = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Vérifications avant submission
-    const amount = parseFloat(burnAmount);
-    if (isNaN(amount) || amount <= 0) {
-      setNotification({ type: 'error', message: 'Montant invalide' });
+    // ✅ FIXED: Use proper token validation
+    const validation = validateTokenSendAmount(burnAmount, decimals);
+    if (!validation.valid) {
+      setNotification({ type: 'error', message: validation.error });
       return;
     }
 
-    // Avertissement si brûler 100%
-    const burnAmountBigInt = BigInt(Math.round(amount * Math.pow(10, decimals)));
-    const myBalanceBigInt = BigInt(Math.round(myBalance * Math.pow(10, decimals)));
-    const isBurningAll = burnAmountBigInt >= myBalanceBigInt;
+    const amount = parseFloat(burnAmount);
 
-    if (isBurningAll && isCreator) {
-      const msg = `⚠️ ATTENTION CRITIQUE: Vous allez détruire TOUS vos tokens. Si le mint baton est inclus, vous ne pourrez PLUS JAMAIS créer de nouveaux tokens pour ce tokenId. Êtes-vous sûr ?`;
-      setConfirmMessage(msg);
-      setShowConfirmModal(true);
-      return;
-    } else if (amount > myBalance * 0.5) {
-      const msg = `⚠️ Attention: Vous allez détruire ${burnAmount} tokens (${((amount / myBalance) * 100).toFixed(0)}% de votre solde). Continuer ?`;
-      setConfirmMessage(msg);
-      setShowConfirmModal(true);
-      return;
+    // Avertissement si brûler 100%
+    if (validation.atoms) {
+      const myBalanceAtoms = BigInt(Math.round(myBalance * Math.pow(10, decimals)));
+      const isBurningAll = validation.atoms >= myBalanceAtoms;
+
+      if (isBurningAll && isCreator) {
+        const msg = `⚠️ ATTENTION CRITIQUE: Vous allez détruire TOUS vos tokens. Si le mint baton est inclus, vous ne pourrez PLUS JAMAIS créer de nouveaux tokens pour ce tokenId. Êtes-vous sûr ?`;
+        setConfirmMessage(msg);
+        setShowConfirmModal(true);
+        return;
+      } else if (amount > myBalance * 0.5) {
+        const msg = `⚠️ Attention: Vous allez détruire ${burnAmount} tokens (${((amount / myBalance) * 100).toFixed(0)}% de votre solde). Continuer ?`;
+        setConfirmMessage(msg);
+        setShowConfirmModal(true);
+        return;
+      }
     }
 
     // Procéder sans confirmation
@@ -101,31 +105,24 @@ export const Burn: React.FC<BurnProps> = ({
     const txid = await burn(burnAmount);
 
     if (txid) {
-      setNotification({
-        type: 'success',
-        message: `🔥 ${burnAmount} jetons détruits ! TXID: ${txid.substring(0, 8)}...`,
+      // ✅ FIXED: Use centralized action success handler
+      await handleActionSuccess({
+        txid,
+        amount: burnAmount,
+        ticker,
+        actionType: 'burn',
+        tokenId,
+        ownerAddress: wallet?.getAddress?.() || wallet?.address || '',
+        details: null
       });
 
-      // Enregistrer historique
-      try {
-        const safeTicker = tokenInfo?.genesisInfo?.tokenTicker || ticker || 'UNK';
-        const safeOwner = wallet?.getAddress?.() || wallet?.address || '';
-
-        await addEntry({
-          owner_address: safeOwner,
-          token_id: tokenId,
-          token_ticker: safeTicker,
-          action_type: ACTION_TYPES.BURN,
-          amount: burnAmount,
-          tx_id: txid,
-          details: null,
-        });
-
-        if (onHistoryUpdate) {
+      // Bonus: onHistoryUpdate callback optionnel
+      if (onHistoryUpdate) {
+        try {
           await onHistoryUpdate();
+        } catch (err) {
+          console.warn('⚠️ onHistoryUpdate erreur:', err);
         }
-      } catch (histErr) {
-        console.warn('⚠️ Erreur enregistrement historique:', histErr);
       }
 
       // Reset

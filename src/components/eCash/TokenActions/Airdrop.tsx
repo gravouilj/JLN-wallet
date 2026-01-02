@@ -6,8 +6,9 @@ import NetworkFeesAvail from '../NetworkFeesAvail';
 import ActionFeeEstimate from './ActionFeeEstimate';
 import HoldersDetails from './HoldersDetails';
 import { notificationAtom } from '../../../atoms';
-import { addEntry, ACTION_TYPES } from '../../../services/historyService';
 import { useAirdropToken } from '../../../hooks/useAirdropToken';
+import { useActionSuccess } from '../../../hooks/useActionSuccess';
+import { validateTokenSendAmount } from '../../../utils/validation';
 
 interface AirdropRecipient {
   address: string;
@@ -60,10 +61,10 @@ export const Airdrop: React.FC<AirdropProps> = ({
   const [loadingHolders, setLoadingHolders] = useState(false);
   const [dynamicFee, setDynamicFee] = useState(546);
 
-  // Hook métier
+  // Hook métier + action success handler
   const decimals = tokenInfo?.genesisInfo?.decimals || 0;
   const { isLoading, error, airdrop, reset } = useAirdropToken(tokenId, decimals);
-
+  const handleActionSuccess = useActionSuccess();
   const setNotification = useSetAtom(notificationAtom);
 
   const handleSetMaxAirdrop = () => {
@@ -134,32 +135,26 @@ export const Airdrop: React.FC<AirdropProps> = ({
     const txid = await airdrop(calculatedHolders);
 
     if (txid) {
-      setNotification({
-        type: 'success',
-        message: `✅ Airdrop effectué à ${calculatedHolders.length} destinataires ! TXID: ${txid.substring(0, 8)}...`,
+      // ✅ FIXED: Use centralized action success handler
+      const totalAmount = calculatedHolders.reduce((sum, r) => sum + parseFloat(r.amount), 0);
+      await handleActionSuccess({
+        txid,
+        amount: totalAmount.toString(),
+        ticker,
+        actionType: 'airdrop',
+        recipientCount: calculatedHolders.length,
+        tokenId,
+        ownerAddress: wallet?.getAddress?.() || wallet?.address || '',
+        details: { recipients: calculatedHolders.length, message: airdropMessage || null }
       });
 
-      // Enregistrer historique
-      try {
-        const safeTicker = tokenInfo?.genesisInfo?.tokenTicker || ticker || 'UNK';
-        const safeOwner = wallet?.getAddress() || '';
-        const totalAmount = calculatedHolders.reduce((sum, r) => sum + parseFloat(r.amount), 0);
-
-        await addEntry({
-          owner_address: safeOwner,
-          token_id: tokenId,
-          token_ticker: safeTicker,
-          action_type: ACTION_TYPES.AIRDROP,
-          amount: totalAmount.toString(),
-          tx_id: txid,
-          details: { recipients: calculatedHolders.length, message: airdropMessage || null },
-        });
-
-        if (onHistoryUpdate) {
+      // Bonus: onHistoryUpdate callback optionnel
+      if (onHistoryUpdate) {
+        try {
           await onHistoryUpdate();
+        } catch (err) {
+          console.warn('⚠️ onHistoryUpdate erreur:', err);
         }
-      } catch (histErr) {
-        console.warn('⚠️ Erreur enregistrement historique:', histErr);
       }
 
       // Reset

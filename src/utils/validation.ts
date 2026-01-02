@@ -47,6 +47,133 @@ export const isValidAmount = (
 };
 
 /**
+ * Validates amount for XEC transaction
+ * ✅ NO DUST LIMIT for XEC sends - only 1 sat minimum
+ * Dust limit (546 sats) applies only to ALP token outputs
+ * 
+ * @param amount - Amount string (XEC decimal format)
+ * @returns { valid: boolean; error?: string; sats?: bigint }
+ */
+export const validateXecSendAmount = (amount: string): { valid: boolean; error?: string; sats?: bigint } => {
+  if (!amount || typeof amount !== 'string') {
+    return { valid: false, error: 'Montant requis' };
+  }
+
+  const trimmed = amount.trim();
+  const num = parseFloat(trimmed);
+
+  if (isNaN(num) || !isFinite(num)) {
+    return { valid: false, error: 'Montant invalide' };
+  }
+
+  if (num <= 0) {
+    return { valid: false, error: 'Montant doit être positif' };
+  }
+
+  // Check decimal places (XEC supports 2 decimals for precision, but store as satoshis internally)
+  const decimalPlaces = trimmed.split('.')[1]?.length || 0;
+  if (decimalPlaces > 8) {
+    return { valid: false, error: 'Maximum 8 décimales' };
+  }
+
+  // Convert to satoshis (1 XEC = 100 sats, but we work at satoshi precision)
+  const sats = amountToBigInt(num, 2); // XEC has 2 decimal places in user view
+  
+  if (sats < 1n) {
+    return { valid: false, error: 'Montant trop faible (minimum 0.01 XEC)' };
+  }
+
+  return { valid: true, sats };
+};
+
+/**
+ * Validates amount for EToken transaction
+ * ✅ Respects token decimals
+ * ✅ Each ALP output must be at least 546 sats
+ * 
+ * @param amount - Amount string (token decimal format)
+ * @param decimals - Token decimals (from genesisInfo.decimals)
+ * @returns { valid: boolean; error?: string; atoms?: bigint }
+ */
+export const validateTokenSendAmount = (
+  amount: string,
+  decimals: number = 0
+): { valid: boolean; error?: string; atoms?: bigint } => {
+  if (!amount || typeof amount !== 'string') {
+    return { valid: false, error: 'Montant requis' };
+  }
+
+  if (decimals < 0 || decimals > 8) {
+    return { valid: false, error: 'Décimales invalides' };
+  }
+
+  const trimmed = amount.trim();
+  const num = parseFloat(trimmed);
+
+  if (isNaN(num) || !isFinite(num)) {
+    return { valid: false, error: 'Montant invalide' };
+  }
+
+  if (num <= 0) {
+    return { valid: false, error: 'Montant doit être positif' };
+  }
+
+  // Check decimal places
+  const decimalPlaces = trimmed.split('.')[1]?.length || 0;
+  if (decimalPlaces > decimals) {
+    return { 
+      valid: false, 
+      error: `Maximum ${decimals} décimales pour ce token` 
+    };
+  }
+
+  // Convert to atoms
+  const atoms = amountToBigInt(num, decimals);
+  
+  if (atoms < 1n) {
+    return { 
+      valid: false, 
+      error: `Montant minimum est 10^-${decimals}` 
+    };
+  }
+
+  return { valid: true, atoms };
+};
+
+/**
+ * Validates message size for OP_RETURN
+ * ✅ Counts actual UTF-8 byte size, not character count
+ * ✅ eCash OP_RETURN limit: 220 bytes (before encoding to script)
+ * 
+ * @param text - Message text
+ * @param maxBytes - Maximum bytes allowed (default: 220)
+ * @returns { valid: boolean; error?: string; byteSize?: number }
+ */
+export const validateMessageSize = (
+  text: string,
+  maxBytes: number = 220
+): { valid: boolean; error?: string; byteSize?: number } => {
+  if (!text) {
+    return { valid: true, byteSize: 0 }; // Empty message is OK
+  }
+
+  // Encode to UTF-8 and get actual byte size
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode(text);
+  const byteSize = bytes.length;
+
+  if (byteSize > maxBytes) {
+    return { 
+      valid: false, 
+      error: `Message trop long (${byteSize} bytes, max ${maxBytes})`,
+      byteSize 
+    };
+  }
+
+  return { valid: true, byteSize };
+};
+
+/**
  * Formats an address for display (truncated with ellipsis)
  * @param address - Full address
  * @param startChars - Number of characters to show at start (default: 12)

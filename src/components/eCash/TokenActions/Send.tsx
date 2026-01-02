@@ -8,8 +8,9 @@ import ActionFeeEstimate from './ActionFeeEstimate';
 import AddressBookSelector from '../../AddressBook/AddressBookSelector';
 import AddressBookMultiSelector from '../../AddressBook/AddressBookMultiSelector';
 import { notificationAtom } from '../../../atoms';
-import { addEntry, ACTION_TYPES } from '../../../services/historyService';
 import { useSendToken } from '../../../hooks/useSendToken';
+import { useActionSuccess } from '../../../hooks/useActionSuccess';
+import { validateTokenSendAmount, validateXecSendAmount } from '../../../utils/validation';
 
 interface SendProps {
   activeTab: string;
@@ -64,6 +65,7 @@ export const Send: React.FC<SendProps> = ({
 
   // Hook métier
   const { isLoading, error, send, reset } = useSendToken();
+  const handleActionSuccess = useActionSuccess();
 
   const setNotification = useSetAtom(notificationAtom);
 
@@ -75,6 +77,16 @@ export const Send: React.FC<SendProps> = ({
     e.preventDefault();
 
     if (sendMode === 'single') {
+      // ✅ FIXED: Validate amount based on token type
+      const validation = tokenId 
+        ? validateTokenSendAmount(sendAmount, decimals)
+        : validateXecSendAmount(sendAmount);
+      
+      if (!validation.valid) {
+        setNotification({ type: 'error', message: validation.error });
+        return;
+      }
+
       // Envoi simple
       const txid = await send({
         address: sendAddress,
@@ -83,31 +95,24 @@ export const Send: React.FC<SendProps> = ({
       });
 
       if (txid) {
-        setNotification({
-          type: 'success',
-          message: `✅ ${sendAmount} jetons envoyés ! TXID: ${txid.substring(0, 8)}...`,
+        // ✅ FIXED: Use centralized action success handler
+        await handleActionSuccess({
+          txid,
+          amount: sendAmount,
+          ticker,
+          actionType: 'send',
+          tokenId,
+          ownerAddress: wallet?.getAddress?.() || '',
+          details: { recipient: sendAddress, message: sendMessage || null }
         });
 
-        // Enregistrer historique
-        try {
-          const safeTicker = tokenInfo?.genesisInfo?.tokenTicker || ticker || 'UNK';
-          const safeOwner = wallet?.getAddress() || '';
-
-          await addEntry({
-            owner_address: safeOwner,
-            token_id: tokenId,
-            token_ticker: safeTicker,
-            action_type: ACTION_TYPES.SEND,
-            amount: sendAmount,
-            tx_id: txid,
-            details: { recipient: sendAddress, message: sendMessage || null },
-          });
-
-          if (onHistoryUpdate) {
+        // Bonus: onHistoryUpdate callback
+        if (onHistoryUpdate) {
+          try {
             await onHistoryUpdate();
+          } catch (err) {
+            console.warn('⚠️ onHistoryUpdate error:', err);
           }
-        } catch (histErr) {
-          console.warn('⚠️ Erreur enregistrement historique:', histErr);
         }
 
         // Reset forms
@@ -137,6 +142,17 @@ export const Send: React.FC<SendProps> = ({
         }
 
         const [address, amount] = parts.map((p) => p.trim());
+        
+        // ✅ FIXED: Validate each recipient's amount
+        const validation = tokenId 
+          ? validateTokenSendAmount(amount, decimals)
+          : validateXecSendAmount(amount);
+        
+        if (!validation.valid) {
+          setNotification({ type: 'error', message: `${address}: ${validation.error}` });
+          return;
+        }
+        
         recipients.push({ address, amount });
       }
 
@@ -154,33 +170,26 @@ export const Send: React.FC<SendProps> = ({
 
         const protocol = profileInfo?.protocol || tokenInfo?.protocol || 'ALP';
         const result = await wallet.sendTokenToMany(tokenId, recipients, decimals, protocol, sendMessage || null);
+        const totalAmount = recipients.reduce((sum, r) => sum + parseFloat(r.amount), 0).toString();
 
-        setNotification({
-          type: 'success',
-          message: `✅ Envoyé à ${result.recipientsCount} destinataires ! TXID: ${result.txid.substring(0, 8)}...`,
+        // ✅ FIXED: Use centralized action success handler with recipient count
+        await handleActionSuccess({
+          txid: result.txid,
+          amount: totalAmount,
+          ticker,
+          actionType: 'send',
+          tokenId,
+          ownerAddress: wallet?.getAddress?.() || '',
+          details: { recipients: recipients.length, message: sendMessage || null }
         });
 
-        // Enregistrer dans l'historique
-        try {
-          const safeTicker = tokenInfo?.genesisInfo?.tokenTicker || ticker || 'UNK';
-          const safeOwner = wallet?.getAddress() || '';
-          const totalAmount = recipients.reduce((sum, r) => sum + parseFloat(r.amount), 0).toString();
-
-          await addEntry({
-            owner_address: safeOwner,
-            token_id: tokenId,
-            token_ticker: safeTicker,
-            action_type: ACTION_TYPES.SEND,
-            amount: totalAmount,
-            tx_id: result.txid,
-            details: { recipients: recipients.length, message: sendMessage || null },
-          });
-
-          if (onHistoryUpdate) {
+        // Bonus: onHistoryUpdate callback
+        if (onHistoryUpdate) {
+          try {
             await onHistoryUpdate();
+          } catch (err) {
+            console.warn('⚠️ onHistoryUpdate error:', err);
           }
-        } catch (histErr) {
-          console.warn('⚠️ Erreur enregistrement historique:', histErr);
         }
 
         setMultipleRecipients('');

@@ -9,6 +9,8 @@ import AddressBookMultiSelector from '../../AddressBook/AddressBookMultiSelector
 import { notificationAtom } from '../../../atoms';
 import { addEntry, getHistoryByToken, ACTION_TYPES } from '../../../services/historyService';
 import { encryptMessage, estimateEncryptedSize } from '../../../utils/encryption';
+import { validateMessageSize } from '../../../utils/validation';
+import { useActionSuccess } from '../../../hooks/useActionSuccess';
 
 export const Message = ({
   activeTab,
@@ -30,20 +32,30 @@ export const Message = ({
   const [multipleRecipients, setMultipleRecipients] = useState('');
   const [encryptionPassword, setEncryptionPassword] = useState(''); // Mot de passe optionnel
   const [showEncryption, setShowEncryption] = useState(false); // Toggle cryptage
-  const MAX_MESSAGE_LENGTH = 220; // OP_RETURN limit
+  const MAX_MESSAGE_BYTES = 220; // OP_RETURN limit in bytes
 
-  const remainingChars = MAX_MESSAGE_LENGTH - message.length;
+  // ✅ FIXED: Calculate actual UTF-8 byte size, not character count
+  const encoder = new TextEncoder();
+  const messageBytes = encoder.encode(message);
+  const byteSize = messageBytes.length;
+  const remainingBytes = MAX_MESSAGE_BYTES - byteSize;
+  const isOversized = byteSize > MAX_MESSAGE_BYTES;
 
-    // Gérer l'envoi de message on-chain
+  const handleActionSuccess = useActionSuccess();
+
+  // Gérer l'envoi de message on-chain
   const handleSendMessage = async ({ message, recipients }) => {
     if (!message || message.trim().length === 0) {
       setNotification({ type: 'error', message: 'Le message ne peut pas être vide' });
       return;
     }
 
-    // Note: Les recipients sont optionnels pour le moment
-    // wallet.sendMessage ne prend que le message, pas de destinataires
-    // TODO: Implémenter l'envoi à des destinataires spécifiques si nécessaire
+    // ✅ FIXED: Validate UTF-8 byte size, not character count
+    const validation = validateMessageSize(message, MAX_MESSAGE_BYTES);
+    if (!validation.valid) {
+      setNotification({ type: 'error', message: validation.error });
+      return;
+    }
 
     setProcessing(true);
     try {
@@ -54,17 +66,16 @@ export const Message = ({
         try {
           finalMessage = await encryptMessage(message, encryptionPassword);
           
-          // Vérifier la taille après cryptage
-          if (finalMessage.length > 220) {
-            throw new Error(`Message crypté trop long (${finalMessage.length} > 220). Raccourcissez votre message.`);
+          // ✅ FIXED: Vérifier la taille UTF-8 après cryptage
+          const encryptedValidation = validateMessageSize(finalMessage, MAX_MESSAGE_BYTES);
+          if (!encryptedValidation.valid) {
+            throw new Error(`Message crypté ${encryptedValidation.error}`);
           }
           
           setNotification({ type: 'info', message: '🔒 Message crypté avec succès' });
         } catch (encErr) {
           throw new Error(`Erreur cryptage: ${encErr.message}`);
         }
-      } else if (finalMessage.length > 220) {
-        throw new Error('Message trop long (max 220 caractères)');
       }
       
       // Vérifier que la méthode sendMessage existe
@@ -72,36 +83,28 @@ export const Message = ({
         throw new Error('La fonctionnalité d\'envoi de message on-chain n\'est pas encore implémentée. Veuillez contacter le support.');
       }
       
-      // Envoyer le message via OP_RETURN (pas de destinataires pour le moment)
+      // Envoyer le message via OP_RETURN
       const result = await wallet.sendMessage(finalMessage);
       const txid = result.txid || result;
       
-      setNotification({
-        type: 'success',
-        message: `💬 Message publié${showEncryption && encryptionPassword ? ' (crypté)' : ''} ! TXID: ${txid.substring(0, 8)}...`
+      // ✅ FIXED: Use centralized action success handler
+      await handleActionSuccess({
+        txid,
+        amount: '0',
+        ticker: tokenId || 'OP_RETURN',
+        actionType: 'message',
+        tokenId: tokenId || '',
+        ownerAddress: typeof wallet?.getAddress === 'function' ? wallet.getAddress() : (wallet?.address || ''),
+        details: { message, recipients: recipients && recipients.length > 0 ? recipients.join(', ') : null }
       });
-      
-      // Enregistrer dans l'historique
-      try {
-        const safeTicker = tokenInfo?.genesisInfo?.tokenTicker || 'UNK';
-        const safeOwner = typeof wallet?.getAddress === 'function' ? wallet.getAddress() : (wallet?.address || '');
 
-        await addEntry({
-          owner_address: safeOwner,
-          token_id: tokenId,
-          token_ticker: safeTicker,
-          action_type: ACTION_TYPES.MESSAGE,
-          amount: null,
-          tx_id: txid,
-          details: { message, recipients: recipients.join(', ') }
-        });
-        
-        // Rafraîchir l'historique via callback parent
-        if (onHistoryUpdate) {
+      // Bonus: onHistoryUpdate callback
+      if (onHistoryUpdate) {
+        try {
           await onHistoryUpdate();
+        } catch (err) {
+          console.warn('⚠️ onHistoryUpdate erreur:', err);
         }
-      } catch (histErr) {
-        console.warn('⚠️ Erreur enregistrement historique:', histErr);
       }
       
       setMessage('');
@@ -127,8 +130,10 @@ export const Message = ({
       return;
     }
     
-    if (message.length > MAX_MESSAGE_LENGTH) {
-      setNotification({ type: 'error', message: `Message trop long (${message.length}/${MAX_MESSAGE_LENGTH})` });
+    // ✅ FIXED: Validate UTF-8 byte size before proceeding
+    const validation = validateMessageSize(message, MAX_MESSAGE_BYTES);
+    if (!validation.valid) {
+      setNotification({ type: 'error', message: validation.error });
       return;
     }
     
@@ -304,7 +309,7 @@ export const Message = ({
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Ex: Annonce importante pour les détenteurs de tokens..."
             disabled={processing}
-            maxLength={MAX_MESSAGE_LENGTH}
+            maxLength={MAX_MESSAGE_BYTES}
             rows={4}
             style={{
               width: '100%',
@@ -334,10 +339,10 @@ export const Message = ({
               Le message sera visible publiquement sur la blockchain
             </span>
             <span style={{ 
-              color: remainingChars < 20 ? '#ef4444' : 'var(--text-secondary, #6b7280)',
-              fontWeight: remainingChars < 20 ? '600' : '400'
+              color: remainingBytes < 20 ? '#ef4444' : (isOversized ? '#ef4444' : 'var(--text-secondary, #6b7280)'),
+              fontWeight: remainingBytes < 20 || isOversized ? '600' : '400'
             }}>
-              {remainingChars} caractères restants
+              {isOversized ? '❌' : '✅'} {byteSize} / {MAX_MESSAGE_BYTES} bytes UTF-8
             </span>
           </div>
         </div>
@@ -433,7 +438,7 @@ export const Message = ({
           type="submit" 
           variant="primary" 
           fullWidth 
-          disabled={processing || !message || message.length > MAX_MESSAGE_LENGTH} 
+          disabled={processing || !message || isOversized} 
           style={{ height: '56px', fontSize: '1.1rem' }}
         >
           {processing ? '⏳ Envoi du message...' : '💬 Publier le message'}
