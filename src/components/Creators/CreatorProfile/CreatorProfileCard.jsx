@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, memo, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { useAtom } from 'jotai';
 import { useNavigate } from 'react-router-dom';
@@ -18,8 +18,11 @@ import { useEcashWallet } from '../../../hooks/useEcashWallet';
 /**
  * CreatorProfileCard - Carte de profil standardisée pour Directory et Favorites
  * Affiche : Nom, Badge vérifié, localisation, description, tokens, solde, tags, boutons
+ * 
+ * Optimisé avec React.memo pour éviter les re-renders inutiles
+ * lors du scroll/filtrage dans DirectoryPage
  */
-const CreatorProfileCard = ({ profile, profileTickers = {}, onCardClick }) => {
+const CreatorProfileCard = memo(({ profile, profileTickers = {}, onCardClick }) => {
   const navigate = useNavigate();
   const { wallet } = useEcashWallet();
   const [walletConnected] = useAtom(walletConnectedAtom);
@@ -50,7 +53,7 @@ const CreatorProfileCard = ({ profile, profileTickers = {}, onCardClick }) => {
   const internationalCert = certifications.international;
   
   // Get country flag emoji
-  const getCountryFlag = (country) => {
+  const getCountryFlag = useCallback((country) => {
     const flags = {
       'France': '🇫🇷',
       'Belgique': '🇧🇪',
@@ -59,38 +62,38 @@ const CreatorProfileCard = ({ profile, profileTickers = {}, onCardClick }) => {
       'Luxembourg': '🇱🇺'
     };
     return flags[country] || '🌍';
-  };
+  }, []);
   
   // Get French department code from zip code
-  const getFrenchDepartmentCode = (postalCode) => {
+  const getFrenchDepartmentCode = useCallback((postalCode) => {
     if (!postalCode) return null;
     const zipMatch = postalCode.match(/\b(\d{5})\b/);
     if (zipMatch) {
       return zipMatch[1].substring(0, 2);
     }
     return null;
-  };
+  }, []);
   
-  const handlePayClick = (e) => {
+  const handlePayClick = useCallback((e) => {
     e.stopPropagation();
     if (primaryToken) {
       setSelectedProfile(profile);
       setCurrentTokenId(primaryToken.tokenId);
       navigate('/wallet');
     }
-  };
+  }, [primaryToken, profile, setSelectedProfile, setCurrentTokenId, navigate]);
   
-  const handleSelectClick = (e) => {
+  const handleSelectClick = useCallback((e) => {
     e.stopPropagation();
     onCardClick(profile);
-  };
+  }, [onCardClick, profile]);
   
-  const handleFavoriteClick = (e) => {
+  const handleFavoriteClick = useCallback((e) => {
     e.stopPropagation();
     if (walletConnected) {
       toggleFavorite(profile.id);
     }
-  };
+  }, [walletConnected, toggleFavorite, profile.id]);
   
   const frDeptCode = profile.location_country === 'France' ? getFrenchDepartmentCode(profile.postal_code) : null;
   
@@ -396,6 +399,20 @@ const CreatorProfileCard = ({ profile, profileTickers = {}, onCardClick }) => {
       )}
     </div>
   );
-};
+}, (prevProps, nextProps) => {
+  // Comparateur personnalisé pour memo
+  // Retour true = props inchangées, ne pas re-render
+  // Retour false = props ont changé, re-render
+  
+  return (
+    prevProps.profile.id === nextProps.profile.id &&
+    prevProps.profile.name === nextProps.profile.name &&
+    prevProps.profile.verification_status === nextProps.profile.verification_status &&
+    JSON.stringify(prevProps.profileTickers) === JSON.stringify(nextProps.profileTickers) &&
+    prevProps.onCardClick === nextProps.onCardClick
+  );
+});
+
+CreatorProfileCard.displayName = 'CreatorProfileCard';
 
 export default CreatorProfileCard;
