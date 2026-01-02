@@ -22,6 +22,7 @@ export { useIsCreator } from './useIsCreator';
 // Blockchain & Network
 export { useChronikWebSocket } from './useChronikWebSocket';
 export { useXecPrice } from './useXecPrice';
+export { useWalletScan } from './useWalletScan';
 
 // Transaction Hooks (Phase 5 Refactoring)
 export { useSendToken } from './useSendToken';
