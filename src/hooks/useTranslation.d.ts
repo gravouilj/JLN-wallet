@@ -1,6 +1,9 @@
 export interface UseTranslationReturn {
   t: (key: string, defaultValue?: string) => string;
-  i18n: any;
+  locale: string;
+  changeLanguage: (lang: string) => void;
+  languages: string[];
+  languageNames: Record<string, string>;
 }
 
 export function useTranslation(): UseTranslationReturn;

@@ -20,10 +20,43 @@ import {
   currencyAtom
 } from '../atoms';
 
+// Type definitions
+interface TokenInfo {
+  genesisInfo: {
+    tokenName: string;
+    tokenTicker: string;
+    decimals: number;
+  };
+  [key: string]: any;
+}
+
+interface Profile {
+  id: string;
+  name: string;
+  tokenId: string;
+  verified?: boolean;
+  ticker?: string;
+  creatorProfileId?: string;
+  [key: string]: any;
+}
+
+interface SendFormState {
+  address: string;
+  amount: string;
+}
+
+interface TokenBalances {
+  [tokenId: string]: string;
+}
+
+interface MyToken extends Profile {
+  balance?: string;
+}
+
 const ClientWalletPage = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('receive'); // 'receive', 'send', or 'addressbook'
+  const [activeTab, setActiveTab] = useState<'receive' | 'send' | 'addressbook'>('receive');
   const [showScanner, setShowScanner] = useState(false);
   
   // Page title
@@ -36,15 +69,15 @@ const ClientWalletPage = () => {
   const [currency] = useAtom(currencyAtom);
   
   // Send form state
-  const [sendForm, setSendForm] = useState({ address: '', amount: '' });
+  const [sendForm, setSendForm] = useState<SendFormState>({ address: '', amount: '' });
   const [sendLoading, setSendLoading] = useState(false);
-  const [activeTokenBalance, setActiveTokenBalance] = useState(null);
+  const [activeTokenBalance, setActiveTokenBalance] = useState<string | null>(null);
   
   // Token balances for hub view
-  const [tokenBalances, setTokenBalances] = useState({});
+  const [tokenBalances, setTokenBalances] = useState<TokenBalances>({});
   
   // My tokens: profiles with positive balance (auto-detected)
-  const [myTokens, setMyTokens] = useState([]);
+  const [myTokens, setMyTokens] = useState<MyToken[]>([]);
   
   // Scan loading state
   const [scanLoading, setScanLoading] = useState(false);
@@ -58,7 +91,7 @@ const ClientWalletPage = () => {
   const setNotification = useSetAtom(notificationAtom);
   
   // Load profile data
-  const { profiles } = useProfiles();
+  const { profiles } = useProfiles() as { profiles: Profile[] };
   
   // Token hook for selected profile
   const { 
@@ -68,7 +101,7 @@ const ClientWalletPage = () => {
   } = useEcashToken(currentTokenId);
   
   // Get favorite profiles
-  const favoriteProfiles = Array.isArray(profiles) ? profiles.filter(profile => favoriteProfileIds.includes(profile.id)) : [];
+  const favoriteProfiles: Profile[] = Array.isArray(profiles) ? profiles.filter((profile: Profile) => favoriteProfileIds.includes(profile.id)) : [];
   
   // Setter for favorite profiles
   const setFavoriteProfileIds = useSetAtom(favoriteProfilesAtom);
@@ -86,9 +119,9 @@ const ClientWalletPage = () => {
         const walletTokens = await wallet.listETokens();
         console.log(`📦 ${walletTokens.length} jeton(s) détecté(s) dans le wallet`);
         
-        const balances = {};
-        const tokensWithBalance = [];
-        const newFavoritesToAdd = [];
+        const balances: TokenBalances = {};
+        const tokensWithBalance: MyToken[] = [];
+        const newFavoritesToAdd: string[] = [];
         
         // 2. Pour chaque token trouvé dans le wallet
         for (const walletToken of walletTokens) {
@@ -99,9 +132,18 @@ const ClientWalletPage = () => {
           if (balanceNum === 0n) continue;
           
           // 3. Récupérer les métadonnées blockchain (ticker, decimals TOUJOURS depuis blockchain)
-          let tokenInfo = { genesisInfo: { tokenName: 'Inconnu', tokenTicker: '???', decimals: 0 } };
+          let tokenInfo: TokenInfo = { genesisInfo: { tokenName: 'Inconnu', tokenTicker: '???', decimals: 0 } };
           try {
-            tokenInfo = await wallet.getTokenInfo(tokenId);
+            const info = await wallet.getTokenInfo(tokenId);
+            if (info?.genesisInfo) {
+              tokenInfo = {
+                genesisInfo: {
+                  tokenName: info.genesisInfo.tokenName || 'Inconnu',
+                  tokenTicker: info.genesisInfo.tokenTicker || '???',
+                  decimals: info.genesisInfo.decimals || 0
+                }
+              };
+            }
           } catch (e) {
             console.warn(`⚠️ Impossible de récupérer infos blockchain pour ${tokenId}:`, e);
           }
@@ -111,7 +153,7 @@ const ClientWalletPage = () => {
           const blockchainName = tokenInfo.genesisInfo?.tokenName || 'Token Inconnu';
           
           // 4. Chercher si le token existe dans profiles.json (pour image, description, vérification)
-          const profileMatch = profiles.find(p => p.tokenId === tokenId);
+          const profileMatch = profiles.find((p: Profile) => p.tokenId === tokenId);
           
           if (profileMatch) {
             // ✅ Token référencé dans profiles.json
@@ -196,7 +238,7 @@ const ClientWalletPage = () => {
   }, [selectedProfile, tokenInfo, currentTokenId, tokenBalance]);
 
   // Format token balance with decimals
-  const formatTokenBalance = (balance, decimals = 0) => {
+  const formatTokenBalance = (balance: string | bigint, decimals: number = 0): string => {
     if (!balance) return '0';
     const balanceNum = typeof balance === 'string' ? BigInt(balance) : BigInt(balance.toString());
     const divisor = BigInt(Math.pow(10, decimals));
@@ -212,8 +254,8 @@ const ClientWalletPage = () => {
   };
 
   // Handle profile selection from dropdown
-  const handleProfileSelect = (profile) => {
-    setSelectedProfile(profile);
+  const handleProfileSelect = (profile: Profile): void => {
+    setSelectedProfile({ tokenId: profile.tokenId });
     setNotification({ 
       type: 'success', 
       message: `${profile.name} ${t('wallet.profileSelected') || 'sélectionnée'}` 
@@ -247,16 +289,16 @@ const ClientWalletPage = () => {
     }
   };
 
-  // Format address for display (shortened)
-  const formatAddress = (addressRaw) => {
+  // Format address for display (shortened) - Reserved for future use
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const formatAddress = (addressRaw: string): string => {
     if (!addressRaw) return '';
-    const address = typeof addressRaw === 'string' ? addressRaw : addressRaw?.toString() || '';
-    if (!address) return '';
-    return `${address.slice(0, 10)}...${address.slice(-8)}`;
+    if (!addressRaw) return '';
+    return `${addressRaw.slice(0, 10)}...${addressRaw.slice(-8)}`;
   };
 
   // Handle send form submit
-  const handleSendSubmit = async (e) => {
+  const handleSendSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     
     // VALIDATION STRICTE AU DÉBUT
@@ -330,7 +372,8 @@ const ClientWalletPage = () => {
       
     } catch (error) {
       console.error('Erreur envoi:', error);
-      setNotification({ type: 'error', message: error.message || 'Échec de l\'envoi' });
+      const errorMsg = error instanceof Error ? error.message : 'Échec de l\'envoi';
+      setNotification({ type: 'error', message: errorMsg });
     } finally {
       setSendLoading(false);
     }
@@ -347,7 +390,7 @@ const ClientWalletPage = () => {
   };
 
   // Handle QR code address detection
-  const handleAddressDetected = (detectedAddress) => {
+  const handleAddressDetected = (detectedAddress: string): void => {
     console.log('📷 Adresse scannée:', detectedAddress);
     setSendForm(prev => ({ ...prev, address: detectedAddress }));
     setShowScanner(false);

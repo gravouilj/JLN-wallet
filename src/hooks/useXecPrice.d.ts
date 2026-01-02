@@ -1,5 +1,9 @@
+export interface PriceObject {
+  [currency: string]: number;
+}
+
 export interface UseXecPriceReturn {
-  price: number | null;
+  price: PriceObject | null;
   loading: boolean;
   error: string | null;
 }
