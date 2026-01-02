@@ -61,7 +61,8 @@ interface TokenBalances {
 const ClientWalletPage = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'receive' | 'addressbook'>('receive');
+  const [activeTab, setActiveTab] = useState<'receive' | 'send' | 'addressbook'>('receive');
+  const [showScanner, setShowScanner] = useState(false);
   
   // Page title
   const pageTitle = '💼 Mon Portefeuille';
@@ -75,7 +76,9 @@ const ClientWalletPage = () => {
   // ✅ HOOK PRINCIPAL: Scan du wallet avec dépendances optimisées
   const { myTokens, tokenBalances, scanLoading } = useWalletScan();
   
-  // Token-selected view
+  // Token send form (pour envoyer des TOKENS, pas XEC)
+  const [sendForm, setSendForm] = useState<SendFormState>({ address: '', amount: '' });
+  const [sendLoading, setSendLoading] = useState(false);
   const [activeTokenBalance, setActiveTokenBalance] = useState<string | null>(null);
   
   // Atoms
@@ -169,9 +172,81 @@ const ClientWalletPage = () => {
     return `${addressRaw.slice(0, 10)}...${addressRaw.slice(-8)}`;
   };
 
-  // Handle send form submit
+  // Token-First: Envoyer UNIQUEMENT des tokens, jamais de XEC (c'est le carburant)
+  const handleSendSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
+    e.preventDefault();
+    
+    // ✅ Token-First: Refuser si pas de profil sélectionné (carburant, pas compte principal)
+    if (!selectedProfile) {
+      setNotification({ 
+        type: 'error', 
+        message: 'Sélectionnez un jeton pour envoyer. XEC est le carburant réseau, pas un jeton.' 
+      });
+      return;
+    }
 
-  // Set max amount
+    // Validation stricte
+    if (!sendForm.address || !sendForm.amount) {
+      setNotification({ type: 'error', message: 'Remplissez l\'adresse et le montant.' });
+      return;
+    }
+    
+    if (!wallet || !walletConnected) {
+      setNotification({ type: 'error', message: 'Wallet non connecté' });
+      return;
+    }
+
+    const sanitizedAddress = sanitizeInput(sendForm.address, 'address');
+    const sanitizedAmount = sanitizeInput(sendForm.amount, 'amount');
+
+    if (!sanitizedAddress || !isValidXECAddress(sanitizedAddress)) {
+      setNotification({ type: 'error', message: 'Adresse invalide' });
+      return;
+    }
+
+    if (!sanitizedAmount || !isValidAmount(sanitizedAmount, 'etoken')) {
+      setNotification({ type: 'error', message: 'Montant invalide' });
+      return;
+    }
+
+    const amount = parseFloat(sanitizedAmount);
+    if (amount <= 0) {
+      setNotification({ type: 'error', message: 'Le montant doit être positif' });
+      return;
+    }
+
+    setSendLoading(true);
+    try {
+      const cleanAmount = String(amount).replace(',', '.');
+      
+      // ✅ UNIQUEMENT TOKEN (pas de sendXec)
+      console.log(`📤 Envoi Token ${selectedProfile.ticker} → ${sanitizedAddress}`);
+      const result = await wallet.sendToken(
+        selectedProfile.tokenId,
+        sanitizedAddress,
+        cleanAmount,
+        tokenInfo.genesisInfo?.decimals || 0,
+        selectedProfile.protocol || 'ALP'
+      );
+      
+      setNotification({ 
+        type: 'success', 
+        message: `✅ ${cleanAmount} ${selectedProfile.ticker} envoyés ! TXID: ${result.txid.substring(0, 8)}...` 
+      });
+      
+      // Reset form
+      setSendForm({ address: '', amount: '' });
+      
+    } catch (error) {
+      console.error('❌ Erreur envoi:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Échec de l\'envoi';
+      setNotification({ type: 'error', message: errorMsg });
+    } finally {
+      setSendLoading(false);
+    }
+  };
+
+  // Set max amount for token send
   const setMaxAmount = () => {
     if (selectedProfile && activeTokenBalance) {
       setSendForm(prev => ({ ...prev, amount: activeTokenBalance }));
@@ -562,13 +637,22 @@ const ClientWalletPage = () => {
               </div>
             </div>
 
-            {/* Action Tabs - Token-First: pas d'onglet "Envoyer XEC" */}
+            {/* Action Tabs - Token-First: Envoyer TOKENS UNIQUEMENT */}
             <div className="action-tabs">
               <button 
                 className={`tab-button ${activeTab === 'receive' ? 'active' : ''}`}
                 onClick={() => setActiveTab('receive')}
               >
                 📥 {t('wallet.receive') || 'Recevoir'}
+              </button>
+              <button 
+                className={`tab-button ${activeTab === 'send' ? 'active' : ''}`}
+                onClick={() => setActiveTab('send')}
+                disabled={!selectedProfile}
+                style={{ opacity: selectedProfile ? 1 : 0.5, cursor: selectedProfile ? 'pointer' : 'not-allowed' }}
+                title={selectedProfile ? 'Envoyer ce jeton' : 'Sélectionnez un jeton d\'abord'}
+              >
+                📤 {t('wallet.sendToken') || `Envoyer ${selectedProfile?.ticker || 'Jeton'}`}
               </button>
               <button 
                 className={`tab-button ${activeTab === 'addressbook' ? 'active' : ''}`}
@@ -641,6 +725,182 @@ const ClientWalletPage = () => {
                       <p>Chargement de l'adresse...</p>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Token Send Form - Compact & Token-Focused */}
+              {activeTab === 'send' && selectedProfile && (
+                <div className="send-content" style={{ marginTop: '16px' }}>
+                  <form onSubmit={handleSendSubmit} style={{ maxWidth: '100%' }}>
+                    {/* Adresse - With QR Scanner */}
+                    <div style={{ marginBottom: '14px' }}>
+                      <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '14px' }}>
+                        Adresse destinataire
+                      </label>
+                      <div style={{ position: 'relative', display: 'flex', gap: '8px' }}>
+                        <input
+                          type="text"
+                          value={sendForm.address}
+                          onChange={(e) => setSendForm(prev => ({ ...prev, address: e.target.value }))}
+                          placeholder="ecash:qp..."
+                          disabled={sendLoading}
+                          style={{
+                            flex: 1,
+                            height: '44px',
+                            padding: '0 12px',
+                            fontSize: '14px',
+                            border: '1px solid var(--border-color, #ddd)',
+                            borderRadius: '8px',
+                            backgroundColor: 'var(--bg-primary, #fff)',
+                            boxSizing: 'border-box'
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowScanner(true)}
+                          disabled={sendLoading}
+                          style={{
+                            padding: '8px 14px',
+                            fontSize: '18px',
+                            border: '1px solid var(--border-color, #ddd)',
+                            borderRadius: '8px',
+                            backgroundColor: 'var(--bg-secondary, #f5f5f5)',
+                            color: 'var(--text-secondary, #666)',
+                            cursor: sendLoading ? 'not-allowed' : 'pointer',
+                            transition: 'all 0.2s'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = 'var(--primary-color, #0074e4)';
+                            e.currentTarget.style.color = '#fff';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'var(--bg-secondary, #f5f5f5)';
+                            e.currentTarget.style.color = 'var(--text-secondary, #666)';
+                          }}
+                          title="Scanner QR pour remplir l'adresse"
+                        >
+                          📱
+                        </button>
+                      </div>
+
+                      {/* QR Scanner Modal */}
+                      {showScanner && (
+                        <div style={{
+                          position: 'fixed',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                          zIndex: 9999,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '20px'
+                        }}>
+                          <button
+                            type="button"
+                            onClick={() => setShowScanner(false)}
+                            style={{
+                              position: 'absolute',
+                              top: '20px',
+                              right: '20px',
+                              padding: '8px 16px',
+                              fontSize: '14px',
+                              fontWeight: '500',
+                              border: 'none',
+                              borderRadius: '6px',
+                              backgroundColor: '#fff',
+                              color: '#000',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            ✕ Fermer
+                          </button>
+                          <QrCodeScanner onAddressDetected={handleAddressDetected} />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Montant */}
+                    <div style={{ marginBottom: '14px' }}>
+                      <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '14px' }}>
+                        Montant {selectedProfile.ticker}
+                      </label>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <input
+                          type="number"
+                          step="any"
+                          value={sendForm.amount}
+                          onChange={(e) => setSendForm(prev => ({ ...prev, amount: e.target.value }))}
+                          placeholder="0"
+                          disabled={sendLoading}
+                          style={{
+                            flex: 1,
+                            height: '44px',
+                            padding: '0 12px',
+                            fontSize: '14px',
+                            border: '1px solid var(--border-color, #ddd)',
+                            borderRadius: '8px',
+                            backgroundColor: 'var(--bg-primary, #fff)',
+                            boxSizing: 'border-box'
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={setMaxAmount}
+                          disabled={sendLoading}
+                          style={{
+                            padding: '6px 12px',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            border: '1px solid var(--primary-color, #0074e4)',
+                            borderRadius: '6px',
+                            backgroundColor: 'var(--bg-primary, #fff)',
+                            color: 'var(--primary-color, #0074e4)',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          MAX
+                        </button>
+                      </div>
+                      <small style={{ display: 'block', marginTop: '6px', color: '#666', fontSize: '12px' }}>
+                        Disponible: {activeTokenBalance || '...'} {selectedProfile.ticker}
+                      </small>
+                    </div>
+
+                    {/* Fee info */}
+                    <div style={{ 
+                      padding: '10px', 
+                      marginBottom: '14px',
+                      backgroundColor: 'var(--bg-secondary, #f5f5f5)',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      color: '#666'
+                    }}>
+                      ⛽ Frais réseau: ~1-2 XEC | ⛽ Carburant: {Number(balance).toFixed(2)} XEC
+                    </div>
+
+                    {/* Submit button */}
+                    <button
+                      type="submit"
+                      disabled={sendLoading || !sendForm.address || !sendForm.amount}
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        fontSize: '16px',
+                        fontWeight: '600',
+                        border: 'none',
+                        borderRadius: '8px',
+                        backgroundColor: sendLoading || !sendForm.address || !sendForm.amount ? '#ccc' : 'var(--primary-color, #0074e4)',
+                        color: '#fff',
+                        cursor: sendLoading || !sendForm.address || !sendForm.amount ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      {sendLoading ? '⌛ Envoi en cours...' : `✔️ Envoyer ${selectedProfile.ticker}`}
+                    </button>
+                  </form>
                 </div>
               )}
 
