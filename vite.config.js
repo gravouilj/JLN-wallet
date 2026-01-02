@@ -29,11 +29,18 @@ export default defineConfig({
       'assert'
     ],
   },
-  // --- NOUVELLE SECTION : OPTIMISATION DU BUILD ---
+  // --- OPTIMISATION DU BUILD ---
   build: {
     target: 'esnext', // Optimisation pour les navigateurs modernes (BigInt support)
     chunkSizeWarningLimit: 1000, // On augmente la limite d'alerte à 1MB pour réduire le bruit
     rollupOptions: {
+      // Suppression des warnings non-critiques (protobufjs eval)
+      onwarn(warning, warn) {
+        if (warning.code === 'EVAL' || warning.id?.includes('@protobufjs')) {
+          return; // Ignorer silencieusement les warnings d'eval dans les dépendances externes
+        }
+        warn(warning);
+      },
       output: {
         // Découpage intelligent du code (Code Splitting)
         manualChunks: {
