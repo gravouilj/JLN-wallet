@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSetAtom, useAtomValue } from 'jotai';
-import { useEcashWallet } from '../../hooks/useEcashWallet';
 import { profilService } from '../../services/profilService';
 import { notificationAtom, walletAtom } from '../../atoms';
 import { Card, CardContent, Button, Stack } from '../UI';
@@ -71,7 +70,7 @@ const TokenSwitch = ({
       }
       
       // Vérifier si l'utilisateur a déjà un profil
-      const existingProfile = await profilService.getMyProfile(walletAddress);
+      const existingProfile = await profilService.getMyProfil(walletAddress);
       
       if (!existingProfile) {
         // Pas de profil : rediriger vers la création avec le tokenId
@@ -85,7 +84,7 @@ const TokenSwitch = ({
       }
       
       // Recharger les données pour synchroniser
-      const updatedProfile = await profilService.getProfileByOwner(walletAddress);
+      const updatedProfile = await profilService.getProfilByOwner(walletAddress);
       
       setNotification({
         type: 'success',

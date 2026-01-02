@@ -1,27 +1,26 @@
-import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, Button } from '../UI';
 import { useNetworkFees } from '../../hooks/useNetworkFees';
 import { useEcashWallet } from '../../hooks/useEcashWallet';
+
+interface NetworkFeesAvailProps {
+  compact?: boolean;
+  showActions?: boolean;
+  onRefresh?: () => void;
+  estimatedFee?: number | null;
+}
 
 /**
  * NetworkFeesAvail - Affichage des frais réseau disponibles (REFACTORISÉ)
  * 
  * Utilise useNetworkFees pour encapsuler la logique métier.
  * Taille réduite de 380 → 200 lignes (47% réduction).
- * 
- * @param {Object} props
- * @param {boolean} props.compact - Mode compact (sans titre)
- * @param {boolean} props.showActions - Afficher les boutons d'action
- * @param {Function} props.onRefresh - Callback lors du rafraîchissement
- * @param {number} props.estimatedFee - Fee estimé pour l'action (en sats)
  */
-const NetworkFeesAvail = ({ 
+const NetworkFeesAvail: React.FC<NetworkFeesAvailProps> = ({ 
   compact = false, 
   showActions = true,
   onRefresh,
   estimatedFee = null
 }) => {
-  const navigate = useNavigate();
   const { walletConnected } = useEcashWallet();
   const {
     xecBalance,
@@ -31,7 +30,7 @@ const NetworkFeesAvail = ({
     estimatedTxCount,
     refresh,
     getFormattedBalance
-  } = useNetworkFees(estimatedFee);
+  } = useNetworkFees(estimatedFee ?? 0);
 
   // Charger = pas de wallet
   if (loading) {

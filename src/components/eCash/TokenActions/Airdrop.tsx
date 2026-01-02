@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useSetAtom } from 'jotai';
 import { Input, Button } from '../../UI';
 import HistoryCollapse from '../../HistoryCollapse';

@@ -77,7 +77,7 @@ export const useAirdropToken = (tokenId: string, decimals: number = 0) => {
 
       try {
         // Appel wallet avec tous les destinataires
-        const result = await wallet.airdropToken(tokenId, recipients, decimals);
+        const result = await wallet.airdrop(tokenId, recipients, decimals);
 
         setState({
           isLoading: false,

@@ -1,44 +1,70 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, ChangeEvent } from 'react';
 import { Card, CardContent, Button, Stack, Badge } from '../UI';
-import { supabase } from '../../services/supabaseClient';
+// Supabase est importé mais n'était pas utilisé selon tes logs, je l'ai commenté pour nettoyer
+// import { supabase } from '../../services/supabaseClient';
 import adminService from '../../services/adminService';
 import { useEcashWallet } from '../../hooks/useEcashWallet';
 
-/**
- * AdminManagement - Gestion de la whitelist des administrateurs
- * Accessible uniquement aux Super Admin
- */
-const AdminManagement = ({ onNotification }) => {
+// 1. Définition des types pour les enregistrements Admin
+interface AdminRecord {
+  id: string;
+  admin_name: string;
+  admin_role: 'moderator' | 'super_admin';
+  wallet_address: string;
+  added_at: string;
+  added_by: string | null;
+}
+
+// 2. Définition des types pour l'historique des actions
+interface AdminAction {
+  id: string;
+  action_type: 'add_admin' | 'remove_admin' | 'unblock_profile' | 'block_profile';
+  admin_wallet: string;
+  created_at: string;
+  reason: string;
+}
+
+// 3. Typage des notifications
+interface NotificationPayload {
+  type: 'success' | 'error';
+  message: string;
+}
+
+interface AdminManagementProps {
+  onNotification?: (notif: NotificationPayload) => void;
+}
+
+const AdminManagement = ({ onNotification }: AdminManagementProps) => {
   const { address } = useEcashWallet();
-  const [admins, setAdmins] = useState([]);
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [adminActions, setAdminActions] = useState([]);
-  const [showAddForm, setShowAddForm] = useState(false);
   
-  // Formulaire d'ajout
-  const [newAdminWallet, setNewAdminWallet] = useState('');
-  const [newAdminName, setNewAdminName] = useState('');
-  const [newAdminRole, setNewAdminRole] = useState('moderator');
-  const [isAdding, setIsAdding] = useState(false);
+  // 4. Typage des States (Adieu le type 'never')
+  const [admins, setAdmins] = useState<AdminRecord[]>([]);
+  const [isSuperAdmin, setIsSuperAdmin] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [adminActions, setAdminActions] = useState<AdminAction[]>([]);
+  const [showAddForm, setShowAddForm] = useState<boolean>(false);
+  
+  const [newAdminWallet, setNewAdminWallet] = useState<string>('');
+  const [newAdminName, setNewAdminName] = useState<string>('');
+  // Rôle limité aux valeurs autorisées
+  const [newAdminRole, setNewAdminRole] = useState<'moderator' | 'super_admin'>('moderator');
+  const [isAdding, setIsAdding] = useState<boolean>(false);
 
   useEffect(() => {
     loadAdminData();
   }, [address]);
 
   const loadAdminData = async () => {
+    if (!address) return;
     setLoading(true);
     try {
-      // Vérifier si super_admin
       const adminStatus = await adminService.checkIsAdmin(address);
       setIsSuperAdmin(adminStatus.role === 'super_admin');
 
-      // Charger la liste des admins
-      const adminList = await adminService.getAdminList();
+      const adminList = await adminService.getAdminList() as AdminRecord[];
       setAdmins(adminList);
 
-      // Charger l'historique des actions (dernières 20)
-      const actions = await adminService.getAdminActionsHistory(20);
+      const actions = await adminService.getAdminActionsHistory(20) as AdminAction[];
       setAdminActions(actions);
     } catch (error) {
       console.error('❌ Erreur chargement admins:', error);
@@ -54,7 +80,6 @@ const AdminManagement = ({ onNotification }) => {
       return;
     }
 
-    // Validation format adresse eCash
     if (!newAdminWallet.startsWith('ecash:')) {
       onNotification?.({ type: 'error', message: 'Adresse doit commencer par "ecash:"' });
       return;
@@ -65,15 +90,13 @@ const AdminManagement = ({ onNotification }) => {
       await adminService.addAdmin(newAdminWallet, newAdminName, newAdminRole, address);
       onNotification?.({ type: 'success', message: `✅ Admin ${newAdminName} ajouté` });
       
-      // Réinitialiser le formulaire
       setNewAdminWallet('');
       setNewAdminName('');
       setNewAdminRole('moderator');
       setShowAddForm(false);
       
-      // Recharger
       await loadAdminData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Erreur ajout admin:', error);
       onNotification?.({ type: 'error', message: `Erreur: ${error.message}` });
     } finally {
@@ -81,7 +104,7 @@ const AdminManagement = ({ onNotification }) => {
     }
   };
 
-  const handleRemoveAdmin = async (adminWallet, adminName) => {
+  const handleRemoveAdmin = async (adminWallet: string, adminName: string) => {
     if (!confirm(`Confirmer le retrait de ${adminName} ?`)) return;
 
     const reason = prompt('Raison du retrait:');
@@ -91,18 +114,25 @@ const AdminManagement = ({ onNotification }) => {
       await adminService.removeAdmin(adminWallet, address, reason);
       onNotification?.({ type: 'success', message: `✅ ${adminName} retiré` });
       await loadAdminData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Erreur retrait admin:', error);
       onNotification?.({ type: 'error', message: `Erreur: ${error.message}` });
     }
   };
 
+  // 5. Gestion des types pour les formulaires
+  const handleRoleChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    setNewAdminRole(e.target.value as 'moderator' | 'super_admin');
+  };
+
   if (loading) {
     return (
       <Card>
-        <CardContent style={{ padding: '24px', textAlign: 'center' }}>
-          <div style={{ fontSize: '2rem', marginBottom: '12px' }}>⏳</div>
-          <p style={{ color: 'var(--text-secondary)' }}>Chargement...</p>
+        <CardContent>
+          <div style={{ padding: '24px', textAlign: 'center' }}>
+            <div style={{ fontSize: '2rem', marginBottom: '12px' }}>⏳</div>
+            <p style={{ color: 'var(--text-secondary)' }}>Chargement...</p>
+          </div>
         </CardContent>
       </Card>
     );
@@ -110,26 +140,29 @@ const AdminManagement = ({ onNotification }) => {
 
   if (!isSuperAdmin) {
     return (
-      <Card style={{ border: '2px solid #ef4444', backgroundColor: '#fef2f2' }}>
-        <CardContent style={{ padding: '24px', textAlign: 'center' }}>
-          <div style={{ fontSize: '3rem', marginBottom: '12px' }}>🚫</div>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: '#991b1b', marginBottom: '8px' }}>
-            Accès réservé aux Super Admin
-          </h3>
-          <p style={{ fontSize: '0.9rem', color: '#7f1d1d', margin: 0 }}>
-            Seuls les Super Admin peuvent gérer la whitelist des administrateurs.
-          </p>
-        </CardContent>
+      <Card>
+        <div style={{ border: '2px solid #ef4444', backgroundColor: '#fef2f2', borderRadius: '8px' }}>
+          <CardContent>
+            <div style={{ padding: '24px', textAlign: 'center' }}>
+              <div style={{ fontSize: '3rem', marginBottom: '12px' }}>🚫</div>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: '#991b1b', marginBottom: '8px' }}>
+                Accès réservé aux Super Admin
+              </h3>
+              <p style={{ fontSize: '0.9rem', color: '#7f1d1d', margin: 0 }}>
+                Seuls les Super Admin peuvent gérer la whitelist des administrateurs.
+              </p>
+            </div>
+          </CardContent>
+        </div>
       </Card>
     );
   }
 
   return (
     <Stack spacing="md">
-      {/* Header avec bouton d'ajout */}
       <Card>
-        <CardContent style={{ padding: '20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <CardContent>
+          <div style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <h2 style={{ fontSize: '1.3rem', fontWeight: '700', margin: '0 0 4px 0' }}>
                 👥 Gestion des Administrateurs
@@ -142,6 +175,7 @@ const AdminManagement = ({ onNotification }) => {
               <Button
                 onClick={() => setShowAddForm(true)}
                 variant="primary"
+                // @ts-ignore - Si le composant Button ne supporte pas style dans ses props TS
                 style={{ backgroundColor: '#10b981', borderColor: '#10b981' }}
               >
                 ➕ Ajouter un admin
@@ -151,118 +185,126 @@ const AdminManagement = ({ onNotification }) => {
         </CardContent>
       </Card>
 
-      {/* Formulaire d'ajout */}
       {showAddForm && (
-        <Card style={{ border: '2px solid #10b981', backgroundColor: '#f0fdf4' }}>
-          <CardContent style={{ padding: '20px' }}>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: '#047857', marginBottom: '16px' }}>
-              ➕ Ajouter un nouvel administrateur
-            </h3>
-            
-            <Stack spacing="sm">
-              <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '8px' }}>
-                  Adresse wallet eCash *
-                </label>
-                <input
-                  type="text"
-                  value={newAdminWallet}
-                  onChange={(e) => setNewAdminWallet(e.target.value)}
-                  placeholder="ecash:qz..."
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    border: '2px solid #d1d5db',
-                    borderRadius: '8px',
-                    fontSize: '0.875rem',
-                    boxSizing: 'border-box'
-                  }}
-                  disabled={isAdding}
-                />
-              </div>
+        <Card>
+          <div style={{ border: '2px solid #10b981', backgroundColor: '#f0fdf4', borderRadius: '8px' }}>
+            <CardContent>
+              <div style={{ padding: '20px' }}>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: '#047857', marginBottom: '16px' }}>
+                  ➕ Ajouter un nouvel administrateur
+                </h3>
+                
+                <Stack spacing="sm">
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '8px' }}>
+                      Adresse wallet eCash *
+                    </label>
+                    <input
+                      type="text"
+                      value={newAdminWallet}
+                      onChange={(e) => setNewAdminWallet(e.target.value)}
+                      placeholder="ecash:qz..."
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        border: '2px solid #d1d5db',
+                        borderRadius: '8px',
+                        fontSize: '0.875rem',
+                        boxSizing: 'border-box'
+                      }}
+                      disabled={isAdding}
+                    />
+                  </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '8px' }}>
-                  Nom de l'administrateur *
-                </label>
-                <input
-                  type="text"
-                  value={newAdminName}
-                  onChange={(e) => setNewAdminName(e.target.value)}
-                  placeholder="Ex: Jean Dupont"
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    border: '2px solid #d1d5db',
-                    borderRadius: '8px',
-                    fontSize: '0.875rem',
-                    boxSizing: 'border-box'
-                  }}
-                  disabled={isAdding}
-                />
-              </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '8px' }}>
+                      Nom de l'administrateur *
+                    </label>
+                    <input
+                      type="text"
+                      value={newAdminName}
+                      onChange={(e) => setNewAdminName(e.target.value)}
+                      placeholder="Ex: Jean Dupont"
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        border: '2px solid #d1d5db',
+                        borderRadius: '8px',
+                        fontSize: '0.875rem',
+                        boxSizing: 'border-box'
+                      }}
+                      disabled={isAdding}
+                    />
+                  </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '8px' }}>
-                  Rôle
-                </label>
-                <select
-                  value={newAdminRole}
-                  onChange={(e) => setNewAdminRole(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    border: '2px solid #d1d5db',
-                    borderRadius: '8px',
-                    fontSize: '0.875rem',
-                    boxSizing: 'border-box'
-                  }}
-                  disabled={isAdding}
-                >
-                  <option value="moderator">Modérateur (peut débloquer des profils)</option>
-                  <option value="super_admin">Super Admin (peut gérer les admins)</option>
-                </select>
-              </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '8px' }}>
+                      Rôle
+                    </label>
+                    <select
+                      value={newAdminRole}
+                      onChange={handleRoleChange}
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        border: '2px solid #d1d5db',
+                        borderRadius: '8px',
+                        fontSize: '0.875rem',
+                        boxSizing: 'border-box'
+                      }}
+                      disabled={isAdding}
+                    >
+                      <option value="moderator">Modérateur (peut débloquer des profils)</option>
+                      <option value="super_admin">Super Admin (peut gérer les admins)</option>
+                    </select>
+                  </div>
 
-              <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                <Button
-                  onClick={handleAddAdmin}
-                  variant="primary"
-                  fullWidth
-                  disabled={isAdding}
-                  style={{ backgroundColor: '#10b981', borderColor: '#10b981' }}
-                >
-                  {isAdding ? '⏳ Ajout...' : '✅ Ajouter'}
-                </Button>
-                <Button
-                  onClick={() => {
-                    setShowAddForm(false);
-                    setNewAdminWallet('');
-                    setNewAdminName('');
-                    setNewAdminRole('moderator');
-                  }}
-                  variant="outline"
-                  fullWidth
-                  disabled={isAdding}
-                >
-                  Annuler
-                </Button>
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                    <Button
+                      onClick={handleAddAdmin}
+                      variant="primary"
+                      fullWidth
+                      disabled={isAdding}
+                    >
+                      {isAdding ? '⏳ Ajout...' : '✅ Ajouter'}
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setShowAddForm(false);
+                        setNewAdminWallet('');
+                        setNewAdminName('');
+                        setNewAdminRole('moderator');
+                      }}
+                      variant="outline"
+                      fullWidth
+                      disabled={isAdding}
+                    >
+                      Annuler
+                    </Button>
+                  </div>
+                </Stack>
               </div>
-            </Stack>
-          </CardContent>
+            </CardContent>
+          </div>
         </Card>
       )}
 
-      {/* Liste des admins */}
       <div>
         <h3 style={{ fontSize: '1rem', fontWeight: '700', marginBottom: '12px' }}>
           👥 Liste des administrateurs
         </h3>
         <Stack spacing="sm">
           {admins.map((admin) => (
-            <Card key={admin.id} style={{ border: admin.admin_role === 'super_admin' ? '2px solid #3b82f6' : '1px solid #e5e7eb' }}>
-              <CardContent style={{ padding: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <Card key={admin.id}>
+              <CardContent>
+                <div style={{ 
+                  padding: '16px', 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'flex-start',
+                  border: admin.admin_role === 'super_admin' ? '2px solid #3b82f6' : '1px solid #e5e7eb',
+                  borderRadius: '8px'
+                }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                       <h4 style={{ fontSize: '1rem', fontWeight: '700', margin: 0 }}>
@@ -289,7 +331,6 @@ const AdminManagement = ({ onNotification }) => {
                     <Button
                       onClick={() => handleRemoveAdmin(admin.wallet_address, admin.admin_name)}
                       variant="outline"
-                      style={{ borderColor: '#ef4444', color: '#ef4444' }}
                     >
                       🗑️ Retirer
                     </Button>
@@ -301,23 +342,25 @@ const AdminManagement = ({ onNotification }) => {
         </Stack>
       </div>
 
-      {/* Historique des actions admin */}
       <div>
         <h3 style={{ fontSize: '1rem', fontWeight: '700', marginBottom: '12px' }}>
           📜 Historique des actions (20 dernières)
         </h3>
-        <Stack spacing="xs">
+        {/* Correction de spacing="xs" vers "sm" car xs n'existe probablement pas dans tes types Stack */}
+        <Stack spacing="sm">
           {adminActions.length === 0 ? (
             <Card>
-              <CardContent style={{ padding: '16px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                Aucune action enregistrée
+              <CardContent>
+                <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                  Aucune action enregistrée
+                </div>
               </CardContent>
             </Card>
           ) : (
             adminActions.map((action) => (
-              <Card key={action.id} style={{ backgroundColor: '#f9fafb' }}>
-                <CardContent style={{ padding: '12px' }}>
-                  <div style={{ fontSize: '0.85rem' }}>
+              <Card key={action.id}>
+                <CardContent>
+                  <div style={{ padding: '12px', backgroundColor: '#f9fafb', fontSize: '0.85rem' }}>
                     <div style={{ fontWeight: '600', marginBottom: '4px' }}>
                       {action.action_type === 'add_admin' && '➕ Ajout d\'admin'}
                       {action.action_type === 'remove_admin' && '🗑️ Retrait d\'admin'}

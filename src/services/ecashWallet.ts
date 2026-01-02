@@ -66,6 +66,9 @@ export class EcashWallet {
   }
 
   getAddress(): string { return this.addressStr; }
+  
+  // Getter for compatibility with components
+  get address(): string { return this.addressStr; }
 
   getPrivateKeyWIF(): string {
     return toHex(this.sk);

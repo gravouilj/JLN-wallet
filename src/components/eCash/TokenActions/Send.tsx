@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useSetAtom } from 'jotai';
-import { useParams } from 'react-router-dom';
 import { Input, Button, Modal } from '../../UI';
 import HistoryCollapse from '../../HistoryCollapse';
 import NetworkFeesAvail from '../NetworkFeesAvail';
@@ -9,7 +8,7 @@ import ActionFeeEstimate from './ActionFeeEstimate';
 import AddressBookSelector from '../../AddressBook/AddressBookSelector';
 import AddressBookMultiSelector from '../../AddressBook/AddressBookMultiSelector';
 import { notificationAtom } from '../../../atoms';
-import { addEntry, getHistoryByToken, ACTION_TYPES } from '../../../services/historyService';
+import { addEntry, ACTION_TYPES } from '../../../services/historyService';
 import { useSendToken } from '../../../hooks/useSendToken';
 
 interface SendProps {

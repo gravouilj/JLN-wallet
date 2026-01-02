@@ -59,7 +59,7 @@ export const useBurnToken = (tokenId: string, decimals: number = 0) => {
       }
 
       try {
-        const result = await wallet.burn(tokenId, amountNum, decimals);
+        const result = await wallet.burnToken(tokenId, amountNum, decimals);
 
         setState({
           isLoading: false,

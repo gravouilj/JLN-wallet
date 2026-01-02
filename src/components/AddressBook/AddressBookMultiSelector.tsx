@@ -1,18 +1,36 @@
 import { useState, useEffect } from 'react';
 import addressBookService from '../../services/addressBookService';
 
+// 1. Définition de l'interface pour un Contact
+// Cela règle les erreurs "property name does not exist on type never"
+export interface Contact {
+  name: string;
+  address: string;
+  tokenId?: string | null;
+}
+
+// 2. Définition des Props du composant
+interface AddressBookMultiSelectorProps {
+  tokenId: string | null;
+  onContactsSelected: (contacts: Contact[]) => void;
+}
+
 /**
  * Sélecteur de contacts multiples pour mode sendToMany
- * Ajoute les contacts sélectionnés au textarea parent
  */
-export const AddressBookMultiSelector = ({ tokenId, onContactsSelected }) => {
-  const [contacts, setContacts] = useState([]);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedContacts, setSelectedContacts] = useState([]);
+export const AddressBookMultiSelector = ({ 
+  tokenId, 
+  onContactsSelected 
+}: AddressBookMultiSelectorProps) => {
+  // 3. Typage explicite des states (Vague 3 : adieu les "never[]")
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [showDropdown, setShowDropdown] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedContacts, setSelectedContacts] = useState<Contact[]>([]);
 
   useEffect(() => {
-    const allContacts = addressBookService.getContacts(tokenId);
+    // On assume que getContacts retourne un Contact[]
+    const allContacts = addressBookService.getContacts(tokenId) as Contact[];
     setContacts(allContacts);
   }, [tokenId]);
 
@@ -22,7 +40,8 @@ export const AddressBookMultiSelector = ({ tokenId, onContactsSelected }) => {
 
   if (contacts.length === 0) return null;
 
-  const handleToggleContact = (contact) => {
+  // 4. Typage de l'argument contact
+  const handleToggleContact = (contact: Contact) => {
     setSelectedContacts(prev => {
       const isSelected = prev.find(c => c.address === contact.address);
       if (isSelected) {
@@ -77,7 +96,6 @@ export const AddressBookMultiSelector = ({ tokenId, onContactsSelected }) => {
 
       {showDropdown && (
         <>
-          {/* Overlay pour fermer */}
           <div
             onClick={() => setShowDropdown(false)}
             style={{
@@ -90,7 +108,6 @@ export const AddressBookMultiSelector = ({ tokenId, onContactsSelected }) => {
             }}
           />
 
-          {/* Dropdown */}
           <div style={{
             position: 'absolute',
             top: '100%',
@@ -106,7 +123,6 @@ export const AddressBookMultiSelector = ({ tokenId, onContactsSelected }) => {
             maxHeight: '400px',
             overflowY: 'auto'
           }}>
-            {/* Recherche si > 3 contacts */}
             {contacts.length > 3 && (
               <div style={{ padding: '8px', borderBottom: '1px solid #e2e8f0' }}>
                 <input
@@ -126,13 +142,12 @@ export const AddressBookMultiSelector = ({ tokenId, onContactsSelected }) => {
               </div>
             )}
 
-            {/* Liste de contacts avec checkboxes */}
             <div style={{ padding: '4px' }}>
-              {filteredContacts.map((contact, idx) => {
+              {filteredContacts.map((contact) => {
                 const isSelected = selectedContacts.find(c => c.address === contact.address);
                 return (
                   <div
-                    key={idx}
+                    key={contact.address} // Préférer l'adresse à l'index pour la clé
                     onClick={() => handleToggleContact(contact)}
                     style={{
                       display: 'flex',
@@ -144,8 +159,6 @@ export const AddressBookMultiSelector = ({ tokenId, onContactsSelected }) => {
                       backgroundColor: isSelected ? '#eff6ff' : 'transparent',
                       transition: 'background-color 0.2s'
                     }}
-                    onMouseEnter={(e) => !isSelected && (e.currentTarget.style.backgroundColor = '#f8fafc')}
-                    onMouseLeave={(e) => !isSelected && (e.currentTarget.style.backgroundColor = 'transparent')}
                   >
                     <input
                       type="checkbox"
@@ -157,7 +170,7 @@ export const AddressBookMultiSelector = ({ tokenId, onContactsSelected }) => {
                       <div style={{ fontSize: '0.85rem', fontWeight: '600', color: '#1e293b' }}>
                         {contact.name}
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b', fontFamily: 'monospace' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b', fontName: 'monospace' }}>
                         {contact.address.substring(0, 20)}...
                       </div>
                     </div>
@@ -166,7 +179,6 @@ export const AddressBookMultiSelector = ({ tokenId, onContactsSelected }) => {
               })}
             </div>
 
-            {/* Bouton pour ajouter les contacts sélectionnés */}
             {selectedContacts.length > 0 && (
               <div style={{ padding: '8px', borderTop: '1px solid #e2e8f0' }}>
                 <button

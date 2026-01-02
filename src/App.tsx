@@ -27,15 +27,12 @@ const AdminVerificationPage = lazy(() => import('./pages/AdminVerificationPage')
 const RequestListingPage = lazy(() => import('./pages/VerificationRequestPage'));
 
 // Components
-import ProtectedRoute from './components/ProtectedRoute';
 import AdminGateRoute from './components/Admin/AdminGateRoute';
 import ThemeProvider from './components/ThemeProvider';
 import Notification from './components/Notification';
 import LoadingScreen from './components/LoadingScreen';
 import ErrorBoundary from './components/ErrorBoundary';
 import FloatingAdminButton from './components/Admin/FloatingAdminButton';
-import LazyBoundary from './components/LazyBoundary';
-import TopBar from './components/Layout/TopBar'; // ✅ REMPLACEMENT: Header -> TopBar
 
 // SECURITY COMPONENTS
 import UnlockWallet from './components/Auth/UnlockWallet';
@@ -55,7 +52,11 @@ import './styles/utilities.css';
 import './styles/landing.css';
 
 // --- GUARD DE SÉCURITÉ ---
-const WalletAuthGuard = ({ children }) => {
+interface WalletAuthGuardProps {
+  children: React.ReactNode;
+}
+
+const WalletAuthGuard: React.FC<WalletAuthGuardProps> = ({ children }) => {
   const mnemonic = useAtomValue(mnemonicAtom);
   const hasEncryptedWallet = useAtomValue(hasEncryptedWalletAtom);
 
@@ -74,7 +75,7 @@ const WalletAuthGuard = ({ children }) => {
   // 3. Pas de wallet -> Assistant de création (Mode Page)
   return (
     <div className="main-content" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-      <OnboardingModal isPageMode={true} />
+      <OnboardingModal isPageMode={true} onClose={() => {}} />
     </div>
   );
 };
@@ -134,66 +135,22 @@ function App() {
               {/* === PUBLIC (Pas de Guard) === */}
               <Route path="/" element={<DirectoryPage />} />
               <Route path="/landingpage" element={<LandingPage />} />
-              <Route path="/faq" element={
-                <LazyBoundary>
-                  <FaqPage />
-                </LazyBoundary>
-              } />
+              <Route path="/faq" element={<FaqPage />} />
 
               {/* === PRIVÉ (Guard actif) === */}
               <Route path="/wallet" element={<WalletAuthGuard><ClientWalletPage /></WalletAuthGuard>} />
-              <Route path="/send" element={
-                <LazyBoundary>
-                  <WalletAuthGuard><SendPage /></WalletAuthGuard>
-                </LazyBoundary>
-              } />
+              <Route path="/send" element={<WalletAuthGuard><SendPage /></WalletAuthGuard>} />
               <Route path="/settings" element={<WalletAuthGuard><SettingsPage /></WalletAuthGuard>} />
               <Route path="/create-token" element={<Navigate to="/manage-token" replace />} />
-              <Route path="/complete-token-import" element={
-                <LazyBoundary>
-                  <WalletAuthGuard><CompleteTokenImportPage /></WalletAuthGuard>
-                </LazyBoundary>
-              } />
-              <Route path="/manage-token" element={
-                <LazyBoundary>
-                  <WalletAuthGuard><AdminGateRoute fallbackRoute="/wallet"><ManageTokenPage /></AdminGateRoute></WalletAuthGuard>
-                </LazyBoundary>
-              } />
-              <Route path="/token/:tokenId" element={
-                <LazyBoundary>
-                  <WalletAuthGuard><TokenPage /></WalletAuthGuard>
-                </LazyBoundary>
-              } />
-              <Route path="/request-listing/:tokenId" element={
-                <LazyBoundary>
-                  <WalletAuthGuard><RequestListingPage /></WalletAuthGuard>
-                </LazyBoundary>
-              } />
-              <Route path="/manage-profile/:tokenId" element={
-                <LazyBoundary>
-                  <WalletAuthGuard><AdminGateRoute fallbackRoute="/manage-token"><ManageProfilePage /></AdminGateRoute></WalletAuthGuard>
-                </LazyBoundary>
-              } />
-              <Route path="/manage-profile" element={
-                <LazyBoundary>
-                  <WalletAuthGuard><ManageProfilePage /></WalletAuthGuard>
-                </LazyBoundary>
-              } />
-              <Route path="/support" element={
-                <LazyBoundary>
-                  <WalletAuthGuard><SupportPage /></WalletAuthGuard>
-                </LazyBoundary>
-              } />
-              <Route path="/admin/verification" element={
-                <LazyBoundary>
-                  <WalletAuthGuard><AdminGateRoute fallbackRoute="/"><AdminVerificationPage /></AdminGateRoute></WalletAuthGuard>
-                </LazyBoundary>
-              } />
-              <Route path="/admin" element={
-                <LazyBoundary>
-                  <WalletAuthGuard><AdminGateRoute fallbackRoute="/"><AdminDashboard /></AdminGateRoute></WalletAuthGuard>
-                </LazyBoundary>
-              } />
+              <Route path="/complete-token-import" element={<WalletAuthGuard><CompleteTokenImportPage /></WalletAuthGuard>} />
+              <Route path="/manage-token" element={<WalletAuthGuard><AdminGateRoute fallbackRoute="/wallet"><ManageTokenPage /></AdminGateRoute></WalletAuthGuard>} />
+              <Route path="/token/:tokenId" element={<WalletAuthGuard><TokenPage /></WalletAuthGuard>} />
+              <Route path="/request-listing/:tokenId" element={<WalletAuthGuard><RequestListingPage /></WalletAuthGuard>} />
+              <Route path="/manage-profile/:tokenId" element={<WalletAuthGuard><AdminGateRoute fallbackRoute="/manage-token"><ManageProfilePage /></AdminGateRoute></WalletAuthGuard>} />
+              <Route path="/manage-profile" element={<WalletAuthGuard><ManageProfilePage /></WalletAuthGuard>} />
+              <Route path="/support" element={<WalletAuthGuard><SupportPage /></WalletAuthGuard>} />
+              <Route path="/admin/verification" element={<WalletAuthGuard><AdminGateRoute fallbackRoute="/"><AdminVerificationPage /></AdminGateRoute></WalletAuthGuard>} />
+              <Route path="/admin" element={<WalletAuthGuard><AdminGateRoute fallbackRoute="/"><AdminDashboard /></AdminGateRoute></WalletAuthGuard>} />
 
               {/* Redirections */}
               <Route path="/home" element={<Navigate to="/wallet" replace />} />

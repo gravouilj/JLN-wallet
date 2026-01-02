@@ -74,10 +74,9 @@ export const useMintToken = (tokenId: string, decimals: number = 0) => {
       }
 
       try {
-        const result = await wallet.mint(
+        const result = await wallet.mintToken(
           tokenId,
           amountNum,
-          batonRecipient,
           decimals
         );
 
