@@ -1,3 +1,4 @@
+// TypeScript version
 /**
  * Utilitaires de cryptage/décryptage pour messages OP_RETURN
  * Utilise l'API Web Crypto (AES-GCM)

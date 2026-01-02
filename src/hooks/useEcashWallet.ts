@@ -3,7 +3,7 @@ import { useAtom, useAtomValue } from 'jotai';
 import {
   walletAtom,
   walletConnectedAtom,
-  mnemonicAtom, // ✅ On utilise uniquement l'atome sécurisé en mémoire
+  mnemonicAtom,
   hdPathAtom,
   balanceAtom,
   totalBalanceAtom,
@@ -12,12 +12,75 @@ import {
   scriptLoadedAtom,
   tokenRefreshTriggerAtom
 } from '../atoms';
-import { createWallet } from '../services/ecashWallet';
-import { storageService } from '../services/storageService'; // ✅ Pour le logout propre
+import { createWallet, EcashWallet } from '../services/ecashWallet';
+import { storageService } from '../services/storageService';
+
+// Type definitions
+interface BalanceData {
+  balance: number;
+  totalBalance: number;
+  balanceBreakdown?: BalanceBreakdown;
+  utxos?: {
+    pureXec?: any[];
+    token?: any[];
+  };
+}
+
+interface BalanceBreakdown {
+  spendableBalance: number;
+  totalBalance: number;
+  tokenDustValue: number;
+  pureXecUtxos: number;
+  tokenUtxos: number;
+}
+
+interface TokenInfo {
+  genesisInfo: {
+    tokenName: string;
+    tokenTicker: string;
+    decimals: number;
+  };
+  [key: string]: any;
+}
+
+interface SendResult {
+  txid: string;
+  [key: string]: any;
+}
+
+interface UseEcashWalletReturn {
+  wallet: EcashWallet | null;
+  address: string;
+  walletConnected: boolean;
+  loading: boolean;
+  error: string | null;
+  disconnectWallet: () => void;
+  resetWallet: () => void;
+}
+
+interface UseEcashBalanceReturn {
+  balance: number;
+  balanceBreakdown: BalanceBreakdown | null;
+  loading: boolean;
+  error: string | null;
+  refreshBalance: () => Promise<void>;
+}
+
+interface UseEcashTokenReturn {
+  tokenInfo: TokenInfo | null;
+  tokenBalance: string;
+  loading: boolean;
+  refreshToken: () => Promise<void>;
+}
+
+interface UseEcashXecReturn {
+  loading: boolean;
+  error: string | null;
+  sendXec: (toAddress: string, amountXec: number) => Promise<SendResult>;
+}
 
 // --- HOOK PRINCIPAL DU WALLET ---
-export const useEcashWallet = () => {
-  // On récupère le mnemonic depuis la RAM (défini par UnlockWallet ou OnboardingModal)
+export const useEcashWallet = (): UseEcashWalletReturn => {
   const mnemonic = useAtomValue(mnemonicAtom);
   
   const [wallet, setWallet] = useAtom(walletAtom);
@@ -25,13 +88,11 @@ export const useEcashWallet = () => {
   const [hdPath] = useAtom(hdPathAtom);
   const [, setScriptLoaded] = useAtom(scriptLoadedAtom);
   
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   // LOGIQUE D'INITIALISATION REACTIVE
-  // Dès que 'mnemonic' change (login succès), on instancie le wallet
   useEffect(() => {
-    // Si pas de mnemonic (logout), on nettoie l'état
     if (!mnemonic) {
       if (wallet) {
         setWallet(null);
@@ -41,10 +102,9 @@ export const useEcashWallet = () => {
       return;
     }
 
-    // Si le wallet est déjà initialisé avec ce mnemonic, on ne fait rien
     if (wallet && wallet.getAddress()) return;
 
-    const init = async () => {
+    const init = async (): Promise<void> => {
       setLoading(true);
       setError(null);
       console.log('🔑 Initialisation du wallet depuis la mémoire sécurisée...');
@@ -52,16 +112,18 @@ export const useEcashWallet = () => {
       try {
         const walletInstance = await createWallet(mnemonic, hdPath);
         
-        // Validation basique
-        if (!walletInstance.getAddress()) throw new Error('Instance wallet invalide');
+        if (!walletInstance.getAddress()) {
+          throw new Error('Instance wallet invalide');
+        }
 
         setWallet(walletInstance);
         setWalletConnected(true);
         setScriptLoaded(true);
         console.log('✅ Wallet prêt et connecté.');
       } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Erreur inconnue';
         console.error('❌ Échec init wallet:', err);
-        setError(err.message);
+        setError(errorMsg);
         setWalletConnected(false);
       } finally {
         setLoading(false);
@@ -72,23 +134,22 @@ export const useEcashWallet = () => {
   }, [mnemonic, hdPath, wallet, setWallet, setWalletConnected, setScriptLoaded]);
 
   // Déconnexion (Logout logique)
-  const disconnectWallet = useCallback(() => {
+  const disconnectWallet = useCallback((): void => {
     setWallet(null);
     setWalletConnected(false);
     setScriptLoaded(false);
-    // Note: Pour un vrai logout, il faut setter mnemonicAtom à null (via App/Header)
   }, [setWallet, setWalletConnected, setScriptLoaded]);
 
   // Reset complet (Suppression des données chiffrées)
-  const resetWallet = useCallback(() => {
+  const resetWallet = useCallback((): void => {
     if (window.confirm("Êtes-vous sûr de vouloir supprimer le portefeuille de cet appareil ?")) {
-      storageService.clearWallet(); // Supprime le vault chiffré
-      window.location.reload(); // Recharge pour retourner à l'accueil
+      storageService.clearWallet();
+      window.location.reload();
     }
   }, []);
 
   // Helper adresse
-  const address = useMemo(() => {
+  const address = useMemo((): string => {
     return wallet ? wallet.getAddress() : '';
   }, [wallet]);
 
@@ -100,12 +161,11 @@ export const useEcashWallet = () => {
     error,
     disconnectWallet,
     resetWallet
-    // Note: generateNewWallet et importWallet ne sont plus ici car gérés par l'UI (OnboardingModal)
   };
 };
 
-// --- HOOK DE BALANCE (Inchangé mais nettoyé) ---
-export const useEcashBalance = (refreshInterval = 10000) => {
+// --- HOOK DE BALANCE ---
+export const useEcashBalance = (refreshInterval: number = 10000): UseEcashBalanceReturn => {
   const [wallet] = useAtom(walletAtom);
   const [walletConnected] = useAtom(walletConnectedAtom);
   
@@ -115,10 +175,10 @@ export const useEcashBalance = (refreshInterval = 10000) => {
   const [triggerRefresh] = useAtom(balanceRefreshTriggerAtom);
   const [, setTokenRefreshTrigger] = useAtom(tokenRefreshTriggerAtom);
   
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const fetchBalance = useCallback(async () => {
+  const fetchBalance = useCallback(async (): Promise<void> => {
     if (!wallet || !walletConnected) {
       setBalance(0);
       setTotalBalance(0);
@@ -127,11 +187,11 @@ export const useEcashBalance = (refreshInterval = 10000) => {
 
     setLoading(true);
     try {
-      const balanceData = await wallet.getBalance();
+      const balanceData: BalanceData = await wallet.getBalance();
       
       setBalance(balanceData.balance);
       setTotalBalance(balanceData.totalBalance);
-      setBalanceBreakdown(balanceData.balanceBreakdown || {
+      setBalanceBreakdown({
         spendableBalance: balanceData.balance,
         totalBalance: balanceData.totalBalance,
         tokenDustValue: balanceData.totalBalance - balanceData.balance,
@@ -142,8 +202,9 @@ export const useEcashBalance = (refreshInterval = 10000) => {
       setTokenRefreshTrigger(Date.now());
 
     } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erreur inconnue';
       console.error('Erreur balance:', err);
-      setError(err.message);
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -172,16 +233,16 @@ export const useEcashBalance = (refreshInterval = 10000) => {
   };
 };
 
-// --- HOOK DE TOKEN (Inchangé) ---
-export const useEcashToken = (tokenId) => {
+// --- HOOK DE TOKEN ---
+export const useEcashToken = (tokenId: string | null | undefined): UseEcashTokenReturn => {
   const [wallet] = useAtom(walletAtom);
   const [triggerRefresh] = useAtom(balanceRefreshTriggerAtom);
   
-  const [tokenInfo, setTokenInfo] = useState(null);
-  const [tokenBalance, setTokenBalance] = useState('0');
-  const [loading, setLoading] = useState(false);
+  const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null);
+  const [tokenBalance, setTokenBalance] = useState<string>('0');
+  const [loading, setLoading] = useState<boolean>(false);
 
-  const fetchToken = useCallback(async () => {
+  const fetchToken = useCallback(async (): Promise<void> => {
     if (!wallet || !tokenId) return;
 
     setLoading(true);
@@ -207,15 +268,15 @@ export const useEcashToken = (tokenId) => {
   return { tokenInfo, tokenBalance, loading, refreshToken: fetchToken };
 };
 
-// --- HOOK ENVOI XEC (Inchangé) ---
-export const useEcashXec = () => {
+// --- HOOK ENVOI XEC ---
+export const useEcashXec = (): UseEcashXecReturn => {
   const [wallet] = useAtom(walletAtom);
   const [walletConnected] = useAtom(walletConnectedAtom);
   
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const sendXec = useCallback(async (toAddress, amountXec) => {
+  const sendXec = useCallback(async (toAddress: string, amountXec: number): Promise<SendResult> => {
     if (!wallet || !walletConnected) {
       throw new Error('Wallet not connected');
     }
@@ -224,12 +285,13 @@ export const useEcashXec = () => {
     setError(null);
 
     try {
-      const result = await wallet.sendXec(toAddress, amountXec);
+      const result: SendResult = await wallet.sendXec(toAddress, amountXec);
       console.log('✅ XEC sent! TXID:', result.txid);
       return result;
     } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erreur inconnue';
       console.error('❌ Failed to send XEC:', err);
-      setError(err.message);
+      setError(errorMsg);
       throw err;
     } finally {
       setLoading(false);

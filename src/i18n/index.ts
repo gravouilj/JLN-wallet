@@ -6,16 +6,24 @@ import LanguageDetector from 'i18next-browser-languagedetector';
 import en from './locales/en.json';
 import fr from './locales/fr.json';
 
-const resources = {
+interface Resources {
+  [key: string]: {
+    translation: Record<string, any>;
+  };
+}
+
+const resources: Resources = {
   en: { translation: en },
   fr: { translation: fr }
 };
 
-// Détecte la langue du navigateur intelligemment
-const detectBrowserLanguage = () => {
+/**
+ * Détecte la langue du navigateur intelligemment
+ */
+const detectBrowserLanguage = (): string => {
   if (typeof window === 'undefined') return 'fr';
   
-  const navLang = (navigator.language || navigator.userLanguage || 'fr').toLowerCase();
+  const navLang = (navigator.language || (navigator as any).userLanguage || 'fr').toLowerCase();
   
   // Détecte le français
   if (navLang.includes('fr')) return 'fr';
@@ -23,7 +31,7 @@ const detectBrowserLanguage = () => {
   // Détecte l'anglais
   if (navLang.includes('en')) return 'en';
   
-  // Défaut : français (public francophone)
+  // Défaut : français
   return 'fr';
 };
 
@@ -32,8 +40,8 @@ i18n
   .use(initReactI18next)
   .init({
     resources,
-    lng: detectBrowserLanguage(), // Auto-détecte avec fallback intelligent
-    fallbackLng: 'fr', // Français par défaut (public francophone prioritaire)
+    lng: detectBrowserLanguage(),
+    fallbackLng: 'fr',
 
     detection: {
       order: ['localStorage', 'navigator', 'htmlTag'],
@@ -45,11 +53,11 @@ i18n
     whitelist: ['en', 'fr'],
 
     interpolation: {
-      escapeValue: false // React already does escaping
+      escapeValue: false
     },
 
     react: {
-      useSuspense: false // We'll handle loading states manually
+      useSuspense: false
     }
   });
 
