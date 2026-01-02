@@ -120,8 +120,7 @@ export const Send: React.FC<SendProps> = ({
         setNotification({ type: 'error', message: error });
       }
     } else {
-      // Envoi multiple
-      // Parser les destinataires
+      // Envoi multiple - Parser les destinataires
       const lines = multipleRecipients.trim().split('\n');
       const recipients = [];
 
@@ -147,58 +146,51 @@ export const Send: React.FC<SendProps> = ({
         return;
       }
 
-      // Envoyer à chaque destinataire
-      let successCount = 0;
-      let failCount = 0;
-
-      for (const recipient of recipients) {
-        const txid = await send({
-          address: recipient.address,
-          amount: recipient.amount,
-          message: sendMessage || undefined,
-        });
-
-        if (txid) {
-          successCount++;
-          try {
-            const safeTicker = tokenInfo?.genesisInfo?.tokenTicker || ticker || 'UNK';
-            const safeOwner = wallet?.getAddress() || '';
-
-            await addEntry({
-              owner_address: safeOwner,
-              token_id: tokenId,
-              token_ticker: safeTicker,
-              action_type: ACTION_TYPES.SEND,
-              amount: recipient.amount,
-              tx_id: txid,
-              details: { recipient: recipient.address, message: sendMessage || null },
-            });
-          } catch (histErr) {
-            console.warn('⚠️ Erreur enregistrement historique:', histErr);
-          }
-        } else {
-          failCount++;
+      // Utiliser sendTokenToMany pour envoyer en une seule transaction
+      try {
+        if (!wallet) {
+          setNotification({ type: 'error', message: 'Wallet non connecté' });
+          return;
         }
-      }
 
-      if (successCount > 0) {
+        const protocol = profileInfo?.protocol || tokenInfo?.protocol || 'ALP';
+        const result = await wallet.sendTokenToMany(tokenId, recipients, decimals, protocol, sendMessage || null);
+
         setNotification({
-          type: successCount === recipients.length ? 'success' : 'warning',
-          message: `✅ ${successCount}/${recipients.length} transactions réussies`,
+          type: 'success',
+          message: `✅ Envoyé à ${result.recipientsCount} destinataires ! TXID: ${result.txid.substring(0, 8)}...`,
         });
 
-        if (onHistoryUpdate) {
-          await onHistoryUpdate();
+        // Enregistrer dans l'historique
+        try {
+          const safeTicker = tokenInfo?.genesisInfo?.tokenTicker || ticker || 'UNK';
+          const safeOwner = wallet?.getAddress() || '';
+          const totalAmount = recipients.reduce((sum, r) => sum + parseFloat(r.amount), 0).toString();
+
+          await addEntry({
+            owner_address: safeOwner,
+            token_id: tokenId,
+            token_ticker: safeTicker,
+            action_type: ACTION_TYPES.SEND,
+            amount: totalAmount,
+            tx_id: result.txid,
+            details: { recipients: recipients.length, message: sendMessage || null },
+          });
+
+          if (onHistoryUpdate) {
+            await onHistoryUpdate();
+          }
+        } catch (histErr) {
+          console.warn('⚠️ Erreur enregistrement historique:', histErr);
         }
 
         setMultipleRecipients('');
         setSendMessage('');
         reset();
-      } else {
-        setNotification({
-          type: 'error',
-          message: `❌ Les ${recipients.length} transactions ont échoué`,
-        });
+      } catch (err: any) {
+        const errorMsg = err.message || 'Échec de l\'envoi multiple';
+        console.error('❌ Erreur envoi multiple:', errorMsg, err);
+        setNotification({ type: 'error', message: errorMsg });
       }
     }
   };
