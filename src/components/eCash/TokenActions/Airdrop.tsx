@@ -4,7 +4,6 @@ import { Input, Button } from '../../UI';
 import HistoryCollapse from '../../HistoryCollapse';
 import NetworkFeesAvail from '../NetworkFeesAvail';
 import ActionFeeEstimate from './ActionFeeEstimate';
-import AddressBook from '../../AddressBook/AddressBook';
 import HoldersDetails from './HoldersDetails';
 import { notificationAtom } from '../../../atoms';
 import { addEntry, ACTION_TYPES } from '../../../services/historyService';
@@ -60,11 +59,10 @@ export const Airdrop: React.FC<AirdropProps> = ({
   const [isCalculationValid, setIsCalculationValid] = useState(false);
   const [loadingHolders, setLoadingHolders] = useState(false);
   const [dynamicFee, setDynamicFee] = useState(546);
-  const [showAddressBook, setShowAddressBook] = useState(false);
 
   // Hook métier
   const decimals = tokenInfo?.genesisInfo?.decimals || 0;
-  const { isLoading, error, txId, success, airdrop, reset } = useAirdropToken(tokenId, decimals);
+  const { isLoading, error, airdrop, reset } = useAirdropToken(tokenId, decimals);
 
   const setNotification = useSetAtom(notificationAtom);
 
@@ -98,13 +96,13 @@ export const Airdrop: React.FC<AirdropProps> = ({
 
       if (airdropMode === 'equal') {
         const amountPerHolder = totalAmount / holdersArray.length;
-        recipients = holdersArray.map((holder) => ({
+        recipients = holdersArray.map((holder: any) => ({
           address: holder.address,
           amount: amountPerHolder.toString(),
         }));
       } else {
         // Mode manuel - utiliser les montants existants
-        recipients = holdersArray.map((holder) => ({
+        recipients = holdersArray.map((holder: any) => ({
           address: holder.address,
           amount: holder.amount?.toString() || '0',
         }));
@@ -343,7 +341,7 @@ export const Airdrop: React.FC<AirdropProps> = ({
               <ActionFeeEstimate
                 actionType="airdrop"
                 params={{ recipients: calculatedHolders.length }}
-                onFeeCalculated={(fee) => setDynamicFee(fee)}
+                onFeeCalculated={(fee: any) => setDynamicFee(fee)}
               />
               {isCreator && <NetworkFeesAvail compact={true} showActions={true} estimatedFee={dynamicFee} />}
             </div>

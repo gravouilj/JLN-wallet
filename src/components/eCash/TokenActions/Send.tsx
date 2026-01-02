@@ -63,7 +63,7 @@ export const Send: React.FC<SendProps> = ({
   const [selectedContactName, setSelectedContactName] = useState('');
 
   // Hook métier
-  const { isLoading, error, txId, success, send, reset } = useSendToken(tokenId, decimals);
+  const { isLoading, error, send, reset } = useSendToken();
 
   const setNotification = useSetAtom(notificationAtom);
 
@@ -297,7 +297,7 @@ export const Send: React.FC<SendProps> = ({
                   </label>
                   <AddressBookSelector
                     tokenId={tokenId}
-                    onSelectContact={(address, name) => {
+                    onSelectContact={(address: string, name: string) => {
                       setSendAddress(address);
                       setSelectedContactName(name);
                       setNotification({ type: 'success', message: `✅ Contact "${name}" sélectionné` });
@@ -357,7 +357,7 @@ export const Send: React.FC<SendProps> = ({
                 </label>
                 <AddressBookMultiSelector
                   tokenId={tokenId}
-                  onContactsSelected={(contacts) => {
+                  onContactsSelected={(contacts: any[]) => {
                     const newLines = contacts.map((c) => `${c.address},${sendAmount || '0'}  # ${c.name}`).join('\n');
                     setMultipleRecipients((prev) => (prev ? `${prev}\n${newLines}` : newLines));
                     setNotification({ type: 'success', message: `✅ ${contacts.length} contact(s) ajouté(s)` });
@@ -440,7 +440,7 @@ export const Send: React.FC<SendProps> = ({
 
           {/* Frais */}
           <div style={{ display: 'grid', gridTemplateColumns: isCreator ? '1fr 1fr' : '1fr', gap: '16px', alignItems: 'start' }}>
-            <ActionFeeEstimate actionType="send" params={{ message: sendMessage }} onFeeCalculated={(fee) => setDynamicFee(fee)} />
+            <ActionFeeEstimate actionType="send" params={{ message: sendMessage }} onFeeCalculated={(fee: any) => setDynamicFee(fee)} />
             {isCreator && <NetworkFeesAvail compact={true} showActions={true} estimatedFee={dynamicFee} />}
           </div>
 
@@ -479,7 +479,7 @@ export const Send: React.FC<SendProps> = ({
       <Modal isOpen={showQrScanner} onClose={() => setShowQrScanner(false)}>
         <Modal.Header>Scanner un QR Code</Modal.Header>
         <Modal.Body>
-          <QrCodeScanner onScan={handleQrScan} />
+          <QrCodeScanner onAddressDetected={handleQrScan} />
         </Modal.Body>
       </Modal>
     </>

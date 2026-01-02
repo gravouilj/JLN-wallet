@@ -5,7 +5,6 @@ import { useEcashWallet } from '../../hooks/useEcashWallet';
 interface NetworkFeesAvailProps {
   compact?: boolean;
   showActions?: boolean;
-  onRefresh?: () => void;
   estimatedFee?: number | null;
 }
 
@@ -18,7 +17,6 @@ interface NetworkFeesAvailProps {
 const NetworkFeesAvail: React.FC<NetworkFeesAvailProps> = ({ 
   compact = false, 
   showActions = true,
-  onRefresh,
   estimatedFee = null
 }) => {
   const { walletConnected } = useEcashWallet();
