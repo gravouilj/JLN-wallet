@@ -330,3 +330,82 @@ pre {
     grid-template-columns: 1fr;
   }
 }
+
+/* ========================================
+   CLIENT WALLET PAGE STYLES
+   ======================================== */
+
+/* Profile Selector Section */
+.profile-selector-section {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.back-to-hub-btn {
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid var(--border-primary, #ddd);
+  background-color: var(--bg-secondary, #f5f5f5);
+  color: var(--text-primary, #000);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+}
+
+.back-to-hub-btn:hover {
+  background-color: var(--bg-primary, #fff);
+  border-color: var(--accent-primary, #0074e4);
+}
+
+.profile-selector-dropdown {
+  flex: 1;
+}
+
+/* Action Tabs */
+.action-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-primary, #ddd);
+  margin-bottom: 16px;
+}
+
+.tab-button {
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px;
+  border: 1px solid var(--border-primary, #ddd);
+  background-color: var(--bg-secondary, #f5f5f5);
+  color: var(--text-primary, #000);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.tab-button:hover:not(.disabled) {
+  background-color: var(--bg-primary, #fff);
+  border-color: var(--accent-primary, #0074e4);
+}
+
+.tab-button.active {
+  background-color: var(--accent-primary, #0074e4);
+  color: #fff;
+  border-color: var(--accent-primary, #0074e4);
+}
+
+.tab-button.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tab-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

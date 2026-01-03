@@ -5,7 +5,7 @@ import { updateTokenLinkedStatus, checkActiveTicketsForToken } from '../../servi
 import { useEcashWallet } from '../../hooks/useEcashWallet';
 import { notificationAtom } from '../../atoms';
 import antifraudService from '../../services/antifraudService';
-import { ActiveReportsWarningModal, ActiveHoldersWarningModal } from '../Creators/AntifraudModals';
+import { ActiveReportsWarningModal, ActiveHoldersWarningModal } from '../../features/profile/components/AntifraudModals';
 import { Switch, Modal, Button } from '../UI';
 
 /**

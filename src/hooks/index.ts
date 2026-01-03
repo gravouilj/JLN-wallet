@@ -3,7 +3,20 @@
  * Central export point for all React hooks in the application
  */
 
+// ============================================
+// TYPES (Command Hook Pattern)
+// ============================================
+export type { CommandHookState, CommandHookResult } from './types';
+export { initialCommandState, loadingState, errorState, successState } from './types';
+
+// ============================================
+// WALLET CONTEXT (MASTER HOOK)
+// ============================================
+export { useWalletContext } from './useWalletContext';
+
+// ============================================
 // eCash Wallet hooks (professional implementation)
+// ============================================
 export {
   useEcashWallet,
   useEcashBalance,

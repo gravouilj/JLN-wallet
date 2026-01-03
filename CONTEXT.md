@@ -2,36 +2,39 @@
 
 ## 🎯 Vue d'ensemble
 JLN Wallet est un portefeuille web non-custodial pour la blockchain eCash (XEC).
-Il permet de gérer des XEC et des eTokens (SLP/ALP), avec des fonctionnalités avancées pour les créateurs (Mint, Burn, Airdrop).
+Il permet de gérer des XEC et des eTokens (SLP/ALP), avec des fonctionnalités avancées pour les créateurs.
 
 ## 🛠️ Stack Technique
 - **Core Framework**: React 19 + Vite 6
-- **Language**: JavaScript (UI) + TypeScript (Services Critiques)
+- **Language**: TypeScript (Strict pour Services/Utils/UI Core) + JavaScript (Pages Legacy)
 - **State Management**: Jotai (Atomic state)
-- **Styling**: CSS Custom (No Tailwind framework dependencies)
+- **Styling**: CSS Custom + Composants UI modulaires (`src/components/UI`)
 - **Blockchain**: `ecash-lib`, `chronik-client`
 - **Backend**: Supabase (Authentification anonyme & DB Profils)
-- **Testing**: Playwright (E2E)
+- **Testing**: Vitest (Unit) + Playwright (E2E)
 
 ## 🔒 Règles de Sécurité (CRITIQUE)
-1. **Zéro Stockage en Clair** : Le mnémonique (Seed Phrase) ne doit JAMAIS être stocké en `localStorage` ou `sessionStorage`.
-2. **Architecture RAM-Only** : La clé privée déchiffrée réside uniquement dans l'atome `mnemonicAtom` (Jotai) en mémoire vive.
-3. **Chiffrement** : Le stockage persistant se fait via `src/services/storageService.js` qui utilise `Web Crypto API` (AES-GCM).
-4. **Sanitization** : Toute entrée utilisateur (montant, adresse) doit être validée avant envoi à la blockchain.
+1. **Zéro Stockage en Clair** : Le mnémonique ne doit JAMAIS être stocké brut.
+2. **Architecture RAM-Only** : La clé privée déchiffrée réside uniquement dans l'atome `mnemonicAtom` (`src/atoms.ts`).
+3. **Chiffrement** : Stockage persistant via `src/services/storageService.ts` (AES-GCM).
+4. **Calculs** : Toujours utiliser `BigInt` pour les satoshis. Utiliser le helper `getSats(utxo)` dans `ecashWallet.ts`.
 
 ## 🏗️ Architecture du Code
-- **`/src/services/`** : Logique métier pure (API, Crypto). **Doit être stateless.**
-  - `ecashWallet.ts` : Cœur du wallet (TypeScript strict).
-  - `supabaseClient.js` : Client DB unique.
-- **`/src/atoms.js`** : État global de l'application. Source de vérité unique.
-- **`/src/config/constants.ts`** : Toutes les constantes (URLs, Chemins, Clés). **Aucune "Magic String" dans le code.**
-- **`/src/components/`** : Composants UI réutilisables.
-- **`/src/pages/`** : Pages principales routées.
+- **`/src/services/`** : Logique métier (TypeScript).
+  - `ecashWallet.ts` : Cœur du wallet.
+  - `storageService.ts` : Persistance.
+  - `supabaseClient.js` : Client DB.
+- **`/src/types/`** : Définitions TypeScript globales (`index.ts`).
+- **`/src/atoms.ts`** : État global Jotai typé.
+- **`/src/config/constants.ts`** : Configuration centralisée.
+- **`/src/components/UI/`** : Bibliothèque de composants atomiques (`Button.tsx`, `Card.tsx`, etc.).
+- **`/src/pages/`** : Vues principales (encore majoritairement en `.jsx`).
 
 ## 🔄 Workflow de Développement
-1. **Modification Logic** : Prioriser `ecashWallet.ts`. Vérifier les types dans `src/types/index.ts`.
-2. **Build** : Toujours lancer `npm run build` avant de commit pour vérifier les imports statiques/dynamiques.
-3. **Imports** : Utiliser des imports statiques (`import { X } from Y`) en haut des fichiers. Éviter `await import()` à l'intérieur des composants pour optimiser le tree-shaking.
+1. **Logique** : Modifier `ecashWallet.ts` en respectant les interfaces.
+2. **UI** : Utiliser les composants de `@/components/UI`.
+3. **Build** : Lancer `npm run build` pour vérifier le typage.
+4. **Tests** : Lancer `npm run test:unit` après toute modification financière.
 
 ## ⚠️ Dettes Techniques Connues
 - L'UI est encore majoritairement en `.jsx`. La migration vers `.tsx` est encouragée pour les nouveaux composants.

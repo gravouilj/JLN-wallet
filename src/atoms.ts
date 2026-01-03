@@ -112,6 +112,66 @@ export const balanceRefreshTriggerAtom = atom<number>(0);
 export const tokenRefreshTriggerAtom = atom<number>(0);
 
 // ============================================
+// WALLET TOKENS CACHE (Résultat du scan)
+// ============================================
+
+/**
+ * Token détenu par le wallet avec métadonnées
+ */
+export interface WalletToken {
+  tokenId: string;
+  name: string;
+  ticker: string;
+  decimals: number;
+  balance: string;
+  verified: boolean;  // true = référencé dans l'annuaire
+  profileId?: string; // ID du profil si référencé
+  image?: string | null;
+}
+
+/**
+ * État du scan des tokens
+ */
+export interface WalletTokensState {
+  tokens: WalletToken[];
+  balances: Record<string, string>;
+  loading: boolean;
+  error: string | null;
+  lastScanAt: number | null;
+}
+
+/**
+ * Cache des tokens du wallet - Source de vérité unique
+ * Évite les appels redondants à Chronik
+ */
+export const walletTokensAtom = atom<WalletTokensState>({
+  tokens: [],
+  balances: {},
+  loading: false,
+  error: null,
+  lastScanAt: null,
+});
+
+/**
+ * Cache des infos token (évite appels getTokenInfo répétés)
+ */
+export interface TokenInfoCache {
+  [tokenId: string]: {
+    tokenName: string;
+    tokenTicker: string;
+    decimals: number;
+    fetchedAt: number;
+  };
+}
+
+export const tokenInfoCacheAtom = atom<TokenInfoCache>({});
+
+/**
+ * Trigger pour forcer un nouveau scan
+ */
+export const walletScanTriggerAtom = atom<number>(0);
+
+// ============================================
 // UI STATE
 // ============================================
 

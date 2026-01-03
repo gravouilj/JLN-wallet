@@ -12,7 +12,14 @@ import { Button, Input } from '../UI';
  * @param {Function} onSelectAddress - Callback quand une adresse est sélectionnée
  * @param {boolean} compact - Mode compact pour affichage réduit
  */
-export const AddressBook = ({ 
+
+interface AddressBookProps {
+  tokenId?: string | null;
+  onSelectAddress?: ((address: string) => void) | null;
+  compact?: boolean;
+}
+
+export const AddressBook: React.FC<AddressBookProps> = ({ 
   tokenId = null, 
   onSelectAddress = null, 
   compact = false 

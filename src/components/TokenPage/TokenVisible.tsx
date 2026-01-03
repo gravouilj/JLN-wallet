@@ -4,7 +4,7 @@ import { profilService } from '../../services/profilService';
 import { useEcashWallet } from '../../hooks/useEcashWallet';
 import { notificationAtom } from '../../atoms';
 import antifraudService from '../../services/antifraudService';
-import { ActiveReportsWarningModal, ActiveHoldersWarningModal } from '../Creators/AntifraudModals';
+import { ActiveReportsWarningModal, ActiveHoldersWarningModal } from '../../features/profile/components/AntifraudModals';
 import { Switch } from '../UI';
 
 /**

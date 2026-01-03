@@ -1,228 +1,54 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useSetAtom } from 'jotai';
-import { notificationAtom } from '../atoms';
-import { useEcashWallet } from '../hooks/useEcashWallet';
 import MobileLayout from '../components/Layout/MobileLayout';
 import { Card, CardContent, Button, PageLayout, Stack, PageHeader } from '../components/UI';
-// 👇 IMPORT STATIQUE (Correction du dernier warning)
-import { ProfilService } from '../services/profilService'; 
+import { useTokenImport, initialCreatorInfo } from '../features/token-management';
 
 /**
  * CompleteTokenImportPage - Page pour compléter l'import d'un token existant
+ * 
+ * Architecture: Page squelette utilisant useTokenImport pour la logique métier
  * Les infos blockchain sont pré-remplies et non modifiables
- * L'utilisateur doit OBLIGATOIREMENT renseigner l'objectif du token
+ * L'utilisateur doit OBLIGATOIREMENT renseigner l'objectif et la contrepartie
  */
 const CompleteTokenImportPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { wallet, address } = useEcashWallet();
-  const setNotification = useSetAtom(notificationAtom);
 
   // Récupérer les données du token depuis la navigation
   const tokenData = location.state?.tokenData;
 
-  const [purpose, setPurpose] = useState('');
-  const [counterpart, setCounterpart] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  // Section créateur (optionnel mais recommandé)
-  const [creatorInfo, setCreatorInfo] = useState({
-    profileName: '',
-    description: '',
-    country: 'France',
-    region: '',
-    department: '',
-    address: '',
-    phone: '',
-    email: '',
-    website: '',
-    otherWebsite: '',
-    facebook: '',
-    instagram: '',
-    tiktok: '',
-    youtube: '',
-    whatsapp: '',
-    telegram: '',
-    products: '',
-    services: '',
-    legalRepresentative: '',
-    companyid: '',
-    governmentidverificationweblink: '',
-    nationalcertification: '',
-    nationalcertificationweblink: '',
-    internationalcertification: '',
-    internationalcertificationweblink: ''
+  // Hook centralisé pour toute la logique d'import
+  const {
+    purpose,
+    setPurpose,
+    counterpart,
+    setCounterpart,
+    creatorInfo,
+    updateCreatorInfo,
+    isSubmitting,
+    canSubmit,
+    handleSubmit,
+  } = useTokenImport({
+    tokenData,
+    onSuccess: () => {
+      navigate('/manage-token');
+      // Recharger la page pour afficher le nouveau token
+      setTimeout(() => {
+        window.location.reload();
+      }, 100);
+    },
+    onMissingData: () => {
+      navigate('/manage-token');
+    },
   });
 
   useEffect(() => {
     // Rediriger si pas de données de token
     if (!tokenData) {
-      setNotification({
-        type: 'error',
-        message: '❌ Aucune donnée de token. Veuillez réessayer l\'import.'
-      });
       navigate('/manage-token');
     }
-  }, [tokenData, navigate, setNotification]);
-
-  const handleSubmit = async () => {
-    if (!purpose.trim()) {
-      setNotification({
-        type: 'error',
-        message: '⚠️ L\'objectif du token est obligatoire'
-      });
-      return;
-    }
-
-    if (!counterpart.trim()) {
-      setNotification({
-        type: 'error',
-        message: '⚠️ La contrepartie du token est obligatoire'
-      });
-      return;
-    }
-
-    if (!wallet || !address) {
-      setNotification({
-        type: 'error',
-        message: '⚠️ Veuillez connecter votre wallet'
-      });
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      // 👇 UTILISATION DIRECTE (Plus de await import)
-      // const { profilService } = await import('../services/profilService'); ❌
-      
-      // 🔒 NOUVEAU: Vérifier la disponibilité du token avant import
-      console.log('🔍 Vérification disponibilité token...');
-      const availability = await ProfilService.checkTokenAvailability(tokenData.tokenId, address);
-      
-      if (!availability.isAvailable) {
-        setNotification({
-          type: 'error',
-          message: `⛔ Ce jeton est déjà géré par la profile "${availability.existingProfileName}". Vous ne pouvez pas l'importer.`
-        });
-        setIsSubmitting(false);
-        return;
-      }
-      
-      if (availability.isReimport) {
-        console.log('ℹ️ Ré-import détecté (token déjà dans votre profile)');
-      }
-      
-      // Vérifier si l'utilisateur a déjà une profile 
-      const existingProfile = await ProfilService.getMyProfile(address);
-      
-      const newTokenData = {
-        tokenId: tokenData.tokenId,
-        ticker: tokenData.ticker,
-        name: tokenData.name,
-        decimals: tokenData.decimals || 0,
-        image: tokenData.image || '',
-        purpose: purpose.trim(),
-        counterpart: counterpart.trim(),
-        purposeUpdatedAt: new Date().toISOString(),
-        counterpartUpdatedAt: new Date().toISOString()
-      };
-
-      if (existingProfile) {
-        // Ajouter le token à la profile existante
-        const existingTokens = Array.isArray(existingProfile.tokens) ? existingProfile.tokens : [];
-        
-        // Vérifier si le token n'est pas déjà présent
-        const tokenExists = existingTokens.some(t => t.tokenId === tokenData.tokenId);
-        if (tokenExists) {
-          setNotification({
-            type: 'warning',
-            message: '⚠️ Ce token est déjà importé dans votre profile'
-          });
-          navigate('/manage-token');
-          return;
-        }
-
-        // Mettre à jour la profile avec le nouveau token
-        const updatedProfile = {
-          ...existingProfile,
-          tokens: [...existingTokens, newTokenData]
-        };
-
-        await ProfilService.saveProfil(updatedProfile, address);
-
-        setNotification({
-          type: 'success',
-          message: `✅ Token "${tokenData.name}" ajouté à votre profile !`
-        });
-      } else {
-        // Créer une nouvelle profile minimale
-        const profileData = {
-          name: creatorInfo.profileName || tokenData.name || 'Ma Profile',
-          description: creatorInfo.description || '',
-          tokens: [newTokenData],
-          verification_status: 'none',
-          verified: false,
-          products: creatorInfo.products ? creatorInfo.products.split(',').map(p => p.trim()).filter(Boolean) : [],
-          services: creatorInfo.services ? creatorInfo.services.split(',').map(s => s.trim()).filter(Boolean) : [],
-          location_country: creatorInfo.country || '',
-          location_region: creatorInfo.region || '',
-          location_department: creatorInfo.department || '',
-          address: creatorInfo.address || '',
-          phone: creatorInfo.phone || '',
-          email: creatorInfo.email || '',
-          website: creatorInfo.website || '',
-          
-          // Réseaux sociaux (JSONB)
-          socials: {
-            facebook: creatorInfo.facebook || null,
-            instagram: creatorInfo.instagram || null,
-            tiktok: creatorInfo.tiktok || null,
-            youtube: creatorInfo.youtube || null,
-            whatsapp: creatorInfo.whatsapp || null,
-            telegram: creatorInfo.telegram || null,
-            other_website: creatorInfo.otherWebsite || null
-          },
-          
-          // Certifications (JSONB)
-          certifications: {
-            siret: creatorInfo.companyid || null,
-            siret_link: creatorInfo.governmentidverificationweblink || null,
-            legal_representative: creatorInfo.legalRepresentative || null,
-            national: creatorInfo.nationalcertification || null,
-            national_link: creatorInfo.nationalcertificationweblink || null,
-            international: creatorInfo.internationalcertification || null,
-            international_link: creatorInfo.internationalcertificationweblink || null
-          }
-        };
-
-        await ProfilService.saveProfil(profileData, address);
-
-        setNotification({
-          type: 'success',
-          message: `✅ Profile créée avec le token "${tokenData.name}" !`
-        });
-      }
-
-      // Rediriger vers ManageTokenPage
-      navigate('/manage-token');
-      
-      // Recharger la page pour afficher le nouveau token
-      setTimeout(() => {
-        window.location.reload();
-      }, 100);
-
-    } catch (err) {
-      console.error('❌ Erreur import token:', err);
-      setNotification({
-        type: 'error',
-        message: `❌ Erreur lors de l'import: ${err.message}`
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  }, [tokenData, navigate]);
 
   if (!tokenData) {
     return (
@@ -523,7 +349,7 @@ const CompleteTokenImportPage = () => {
                   <input
                     type="text"
                     value={creatorInfo.profileName}
-                    onChange={(e) => setCreatorInfo({...creatorInfo, profileName: e.target.value})}
+                    onChange={(e) => updateCreatorInfo("profileName", e.target.value)}
                     placeholder="Ex: Ferme du Soleil Levant"
                     style={{
                       width: '100%',
@@ -543,7 +369,7 @@ const CompleteTokenImportPage = () => {
                   </label>
                   <textarea
                     value={creatorInfo.description}
-                    onChange={(e) => setCreatorInfo({...creatorInfo, description: e.target.value})}
+                    onChange={(e) => updateCreatorInfo("description", e.target.value)}
                     placeholder="Présentez votre activité..."
                     style={{
                       width: '100%',
@@ -567,7 +393,7 @@ const CompleteTokenImportPage = () => {
                     <input
                       type="text"
                       value={creatorInfo.country}
-                      onChange={(e) => setCreatorInfo({...creatorInfo, country: e.target.value})}
+                      onChange={(e) => updateCreatorInfo("country", e.target.value)}
                       style={{
                         width: '100%',
                         padding: '10px 12px',
@@ -585,7 +411,7 @@ const CompleteTokenImportPage = () => {
                     <input
                       type="text"
                       value={creatorInfo.region}
-                      onChange={(e) => setCreatorInfo({...creatorInfo, region: e.target.value})}
+                      onChange={(e) => updateCreatorInfo("region", e.target.value)}
                       placeholder="Ex: Bretagne"
                       style={{
                         width: '100%',
@@ -608,7 +434,7 @@ const CompleteTokenImportPage = () => {
                     <input
                       type="email"
                       value={creatorInfo.email}
-                      onChange={(e) => setCreatorInfo({...creatorInfo, email: e.target.value})}
+                      onChange={(e) => updateCreatorInfo("email", e.target.value)}
                       placeholder="contact@ferme.com"
                       style={{
                         width: '100%',
@@ -627,7 +453,7 @@ const CompleteTokenImportPage = () => {
                     <input
                       type="tel"
                       value={creatorInfo.phone}
-                      onChange={(e) => setCreatorInfo({...creatorInfo, phone: e.target.value})}
+                      onChange={(e) => updateCreatorInfo("phone", e.target.value)}
                       placeholder="+33 6 12 34 56 78"
                       style={{
                         width: '100%',
@@ -650,7 +476,7 @@ const CompleteTokenImportPage = () => {
                     <input
                       type="url"
                       value={creatorInfo.website}
-                      onChange={(e) => setCreatorInfo({...creatorInfo, website: e.target.value})}
+                      onChange={(e) => updateCreatorInfo("website", e.target.value)}
                       placeholder="https://maferme.com"
                       style={{
                         width: '100%',
@@ -669,7 +495,7 @@ const CompleteTokenImportPage = () => {
                     <input
                       type="url"
                       value={creatorInfo.facebook}
-                      onChange={(e) => setCreatorInfo({...creatorInfo, facebook: e.target.value})}
+                      onChange={(e) => updateCreatorInfo("facebook", e.target.value)}
                       placeholder="https://facebook.com/..."
                       style={{
                         width: '100%',
@@ -690,7 +516,7 @@ const CompleteTokenImportPage = () => {
                   </label>
                   <textarea
                     value={creatorInfo.products}
-                    onChange={(e) => setCreatorInfo({...creatorInfo, products: e.target.value})}
+                    onChange={(e) => updateCreatorInfo("products", e.target.value)}
                     placeholder="Ex: Légumes bio, Fruits de saison, Œufs..."
                     style={{
                       width: '100%',
@@ -712,7 +538,7 @@ const CompleteTokenImportPage = () => {
                   </label>
                   <textarea
                     value={creatorInfo.services}
-                    onChange={(e) => setCreatorInfo({...creatorInfo, services: e.target.value})}
+                    onChange={(e) => updateCreatorInfo("services", e.target.value)}
                     placeholder="Ex: Livraison à domicile, Ateliers pédagogiques..."
                     style={{
                       width: '100%',
@@ -736,7 +562,7 @@ const CompleteTokenImportPage = () => {
                     <input
                       type="text"
                       value={creatorInfo.companyid}
-                      onChange={(e) => setCreatorInfo({...creatorInfo, companyid: e.target.value})}
+                      onChange={(e) => updateCreatorInfo("companyid", e.target.value)}
                       placeholder="123 456 789 00010"
                       style={{
                         width: '100%',
@@ -755,7 +581,7 @@ const CompleteTokenImportPage = () => {
                     <input
                       type="text"
                       value={creatorInfo.legalRepresentative}
-                      onChange={(e) => setCreatorInfo({...creatorInfo, legalRepresentative: e.target.value})}
+                      onChange={(e) => updateCreatorInfo("legalRepresentative", e.target.value)}
                       placeholder="Nom Prénom"
                       style={{
                         width: '100%',
@@ -777,7 +603,7 @@ const CompleteTokenImportPage = () => {
                   <input
                     type="url"
                     value={creatorInfo.governmentidverificationweblink}
-                    onChange={(e) => setCreatorInfo({...creatorInfo, governmentidverificationweblink: e.target.value})}
+                    onChange={(e) => updateCreatorInfo("governmentidverificationweblink", e.target.value)}
                     placeholder="https://..."
                     style={{
                       width: '100%',
@@ -799,7 +625,7 @@ const CompleteTokenImportPage = () => {
                     <input
                       type="text"
                       value={creatorInfo.nationalcertification}
-                      onChange={(e) => setCreatorInfo({...creatorInfo, nationalcertification: e.target.value})}
+                      onChange={(e) => updateCreatorInfo("nationalcertification", e.target.value)}
                       placeholder="Ex: AB (Agriculture Biologique)"
                       style={{
                         width: '100%',
@@ -818,7 +644,7 @@ const CompleteTokenImportPage = () => {
                     <input
                       type="url"
                       value={creatorInfo.nationalcertificationweblink}
-                      onChange={(e) => setCreatorInfo({...creatorInfo, nationalcertificationweblink: e.target.value})}
+                      onChange={(e) => updateCreatorInfo("nationalcertificationweblink", e.target.value)}
                       placeholder="https://..."
                       style={{
                         width: '100%',
@@ -841,7 +667,7 @@ const CompleteTokenImportPage = () => {
                     <input
                       type="text"
                       value={creatorInfo.internationalcertification}
-                      onChange={(e) => setCreatorInfo({...creatorInfo, internationalcertification: e.target.value})}
+                      onChange={(e) => updateCreatorInfo("internationalcertification", e.target.value)}
                       placeholder="Ex: Fair Trade"
                       style={{
                         width: '100%',
@@ -860,7 +686,7 @@ const CompleteTokenImportPage = () => {
                     <input
                       type="url"
                       value={creatorInfo.internationalcertificationweblink}
-                      onChange={(e) => setCreatorInfo({...creatorInfo, internationalcertificationweblink: e.target.value})}
+                      onChange={(e) => updateCreatorInfo("internationalcertificationweblink", e.target.value)}
                       placeholder="https://..."
                       style={{
                         width: '100%',
@@ -883,7 +709,7 @@ const CompleteTokenImportPage = () => {
                     <input
                       type="text"
                       value={creatorInfo.tiktok}
-                      onChange={(e) => setCreatorInfo({...creatorInfo, tiktok: e.target.value})}
+                      onChange={(e) => updateCreatorInfo("tiktok", e.target.value)}
                       placeholder="@username"
                       style={{
                         width: '100%',
@@ -902,7 +728,7 @@ const CompleteTokenImportPage = () => {
                     <input
                       type="text"
                       value={creatorInfo.youtube}
-                      onChange={(e) => setCreatorInfo({...creatorInfo, youtube: e.target.value})}
+                      onChange={(e) => updateCreatorInfo("youtube", e.target.value)}
                       placeholder="@channel"
                       style={{
                         width: '100%',
@@ -924,7 +750,7 @@ const CompleteTokenImportPage = () => {
                     <input
                       type="tel"
                       value={creatorInfo.whatsapp}
-                      onChange={(e) => setCreatorInfo({...creatorInfo, whatsapp: e.target.value})}
+                      onChange={(e) => updateCreatorInfo("whatsapp", e.target.value)}
                       placeholder="+33 6 12 34 56 78"
                       style={{
                         width: '100%',
@@ -943,7 +769,7 @@ const CompleteTokenImportPage = () => {
                     <input
                       type="text"
                       value={creatorInfo.telegram}
-                      onChange={(e) => setCreatorInfo({...creatorInfo, telegram: e.target.value})}
+                      onChange={(e) => updateCreatorInfo("telegram", e.target.value)}
                       placeholder="@username"
                       style={{
                         width: '100%',
@@ -965,7 +791,7 @@ const CompleteTokenImportPage = () => {
                   <input
                     type="url"
                     value={creatorInfo.otherWebsite}
-                    onChange={(e) => setCreatorInfo({...creatorInfo, otherWebsite: e.target.value})}
+                    onChange={(e) => updateCreatorInfo("otherWebsite", e.target.value)}
                     placeholder="https://..."
                     style={{
                       width: '100%',
@@ -987,7 +813,7 @@ const CompleteTokenImportPage = () => {
               <div style={{ display: 'flex', gap: '12px' }}>
                 <Button
                   onClick={handleSubmit}
-                  disabled={isSubmitting || !purpose.trim() || !counterpart.trim()}
+                  disabled={!canSubmit}
                   variant="primary"
                   fullWidth
                   icon={isSubmitting ? '⏳' : '✅'}
@@ -995,7 +821,7 @@ const CompleteTokenImportPage = () => {
                     padding: '14px',
                     fontSize: '1rem',
                     fontWeight: '600',
-                    opacity: (isSubmitting || !purpose.trim() || !counterpart.trim()) ? 0.5 : 1
+                    opacity: !canSubmit ? 0.5 : 1
                   }}
                 >
                   {isSubmitting ? 'Import en cours...' : 'Compléter l\'Import'}

@@ -19,10 +19,11 @@ interface CardContentProps {
   children: React.ReactNode;
   className?: string;
   noPadding?: boolean;
+  style?: React.CSSProperties;
 }
 
-export const CardContent: React.FC<CardContentProps> = ({ children, className = '', noPadding = false }) => (
-  <div className={`card-content ${className}`} style={{ padding: noPadding ? '0' : '24px' }}>
+export const CardContent: React.FC<CardContentProps> = ({ children, className = '', noPadding = false, style }) => (
+  <div className={`card-content ${className}`} style={{ padding: noPadding ? '0' : '24px', ...style }}>
     {children}
   </div>
 );

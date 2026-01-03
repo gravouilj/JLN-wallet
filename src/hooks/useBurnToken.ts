@@ -1,13 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useAtom } from 'jotai';
 import { walletAtom } from '../atoms';
-
-interface BurnState {
-  isLoading: boolean;
-  error: string | null;
-  txId: string | null;
-  success: boolean;
-}
+import { CommandHookState, initialCommandState, loadingState, errorState, successState } from './types';
 
 /**
  * Custom Hook pour la destruction de tokens
@@ -15,69 +9,38 @@ interface BurnState {
  */
 export const useBurnToken = (tokenId: string, decimals: number = 0) => {
   const [wallet] = useAtom(walletAtom);
-  const [state, setState] = useState<BurnState>({
-    isLoading: false,
-    error: null,
-    txId: null,
-    success: false,
-  });
+  const [state, setState] = useState<CommandHookState>(initialCommandState);
 
-  const burn = useCallback(
+  const execute = useCallback(
     async (amount: string): Promise<string | null> => {
-      setState({ isLoading: true, error: null, txId: null, success: false });
+      setState(loadingState());
 
       // Validation du montant
       if (!amount.trim()) {
-        setState({
-          isLoading: false,
-          error: 'Montant requis',
-          txId: null,
-          success: false,
-        });
+        setState(errorState('Montant requis'));
         return null;
       }
 
       const amountNum = parseFloat(amount);
       if (isNaN(amountNum) || amountNum <= 0) {
-        setState({
-          isLoading: false,
-          error: 'Montant invalide',
-          txId: null,
-          success: false,
-        });
+        setState(errorState('Montant invalide'));
         return null;
       }
 
       if (!wallet) {
-        setState({
-          isLoading: false,
-          error: 'Wallet non connecté',
-          txId: null,
-          success: false,
-        });
+        setState(errorState('Wallet non connecté'));
         return null;
       }
 
       try {
         const result = await wallet.burnToken(tokenId, amountNum, decimals);
 
-        setState({
-          isLoading: false,
-          error: null,
-          txId: result.txid,
-          success: true,
-        });
-
+        setState(successState(result.txid));
         return result.txid;
       } catch (err: any) {
         const errorMsg = err.message || 'Erreur lors de la destruction';
         console.error('[useBurnToken]', errorMsg, err);
-        setState({
-          isLoading: false,
-          error: errorMsg,
-          txId: null,
-          success: false,
-        });
+        setState(errorState(errorMsg));
         return null;
       }
     },
@@ -85,8 +48,14 @@ export const useBurnToken = (tokenId: string, decimals: number = 0) => {
   );
 
   const reset = useCallback(() => {
-    setState({ isLoading: false, error: null, txId: null, success: false });
+    setState(initialCommandState);
   }, []);
 
-  return { ...state, burn, reset };
+  return { 
+    ...state, 
+    isLoading: state.loading,
+    execute,
+    burn: execute,
+    reset 
+  };
 };

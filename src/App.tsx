@@ -27,12 +27,12 @@ const AdminVerificationPage = lazy(() => import('./pages/AdminVerificationPage')
 const RequestListingPage = lazy(() => import('./pages/VerificationRequestPage'));
 
 // Components
-import AdminGateRoute from './components/Admin/AdminGateRoute';
+import AdminGateRoute from './features/admin/components/AdminGateRoute';
 import ThemeProvider from './components/ThemeProvider';
 import Notification from './components/Notification';
 import LoadingScreen from './components/LoadingScreen';
 import ErrorBoundary from './components/ErrorBoundary';
-import FloatingAdminButton from './components/Admin/FloatingAdminButton';
+import FloatingAdminButton from './features/admin/components/FloatingAdminButton';
 
 // SECURITY COMPONENTS
 import UnlockWallet from './components/Auth/UnlockWallet';

@@ -51,6 +51,7 @@ export interface GenesisInfo {
   circulatingSupply?: string;
   genesisSupply?: string;
   mintAmount?: string;
+  mintBatonVout?: number | null;
 }
 
 export interface TokenInfo {
@@ -70,6 +71,7 @@ export interface TokenDataFromProfile {
   tokenId: string;
   ticker?: string;
   name?: string;
+  tokenName?: string; // Alias pour name
   decimals?: number;
   image?: string;
   purpose?: string;
@@ -86,7 +88,7 @@ export interface UserProfile {
   owner_address: string;
   name: string;
   description?: string;
-  status?: 'active' | 'banned' | 'deleted' | 'suspended' | 'draft';
+  status?: 'active' | 'banned' | 'deleted' | 'suspended' | 'draft' | 'hidden';
   verification_status?: 'none' | 'pending' | 'verified' | 'rejected' | 'info_requested';
   verified?: boolean;
   tokens?: TokenDataFromProfile[];
@@ -102,6 +104,12 @@ export interface UserProfile {
   phone?: string;
   email?: string;
   website?: string;
+  
+  // Legacy fields for backward compatibility
+  country?: string;
+  region?: string;
+  department?: string;
+  
   socials?: {
     facebook?: string;
     instagram?: string;
@@ -109,13 +117,36 @@ export interface UserProfile {
     youtube?: string;
     whatsapp?: string;
     telegram?: string;
+    other_website?: string;
   };
-  products?: any[]; // À affiner si possible
-  services?: any[]; // À affiner si possible
+  products?: string[] | string;
+  services?: string[] | string;
   certifications?: {
+    // Base fields
     label?: string;
     url?: string;
     is_active?: boolean;
+    // Company ID / SIRET
+    siret?: string;
+    siret_link?: string;
+    legal_representative?: string;
+    // National certification
+    national?: string;
+    national_link?: string;
+    // International certification
+    international?: string;
+    international_link?: string;
+    // Additional certifications
+    certification_1?: string;
+    certification_1_link?: string;
+    certification_2?: string;
+    certification_2_link?: string;
+    // Privacy settings
+    hide_email?: boolean;
+    hide_phone?: boolean;
+    hide_company_id?: boolean;
+    hide_siret?: boolean; // Alias for hide_company_id
+    hide_legal_rep?: boolean;
   };
   
   communication_history?: Array<TicketMessage>;
@@ -125,7 +156,11 @@ export interface UserProfile {
   verified_at?: string | null;
   updated_at?: string;
   created_at?: string;
-  profile_reports?: Array<any>;
+  profile_reports?: Array<unknown>;
+  // Additional fields for deletion/hiding
+  image_url?: string;
+  deleted_at?: string | null;
+  deletion_reason?: string;
 }
 
 // --- Admin System ---

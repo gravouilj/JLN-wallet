@@ -19,7 +19,7 @@
 │  - useEcashXec                                  │
 ├─────────────────────────────────────────────────┤
 │      Wallet Service Layer                       │
-│  src/services/ecashWallet.js                    │
+│  src/services/ecashWallet.ts                    │
 │  - EcashWallet class                            │
 │  - Transaction building                         │
 │  - Key management                               │
@@ -58,7 +58,7 @@
 - **@scure/bip32** (^1.5.0) : Dérivation HD des clés
 - **ecashaddrjs** (^2.0.0) : Encodage/décodage des adresses eCash
 
-## 🔑 Wallet Service (`src/services/ecashWallet.js`)
+## 🔑 Wallet Service (`src/services/ecashWallet.ts`)
 
 ### Classe `EcashWallet`
 
@@ -161,7 +161,7 @@ const result = await wallet.sendToken(
    - Output change token vers soi-même (si nécessaire)
 5. Signature et broadcast
 
-## 🪝 React Hooks (`src/hooks/useEcashWallet.js`)
+## 🪝 React Hooks (`src/hooks/useEcashWallet.ts`)
 
 ### `useEcashWallet()`
 

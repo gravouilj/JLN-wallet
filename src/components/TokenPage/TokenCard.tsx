@@ -7,7 +7,7 @@ import { useEcashWallet } from '../../hooks/useEcashWallet';
 import TokenLinked from './TokenLinked';
 import TokenVisible from './TokenVisible';
 import TokenOffer from './TokenOffer';
-import HoldersDetails from '../eCash/TokenActions/HoldersDetails';
+import HoldersDetails from '../../features/token-management/components/HoldersDetails';
 
 const TokenCard = ({ 
   token, 

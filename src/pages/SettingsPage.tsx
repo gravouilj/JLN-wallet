@@ -10,8 +10,8 @@ import { useEcashWallet } from '../hooks/useEcashWallet';
 import { useXecPrice } from '../hooks/useXecPrice';
 import { walletConnectedAtom, walletAtom, notificationAtom, currencyAtom, localeAtom } from '../atoms';
 import { Card, CardContent, Button, Input, Stack, PageLayout, PageHeader, Select, Tabs } from '../components/UI';
-import ClientTicketForm from '../components/Client/ClientTicketForm';
-import ClientTicketsList from '../components/Client/ClientTicketsList';
+import ClientTicketForm from '../features/support/components/ClientTicketForm';
+import ClientTicketsList from '../features/support/components/ClientTicketsList';
 import { NetworkFeesAvail, AddressHistory, } from '../components/TokenPage';
 
 const SettingsPage = () => {

@@ -4,7 +4,7 @@ import { useAtom } from 'jotai';
 import { notificationAtom, selectedProfileAtom, walletConnectedAtom } from '../atoms';
 import { useEcashWallet } from '../hooks/useEcashWallet';
 import { supabase } from '../services/supabaseClient';
-import SupportTab from '../components/Creators/SupportTab';
+import SupportTab from '../features/profile/components/SupportTab';
 import { Card, CardContent, InfoBox } from '../components/UI';
 import TopBar from '../components/Layout/TopBar';
 import BottomNavigation from '../components/Layout/BottomNavigation';

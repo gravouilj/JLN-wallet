@@ -2,13 +2,7 @@ import { useState, useCallback } from 'react';
 import { useAtom } from 'jotai';
 import { walletAtom } from '../atoms';
 import { isValidXECAddress } from '../utils/validation';
-
-interface MintState {
-  isLoading: boolean;
-  error: string | null;
-  txId: string | null;
-  success: boolean;
-}
+import { CommandHookState, initialCommandState, loadingState, errorState, successState } from './types';
 
 /**
  * Custom Hook pour la création de tokens
@@ -16,60 +10,35 @@ interface MintState {
  */
 export const useMintToken = (tokenId: string, decimals: number = 0) => {
   const [wallet] = useAtom(walletAtom);
-  const [state, setState] = useState<MintState>({
-    isLoading: false,
-    error: null,
-    txId: null,
-    success: false,
-  });
+  const [state, setState] = useState<CommandHookState>(initialCommandState);
 
-  const mint = useCallback(
+  const execute = useCallback(
     async (
       amount: string,
       batonRecipient?: string
     ): Promise<string | null> => {
-      setState({ isLoading: true, error: null, txId: null, success: false });
+      setState(loadingState());
 
       // Validation du montant
       if (!amount.trim()) {
-        setState({
-          isLoading: false,
-          error: 'Montant requis',
-          txId: null,
-          success: false,
-        });
+        setState(errorState('Montant requis'));
         return null;
       }
 
       const amountNum = parseFloat(amount);
       if (isNaN(amountNum) || amountNum <= 0) {
-        setState({
-          isLoading: false,
-          error: 'Montant invalide',
-          txId: null,
-          success: false,
-        });
+        setState(errorState('Montant invalide'));
         return null;
       }
 
       // Validation du destinataire du bâton (optionnel)
       if (batonRecipient && !isValidXECAddress(batonRecipient)) {
-        setState({
-          isLoading: false,
-          error: 'Adresse du bâton invalide',
-          txId: null,
-          success: false,
-        });
+        setState(errorState('Adresse du bâton invalide'));
         return null;
       }
 
       if (!wallet) {
-        setState({
-          isLoading: false,
-          error: 'Wallet non connecté',
-          txId: null,
-          success: false,
-        });
+        setState(errorState('Wallet non connecté'));
         return null;
       }
 
@@ -80,23 +49,12 @@ export const useMintToken = (tokenId: string, decimals: number = 0) => {
           decimals
         );
 
-        setState({
-          isLoading: false,
-          error: null,
-          txId: result.txid,
-          success: true,
-        });
-
+        setState(successState(result.txid));
         return result.txid;
       } catch (err: any) {
         const errorMsg = err.message || 'Erreur lors du minting';
         console.error('[useMintToken]', errorMsg, err);
-        setState({
-          isLoading: false,
-          error: errorMsg,
-          txId: null,
-          success: false,
-        });
+        setState(errorState(errorMsg));
         return null;
       }
     },
@@ -104,8 +62,14 @@ export const useMintToken = (tokenId: string, decimals: number = 0) => {
   );
 
   const reset = useCallback(() => {
-    setState({ isLoading: false, error: null, txId: null, success: false });
+    setState(initialCommandState);
   }, []);
 
-  return { ...state, mint, reset };
+  return { 
+    ...state, 
+    isLoading: state.loading,
+    execute,
+    mint: execute,
+    reset 
+  };
 };

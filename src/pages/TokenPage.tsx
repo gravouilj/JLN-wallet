@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAtom, useSetAtom } from 'jotai';
 import MobileLayout from '../components/Layout/MobileLayout';
 import BlockchainStatus from '../components/eCash/BlockchainStatus';
-import HistoryList from '../components/eCash/TokenActions/HistoryList';
+import HistoryList from '../features/token-management/components/HistoryList';
 import NetworkFeesAvail from '../components/eCash/NetworkFeesAvail';
 import NotificationBell from '../components/NotificationBell';
 import { Card, CardContent, Button, PageLayout, Badge, Tabs, BalanceCard, Stack, Input, Modal, Switch, VisibilityToggle } from '../components/UI';
@@ -15,16 +15,18 @@ import { notificationAtom, currencyAtom } from '../atoms';
 import { syncTokenData, getCachedTokenData, cacheTokenData } from '../utils/tokenSync';
 import { profilService } from '../services/profilService';
 import { addEntry, getHistoryByToken, ACTION_TYPES } from '../services/historyService';
-// 👇 AJOUT (Import statique)
 import { supabase } from '../services/supabaseClient';
 
-// Import des composants d'actions
-import Send from '../components/eCash/TokenActions/Send';
-import Airdrop from '../components/eCash/TokenActions/Airdrop';
-import Mint from '../components/eCash/TokenActions/Mint';
-import Burn from '../components/eCash/TokenActions/Burn';
-import Message from '../components/eCash/TokenActions/Message';
-import ClientTicketForm from '../components/Client/ClientTicketForm';
+// Import des composants d'actions depuis token-management feature
+import { 
+  Send, 
+  Airdrop, 
+  Mint, 
+  Burn, 
+  Message,
+  // Available but not yet integrated: useTokenMetadata, useTokenImage, useTokenPageData
+} from '../features/token-management';
+import ClientTicketForm from '../features/support/components/ClientTicketForm';
 
 // Import des composants TokenPage
 import { 

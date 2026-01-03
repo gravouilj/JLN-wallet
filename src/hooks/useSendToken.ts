@@ -2,13 +2,7 @@ import { useState, useCallback } from 'react';
 import { useAtom } from 'jotai';
 import { walletAtom } from '../atoms';
 import { isValidXECAddress, validateXecSendAmount, validateTokenSendAmount } from '../utils/validation';
-
-interface SendTokenState {
-  isLoading: boolean;
-  error: string | null;
-  txId: string | null;
-  success: boolean;
-}
+import { CommandHookState, initialCommandState, loadingState, errorState, successState } from './types';
 
 interface SendTokenParams {
   address: string;
@@ -28,12 +22,7 @@ interface SendTokenParams {
  */
 export const useSendToken = () => {
   const [wallet] = useAtom(walletAtom);
-  const [state, setState] = useState<SendTokenState>({
-    isLoading: false,
-    error: null,
-    txId: null,
-    success: false,
-  });
+  const [state, setState] = useState<CommandHookState>(initialCommandState);
 
   /**
    * Validation locale des inputs
@@ -60,29 +49,19 @@ export const useSendToken = () => {
    * Fonction principale d'envoi
    * Valide les inputs puis appelle le wallet
    */
-  const send = useCallback(
+  const execute = useCallback(
     async (params: SendTokenParams): Promise<string | null> => {
-      setState({ isLoading: true, error: null, txId: null, success: false });
+      setState(loadingState());
 
       // 1. Validation
       const validationError = validateInputs(params);
       if (validationError) {
-        setState({
-          isLoading: false,
-          error: validationError,
-          txId: null,
-          success: false,
-        });
+        setState(errorState(validationError));
         return null;
       }
 
       if (!wallet) {
-        setState({
-          isLoading: false,
-          error: 'Wallet non connecté',
-          txId: null,
-          success: false,
-        });
+        setState(errorState('Wallet non connecté'));
         return null;
       }
 
@@ -106,23 +85,12 @@ export const useSendToken = () => {
           txid = result.txid;
         }
 
-        setState({
-          isLoading: false,
-          error: null,
-          txId: txid,
-          success: true,
-        });
-
+        setState(successState(txid));
         return txid;
       } catch (err: any) {
         const errorMsg = err.message || 'Erreur lors de la transaction';
         console.error('[useSendToken]', errorMsg, err);
-        setState({
-          isLoading: false,
-          error: errorMsg,
-          txId: null,
-          success: false,
-        });
+        setState(errorState(errorMsg));
         return null;
       }
     },
@@ -133,8 +101,15 @@ export const useSendToken = () => {
    * Reset state - utile après un succès
    */
   const reset = useCallback(() => {
-    setState({ isLoading: false, error: null, txId: null, success: false });
+    setState(initialCommandState);
   }, []);
 
-  return { ...state, send, reset };
+  // Expose both 'loading' (standard) and 'isLoading' (backward compat)
+  return { 
+    ...state, 
+    isLoading: state.loading, // backward compatibility
+    execute, 
+    send: execute, // alias for backward compatibility
+    reset 
+  };
 };

@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MobileLayout from '../components/Layout/MobileLayout';
 import { Card, CardContent, Button, PageLayout, Stack, PageHeader, Badge, Tabs, Textarea, StatusBadge } from '../components/UI';
-import AdminProfilCard from '../components/Admin/AdminProfilCard';
-import AdminReportCard from '../components/Admin/AdminReportCard';
+import AdminProfilCard from '../features/admin/components/AdminProfilCard';
+import AdminReportCard from '../features/admin/components/AdminReportCard';
 import { useAdmin } from '../hooks/useAdmin';
 import { useEcashWallet } from '../hooks/useEcashWallet';
 import { useProfileStatus } from '../hooks/useProfileStatus';
@@ -12,8 +12,8 @@ import { useSetAtom } from 'jotai';
 import { ProfilService } from '../services/profilService';
 import { syncTokenData } from '../utils/tokenSync';
 import { supabase } from '../services/supabaseClient';
-import { ProfilStatusActions, ReportActions } from '../components/Admin/ProfilStatusActions';
-import { AdminChatSection, AdminReportMessaging, BlockedProfileManagement } from '../components/Admin';
+import { ProfilStatusActions, ReportActions } from '../features/admin/components/ProfilStatusActions';
+import { AdminChatSection, AdminReportMessaging, BlockedProfileManagement } from '../features/admin/components';
 
 const AdminVerificationPage = ({ embedded = false }) => {
   const navigate = useNavigate();

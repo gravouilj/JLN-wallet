@@ -9,10 +9,10 @@ import { useAdmin } from '../hooks/useAdmin';
 import TopBar from '../components/Layout/TopBar';
 import BottomNavigation from '../components/Layout/BottomNavigation';
 import SearchFilters from '../components/SearchFilters';
-import { CreatorProfileCard, CreatorProfileModal } from '../components/Creators/CreatorProfile';
+import { CreatorProfileCard, CreatorProfileModal } from '../features/profile/components/CreatorProfile';
 import { Button } from '../components/UI';
-import { CTACard, useCTAInjection } from '../components/Admin/CTA';
-import FloatingAdminButton from '../components/Admin/FloatingAdminButton';
+import { CTACard, useCTAInjection } from '../features/admin/CTA';
+import FloatingAdminButton from '../features/admin/components/FloatingAdminButton';
 
 /**
  * Directory Page - Creator selection interface

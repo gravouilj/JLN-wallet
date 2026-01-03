@@ -31,8 +31,8 @@ export const CTA_TYPES = {
     gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     icon: '🚀',
     // Condition : ne pas afficher si l'utilisateur est déjà créateur
-    showCondition: (userContext) => !userContext.isCreator,
-    getContent: (t) => ({
+    showCondition: (userContext: { isCreator: any; }) => !userContext.isCreator,
+    getContent: (t: (arg0: string) => any) => ({
       name: t('directory.ctaMyEstablishmentName'),
       description: t('directory.ctaMyEstablishmentDesc'),
       location_region: t('directory.ctaMyEstablishmentRegion'),
@@ -41,7 +41,7 @@ export const CTA_TYPES = {
       rewards: t('directory.ctaMyEstablishmentReward'),
       buttonText: t('directory.ctaStartButton'),
     }),
-    onClick: (navigate) => navigate('/landing-page'),
+    onClick: (navigate: (arg0: string) => any) => navigate('/landing-page'),
   },
   
   INVITE_PRODUCER: {
@@ -51,7 +51,7 @@ export const CTA_TYPES = {
     icon: '🤝',
     // Condition : toujours afficher
     showCondition: () => true,
-    getContent: (t) => ({
+    getContent: (t: (arg0: string) => any) => ({
       name: t('directory.ctaInviteProducerName'),
       description: t('directory.ctaInviteProducerDesc'),
       location_region: t('directory.ctaInviteProducerRegion'),
@@ -60,7 +60,7 @@ export const CTA_TYPES = {
       rewards: t('directory.ctaInviteProducerReward'),
       buttonText: t('directory.ctaInviteButton'),
     }),
-    onClick: (navigate) => navigate('/landing-page'),
+    onClick: (navigate: (arg0: string) => any) => navigate('/landing-page'),
   },
 };
 
@@ -69,7 +69,7 @@ export const CTA_TYPES = {
  * @param {Object} userContext - Contexte utilisateur (isCreator, etc.)
  * @returns {Array} Liste des types de CTA à afficher
  */
-export const getActiveCTAs = (userContext) => {
+export const getActiveCTAs = (userContext: any) => {
   return Object.values(CTA_TYPES).filter(cta => 
     cta.showCondition(userContext)
   );

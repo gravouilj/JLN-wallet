@@ -180,7 +180,9 @@
     "yourAddress": "Votre adresse eCash",
     "allTokens": "Tous mes jetons",
     "myTokens": "Mes jetons",
-    "available": "Disponible"
+    "available": "Disponible",
+    "networkFuel": "Carburant Réseau",
+    "sendToken": "Envoyer"
   },
   "token": {
     "balance": "Solde de Jetons",

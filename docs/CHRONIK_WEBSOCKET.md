@@ -7,7 +7,7 @@ Le wallet utilise maintenant **Chronik WebSocket** pour recevoir des mises à jo
 ## Architecture
 
 ### 1. Hook `useChronikWebSocket`
-**Fichier:** `src/hooks/useChronikWebSocket.js`
+**Fichier:** `src/hooks/useChronikWebSocket.ts`
 
 Ce hook gère la connexion WebSocket avec Chronik et s'occupe de :
 - ✅ Connexion automatique au WebSocket Chronik
@@ -17,10 +17,10 @@ Ce hook gère la connexion WebSocket avec Chronik et s'occupe de :
 - ✅ Keep-alive pour maintenir la connexion
 
 ### 2. Intégration dans l'application
-**Fichier:** `src/App.jsx`
+**Fichier:** `src/App.tsx`
 
 Le hook est initialisé au niveau global de l'application :
-```javascript
+```typescript
 function App() {
   const { walletConnected, loading, initializeWallet } = useEcashWallet();
   

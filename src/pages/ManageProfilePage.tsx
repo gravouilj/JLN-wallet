@@ -1,21 +1,61 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useSetAtom } from 'jotai';
 import MobileLayout from '../components/Layout/MobileLayout';
-import { Card, CardContent, Button, PageLayout, Stack, Input, Textarea, Switch, Tabs, Modal, VisibilityToggle, InfoBox } from '../components/UI';
+import { Card, CardContent, Button, PageLayout, Stack, Tabs, Modal } from '../components/UI';
 import { useEcashWallet } from '../hooks/useEcashWallet';
 import { useProfiles } from '../hooks/useProfiles';
 import { notificationAtom } from '../atoms';
 import { ProfilService } from '../services/profilService';
 import { supabase } from '../services/supabaseClient';
-import { CommunicationSection, ReportsSection } from '../components/Admin';
-import InfosTab from '../components/Creators/ManageProfile/InfosTab';
-import LocationTab from '../components/Creators/ManageProfile/LocationTab';
-import ContactTab from '../components/Creators/ManageProfile/ContactTab';
-import VerificationTab from '../components/Creators/ManageProfile/VerificationTab';
-import CertificationsTab from '../components/Creators/ManageProfile/CertificationsTab';
-import TokensListTab from '../components/Creators/ManageProfile/TokensListTab';
-import SecurityTab from '../components/Creators/ManageProfile/SecurityTab';
+import { CommunicationSection as _CommunicationSection } from '../features/admin/components';
+import type { UserProfile, TokenInfo } from '../types';
+
+// Type pour les tokens enrichis avec stats
+interface TokenWithStats {
+  tokenId: string;
+  tokenName: string;
+  ticker: string;
+  holdersCount: number;
+  isComplete: boolean;
+  isVariable: boolean;
+  isVisible: boolean;
+  isLinked?: boolean;
+  purpose?: string;
+  counterpart?: string;
+  image?: string;
+  name?: string;
+  decimals?: number;
+  [key: string]: unknown;
+}
+
+// Type pour les champs sensibles
+interface SensitiveFieldsState {
+  profileName: string;
+  streetAddress: string;
+  companyid: string;
+  [key: string]: string;
+}
+
+// Type pour l'action en attente
+interface PendingSaveActionState {
+  e: React.FormEvent | null;
+  requestVerification: boolean;
+  sensitiveChanges: string[];
+}
+
+// Profile feature hooks and components
+import { 
+  useProductServiceTags,
+  // Available but not yet integrated: useProfileForm, useProfileSubmit, useTokenStats
+  InfosTab,
+  LocationTab,
+  ContactTab,
+  VerificationTab,
+  CertificationsTab,
+  TokensListTab,
+  SecurityTab,
+} from '../features/profile';
 
 const ManageProfilePage = () => {
   const { tokenId } = useParams();
@@ -26,8 +66,28 @@ const ManageProfilePage = () => {
   const setNotification = useSetAtom(notificationAtom);
 
   const [loading, setLoading] = useState(true);
-  const [tokenInfo, setTokenInfo] = useState(null);
-  const [existingProfile, setExistingProfile] = useState(null);
+  const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null);
+  const [existingProfile, setExistingProfile] = useState<UserProfile | null>(null);
+  
+  // Use ProductServiceTags hook for tag management
+  const {
+    productTags,
+    serviceTags,
+    productInput,
+    serviceInput,
+    productSuggestions,
+    serviceSuggestions,
+    setProductInput,
+    setServiceInput,
+    addProductTag,
+    removeProductTag,
+    addServiceTag,
+    removeServiceTag,
+    handleProductKeyDown,
+    handleServiceKeyDown,
+    resetFromProfile,
+  } = useProductServiceTags();
+  
   const [formData, setFormData] = useState({
     profileName: '',
     description: '',
@@ -67,18 +127,18 @@ const ManageProfilePage = () => {
     certification2weblink: '',
   });
   const [submitting, setSubmitting] = useState(false);
-  const [tokensWithStats, setTokensWithStats] = useState([]);
-  const [togglingVisibility, setTogglingVisibility] = useState({});
-  const [expandedDescriptions, setExpandedDescriptions] = useState({});
+  const [tokensWithStats, setTokensWithStats] = useState<TokenWithStats[]>([]);
+  const [togglingVisibility, setTogglingVisibility] = useState<Record<string, boolean>>({});
+  const [_expandedDescriptions, _setExpandedDescriptions] = useState<Record<string, boolean>>({});
   
   // Onglets - Initialiser depuis la navigation si disponible
   // Mapper les anciens noms d'onglets pour compatibilité
   const getInitialTab = () => {
-    const stateTab = location.state?.activeTab;
+    const stateTab = location.state?.activeTab as string | undefined;
     if (!stateTab) return 'profile';
     
     // Mapping pour compatibilité
-    const tabMapping = {
+    const tabMapping: Record<string, string> = {
       'info': 'profile',
       'verification': 'verification',
       'tokens': 'tokens',
@@ -91,15 +151,6 @@ const ManageProfilePage = () => {
   
   const [activeTab, setActiveTab] = useState(getInitialTab());
   
-  // States pour Onglet Support
-  // (formulaire affiché inline dans SupportTab)
-  
-  // Tags pour produits et services (séparés)
-  const [productTags, setProductTags] = useState([]);
-  const [productInput, setProductInput] = useState('');
-  const [serviceTags, setServiceTags] = useState([]);
-  const [serviceInput, setServiceInput] = useState('');
-  
   // Confidentialité
   const [privacy, setPrivacy] = useState({
     hideEmail: false,
@@ -110,22 +161,22 @@ const ManageProfilePage = () => {
   
   // Tracking modifications champs sensibles
   const [sensitiveFieldsChanged, setSensitiveFieldsChanged] = useState(false);
-  const [initialSensitiveFields, setInitialSensitiveFields] = useState(null);
+  const [initialSensitiveFields, setInitialSensitiveFields] = useState<SensitiveFieldsState | null>(null);
   
   // Modal avertissement modifications sensibles
   const [showWarningModal, setShowWarningModal] = useState(false);
-  const [pendingSaveAction, setPendingSaveAction] = useState(null);
+  const [pendingSaveAction, setPendingSaveAction] = useState<PendingSaveActionState | null>(null);
   
   // Re-vérification annuelle
-  const [confirmingInfo, setConfirmingInfo] = useState(false);
+  const [_confirmingInfo, setConfirmingInfo] = useState(false);
   
   // Communication avec admin
   const [newMessage, setNewMessage] = useState('');
-  const [sendingMessage, setSendingMessage] = useState(false);
+  const [_sendingMessage, setSendingMessage] = useState(false);
   
   // Signalements reçus
-  const [profileReports, setProfileReports] = useState([]);
-  const [loadingReports, setLoadingReports] = useState(false);
+  const [_profileReports, setProfileReports] = useState<unknown[]>([]);
+  const [_loadingReports, setLoadingReports] = useState(false);
   
   // Suppression profil
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -134,20 +185,9 @@ const ManageProfilePage = () => {
   
   // Toggle visibilité ferme (active/draft)
   const [togglingProfileStatus, setTogglingProfileStatus] = useState(false);
-  
-  // Suggestions distinctes
-  const productSuggestions = [
-    'Légumes', 'Fruits', 'Viande', 'Produits laitiers', 
-    'Œufs', 'Miel', 'Céréales', 'Pain', 'Vins', 'Fromages'
-  ];
-  
-  const serviceSuggestions = [
-    'Vente directe', 'Cueillette', 'Paniers', 'Livraison',
-    'Visite ferme', 'Ateliers', 'Hébergement', 'Restauration'
-  ];
 
   // Calculer le nombre de messages admin non lus (postérieurs au dernier message creator)
-  const unreadAdminCount = useMemo(() => {
+  const _unreadAdminCount = useMemo(() => {
     if (!existingProfile?.communication_history || existingProfile.communication_history.length === 0) {
       return 0;
     }
@@ -165,7 +205,7 @@ const ManageProfilePage = () => {
 
     // Si aucun message creator, tous les messages admin sont non lus
     if (lastCreatorIndex === -1) {
-      return history.filter(msg => msg.author === 'admin').length;
+      return history.filter((msg: { author: string }) => msg.author === 'admin').length;
     }
 
     // Compter les messages admin après le dernier message creator
@@ -253,47 +293,9 @@ const ManageProfilePage = () => {
     console.log('✅ Tous les jetons enrichis chargés:', enrichedTokens);
   };
 
-  // Gestion des tags produits
-  const addProductTag = (tag) => {
-    if (tag && !productTags.includes(tag)) {
-      setProductTags(prev => [...prev, tag]);
-    }
-  };
-  
-  const removeProductTag = (tagToRemove) => {
-    setProductTags(prev => prev.filter(tag => tag !== tagToRemove));
-  };
-  
-  const handleProductKeyDown = (e) => {
-    if (e.key === 'Enter' && productInput.trim()) {
-      e.preventDefault();
-      addProductTag(productInput.trim());
-      setProductInput('');
-    }
-  };
-  
-  // Gestion des tags services
-  const addServiceTag = (tag) => {
-    if (tag && !serviceTags.includes(tag)) {
-      setServiceTags(prev => [...prev, tag]);
-    }
-  };
-  
-  const removeServiceTag = (tagToRemove) => {
-    setServiceTags(prev => prev.filter(tag => tag !== tagToRemove));
-  };
-  
-  const handleServiceKeyDown = (e) => {
-    if (e.key === 'Enter' && serviceInput.trim()) {
-      e.preventDefault();
-      addServiceTag(serviceInput.trim());
-      setServiceInput('');
-    }
-  };
-  
   // Fonction pour auto-formater les URLs
-  const handleUrlBlur = (fieldName) => {
-    const value = formData[fieldName];
+  const handleUrlBlur = (fieldName: string) => {
+    const value = (formData as Record<string, string>)[fieldName];
     if (value && !value.startsWith('http://') && !value.startsWith('https://')) {
       setFormData(prev => ({
         ...prev,
@@ -303,8 +305,8 @@ const ManageProfilePage = () => {
   };
   
   // Obtenir l'icône pour un réseau social
-  const getSocialIcon = (fieldName) => {
-    const icons = {
+  const getSocialIcon = (fieldName: string) => {
+    const icons: Record<string, string> = {
       website: '🌐',
       otherWebsite: '🌐',
       facebook: '📘',
@@ -318,7 +320,7 @@ const ManageProfilePage = () => {
   };
 
   // Ouvrir un lien dans un nouvel onglet
-  const openLink = (url) => {
+  const openLink = (url: string | undefined) => {
     if (!url) return;
     
     // S'assurer que l'URL a un protocole
@@ -331,7 +333,7 @@ const ManageProfilePage = () => {
   };
   
   // Fonction pour gérer les changements de confidentialité
-  const handlePrivacyChange = (field, checked) => {
+  const handlePrivacyChange = (field: keyof typeof privacy, checked: boolean) => {
     setPrivacy(prev => ({
       ...prev,
       [field]: checked
@@ -339,7 +341,7 @@ const ManageProfilePage = () => {
   };
   
   // Vérifier si les champs obligatoires pour la vérification sont remplis
-  const canRequestVerification = () => {
+  const _canRequestVerification = () => {
     return !!(
       formData.companyid &&
       formData.governmentidverificationweblink &&
@@ -348,7 +350,7 @@ const ManageProfilePage = () => {
     );
   };
   
-  const getMissingFieldsForVerification = () => {
+  const _getMissingFieldsForVerification = () => {
     const missing = [];
     if (!formData.companyid) missing.push('SIRET');
     if (!formData.governmentidverificationweblink) missing.push('Preuve SIRET');
@@ -364,7 +366,7 @@ const ManageProfilePage = () => {
     // Comparer les champs avec les valeurs d'origine
     const socials = existingProfile.socials || {};
     const certs = existingProfile.certifications || {};
-    const tokenData = Array.isArray(existingProfile.tokens) && existingProfile.tokens.length > 0 ? existingProfile.tokens[0] : {};
+    const _tokenData = Array.isArray(existingProfile.tokens) && existingProfile.tokens.length > 0 ? existingProfile.tokens[0] : {};
     
     return (
       formData.profileName !== (existingProfile.name || '') ||
@@ -403,7 +405,7 @@ const ManageProfilePage = () => {
   }, [formData, productTags, serviceTags, existingProfile]);
   
   // Fonction pour toggle la visibilité ou isLinked
-  const handleToggleVisibility = async (tokenId, field = 'isVisible') => {
+  const handleToggleVisibility = async (tokenId: string, field: 'isVisible' | 'isLinked' = 'isVisible') => {
     setTogglingVisibility(prev => ({ ...prev, [tokenId]: true }));
     try {
       // Récupérer la valeur actuelle du token
@@ -445,18 +447,18 @@ const ManageProfilePage = () => {
           setExistingProfile(profile);
           console.log('🔄 Profil rechargé:', profile);
           
-          // Initialiser tags produits et services
-          if (profile.products && Array.isArray(profile.products)) {
-            setProductTags(profile.products);
-          } else if (profile.products && typeof profile.products === 'string') {
-            setProductTags(profile.products.split(',').map(p => p.trim()).filter(Boolean));
-          }
-          
-          if (profile.services && Array.isArray(profile.services)) {
-            setServiceTags(profile.services);
-          } else if (profile.services && typeof profile.services === 'string') {
-            setServiceTags(profile.services.split(',').map(s => s.trim()).filter(Boolean));
-          }
+          // Initialiser tags produits et services via hook
+          const products = Array.isArray(profile.products) 
+            ? profile.products 
+            : (typeof profile.products === 'string' 
+                ? profile.products.split(',').map(p => p.trim()).filter(Boolean) 
+                : []);
+          const services = Array.isArray(profile.services) 
+            ? profile.services 
+            : (typeof profile.services === 'string' 
+                ? profile.services.split(',').map(s => s.trim()).filter(Boolean) 
+                : []);
+          resetFromProfile(products, services);
           
           // Charger privacy depuis certifications JSONB
           if (profile.certifications) {
@@ -472,7 +474,7 @@ const ManageProfilePage = () => {
         console.error('❌ Erreur rechargement profil:', err);
       });
     }
-  }, [address, wallet]); // Recharger uniquement quand l'adresse ou le wallet change
+  }, [address, wallet, resetFromProfile]); // Recharger uniquement quand l'adresse ou le wallet change
 
   useEffect(() => {
     const loadData = async () => {
@@ -503,7 +505,7 @@ const ManageProfilePage = () => {
           // Pré-remplir le formulaire avec les données Supabase
           const socials = profile.socials || {};
           const certs = profile.certifications || {};
-          const tokenData = Array.isArray(profile.tokens) && profile.tokens.length > 0 ? profile.tokens[0] : {};
+          const tokenData: { purpose?: string; counterpart?: string } = Array.isArray(profile.tokens) && profile.tokens.length > 0 ? profile.tokens[0] : {};
           
           const newFormData = {
             profileName: profile.name || '',
@@ -574,7 +576,7 @@ const ManageProfilePage = () => {
   }, [tokenId, wallet, address, profiles, setNotification]);
   
   // Fonction pour charger les signalements
-  const loadProfileReports = async (profileId) => {
+  const loadProfileReports = async (profileId: string) => {
     if (!profileId) return;
     
     try {
@@ -597,7 +599,7 @@ const ManageProfilePage = () => {
   };
 
   // Handler pour toggle de visibilité profile (active/draft)
-  const handleToggleProfileStatus = async (newStatus) => {
+  const handleToggleProfileStatus = async (newStatus: 'active' | 'draft') => {
     if (!existingProfile) return;
     
     setTogglingProfileStatus(true);
@@ -630,7 +632,7 @@ const ManageProfilePage = () => {
     }
   };
 
-  const handleChange = (e) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
@@ -647,8 +649,9 @@ const ManageProfilePage = () => {
           setSensitiveFieldsChanged(true);
         } else if (!hasChanged) {
           // Vérifier si d'autres champs ont changé
+          const formDataRecord = formData as Record<string, string>;
           const otherFieldsChanged = sensitiveFields.some(
-            field => field !== name && formData[field] !== initialSensitiveFields[field]
+            field => field !== name && formDataRecord[field] !== initialSensitiveFields[field]
           );
           setSensitiveFieldsChanged(otherFieldsChanged);
         }
@@ -657,7 +660,7 @@ const ManageProfilePage = () => {
   };
 
   // Vérifier si champs sensibles modifiés/vidés avant sauvegarde
-  const checkSensitiveFields = (requestVerification = false) => {
+  const checkSensitiveFields = (_requestVerification = false) => {
     // Si profile verified ou pending, vérifier modifications sensibles
     if (!existingProfile || (!existingProfile.verified && existingProfile.verification_status !== 'pending')) {
       return false; // Pas de restriction
@@ -701,7 +704,7 @@ const ManageProfilePage = () => {
     return sensitiveChanges.length > 0 ? sensitiveChanges : false;
   };
 
-  const handleSubmit = async (e, requestVerification = false) => {
+  const handleSubmit = async (e: React.FormEvent | null, requestVerification = false) => {
     e?.preventDefault();
     
     // Vérifier modifications sensibles avant validation
@@ -718,7 +721,7 @@ const ManageProfilePage = () => {
   };
 
   // Fonction de sauvegarde réelle (appelée après confirmation modal ou directement)
-  const performSave = async (e, requestVerification = false) => {
+  const performSave = async (e: React.FormEvent | null, requestVerification = false) => {
     e?.preventDefault();
     
     // Bloquer toute action si le profile est banni
@@ -761,7 +764,7 @@ const ManageProfilePage = () => {
     setSubmitting(true);
     try {
       // Construire l'objet profile compatible Supabase
-      const profileData = {
+      const profileData: Partial<UserProfile> & { forceStatus?: string } = {
         name: formData.profileName,
         description: formData.description,
         location_country: formData.locationCountry || formData.country || 'France',
@@ -774,32 +777,32 @@ const ManageProfilePage = () => {
         phone: formData.phone,
         email: formData.email,
         website: formData.website,
-        image_url: existingProfile?.image_url || null,
+        image_url: existingProfile?.image_url || undefined,
         
         // Réseaux sociaux (JSONB)
         socials: {
-          facebook: formData.facebook || null,
-          instagram: formData.instagram || null,
-          tiktok: formData.tiktok || null,
-          youtube: formData.youtube || null,
-          whatsapp: formData.whatsapp || null,
-          telegram: formData.telegram || null,
-          other_website: formData.otherWebsite || null
+          facebook: formData.facebook || undefined,
+          instagram: formData.instagram || undefined,
+          tiktok: formData.tiktok || undefined,
+          youtube: formData.youtube || undefined,
+          whatsapp: formData.whatsapp || undefined,
+          telegram: formData.telegram || undefined,
+          other_website: formData.otherWebsite || undefined
         },
         
         // Certifications (JSONB)
         certifications: {
-          siret: formData.companyid || null,
-          siret_link: formData.governmentidverificationweblink || null,
-          legal_representative: formData.legalRepresentative || null,
-          national: formData.nationalcertification || null,
-          national_link: formData.nationalcertificationweblink || null,
-          international: formData.internationalcertification || null,
-          international_link: formData.internationalcertificationweblink || null,
-          certification_1: formData.certification1 || null,
-          certification_1_link: formData.certification1weblink || null,
-          certification_2: formData.certification2 || null,
-          certification_2_link: formData.certification2weblink || null,
+          siret: formData.companyid || undefined,
+          siret_link: formData.governmentidverificationweblink || undefined,
+          legal_representative: formData.legalRepresentative || undefined,
+          national: formData.nationalcertification || undefined,
+          national_link: formData.nationalcertificationweblink || undefined,
+          international: formData.internationalcertification || undefined,
+          international_link: formData.internationalcertificationweblink || undefined,
+          certification_1: formData.certification1 || undefined,
+          certification_1_link: formData.certification1weblink || undefined,
+          certification_2: formData.certification2 || undefined,
+          certification_2_link: formData.certification2weblink || undefined,
           // Privacy settings intégré dans certifications
           hide_email: privacy.hideEmail || false,
           hide_phone: privacy.hidePhone || false,
@@ -931,11 +934,13 @@ const ManageProfilePage = () => {
       
       // Réinitialiser les trackers
       setSensitiveFieldsChanged(false);
-      setInitialSensitiveFields({
-        profileName: updatedProfile.name,
-        streetAddress: updatedProfile.street_address,
-        companyid: updatedProfile.certifications?.siret || ''
-      });
+      if (updatedProfile) {
+        setInitialSensitiveFields({
+          profileName: updatedProfile.name || '',
+          streetAddress: updatedProfile.street_address || '',
+          companyid: updatedProfile.certifications?.siret || ''
+        });
+      }
 
       // Navigation différée uniquement si demande de vérification
       if (requestVerification) {
@@ -944,22 +949,23 @@ const ManageProfilePage = () => {
         }, 3000);
       }
 
-    } catch (err) {
+    } catch (err: unknown) {
+      const error = err as Error & { code?: string; details?: string; hint?: string };
       console.error('❌ Erreur complète:', err);
       console.error('❌ Type:', typeof err);
-      console.error('❌ Message:', err.message);
-      console.error('❌ Stack:', err.stack);
+      console.error('❌ Message:', error.message);
+      console.error('❌ Stack:', error.stack);
       
       // Si c'est une erreur Supabase, afficher détails
-      if (err.code) {
-        console.error('❌ Code Supabase:', err.code);
-        console.error('❌ Détails Supabase:', err.details);
-        console.error('❌ Hint Supabase:', err.hint);
+      if (error.code) {
+        console.error('❌ Code Supabase:', error.code);
+        console.error('❌ Détails Supabase:', error.details);
+        console.error('❌ Hint Supabase:', error.hint);
       }
       
       setNotification({
         type: 'error',
-        message: err.message || 'Erreur lors de l\'enregistrement'
+        message: error.message || 'Erreur lors de l\'enregistrement'
       });
     } finally {
       setSubmitting(false);
@@ -981,11 +987,11 @@ const ManageProfilePage = () => {
   };
 
   // Vérifier l'âge de la vérification (> 1 an = re-vérification nécessaire)
-  const checkVerificationAge = () => {
+  const _checkVerificationAge = () => {
     if (!existingProfile?.verified || !existingProfile?.verified_at) return null;
     
-    const verifiedDate = new Date(existingProfile.verified_at);
-    const now = new Date();
+    const verifiedDate = new Date(existingProfile.verified_at).getTime();
+    const now = Date.now();
     const diffInDays = Math.floor((now - verifiedDate) / (1000 * 60 * 60 * 24));
     const diffInYears = diffInDays / 365;
     
@@ -993,10 +999,10 @@ const ManageProfilePage = () => {
   };
 
   // Confirmer les informations (met à jour verified_at)
-  const handleConfirmInformation = async () => {
+  const _handleConfirmInformation = async () => {
     setConfirmingInfo(true);
     try {
-      await ProfilService.updateProfile(address, {
+      await ProfilService.updateProfil(address, {
         verified_at: new Date().toISOString()
       });
       
@@ -1020,7 +1026,7 @@ const ManageProfilePage = () => {
   };
 
   // Envoyer un message à l'admin (avec type de message)
-  const handleSendMessage = async (messageText, messageType = 'verification') => {
+  const _handleSendMessage = async (messageText: string, messageType = 'verification') => {
     // Si pas de paramètre, utiliser newMessage (compatibilité)
     const text = messageText || newMessage;
     
@@ -1057,7 +1063,7 @@ const ManageProfilePage = () => {
   };
 
   // Gestion suppression profil
-  const handleDeleteProfil = () => {
+  const _handleDeleteProfil = () => {
     setShowDeleteModal(true);
     setDeleteStep(1);
   };
@@ -1069,7 +1075,7 @@ const ManageProfilePage = () => {
   const handleConfirmDeleteStep2 = async () => {
     setDeleting(true);
     try {
-      await ProfilService.deleteProfil(address);
+      await ProfilService.deleteProfil(existingProfile?.id || '', address);
       
       setNotification({
         type: 'success',
@@ -1189,6 +1195,8 @@ const ManageProfilePage = () => {
                     <CertificationsTab
                       formData={formData}
                       handleChange={handleChange}
+                      handleUrlBlur={handleUrlBlur}
+                      openLink={openLink}
                     />
                   </Stack>
 
@@ -1249,18 +1257,18 @@ const ManageProfilePage = () => {
                   onRequestVerification={async (e) => {
                     if (e) e.preventDefault();
                     
-                    const sensitiveChanges = checkSensitiveFieldsChanged();
-                    if (sensitiveChanges.length > 0 && existingProfile?.verified) {
+                    const sensitiveChanges = checkSensitiveFields(true);
+                    if (Array.isArray(sensitiveChanges) && sensitiveChanges.length > 0 && existingProfile?.verified) {
                       // Avertir l'utilisateur que la vérification sera perdue
                       setPendingSaveAction({ 
-                        event: e, 
+                        e: e ?? null, 
                         requestVerification: true,
                         sensitiveChanges 
                       });
                       setShowWarningModal(true);
                     } else {
                       // Sauvegarder directement avec demande de vérification
-                      await performSave(e, true);
+                      await performSave(e ?? null, true);
                     }
                   }}
                   onSaveWithoutVerification={async (e) => {
@@ -1268,7 +1276,7 @@ const ManageProfilePage = () => {
                     
                     // Sauvegarde simple sans demande de vérification
                     // La logique de performSave gère automatiquement le changement de statut
-                    await performSave(e, false);
+                    await performSave(e ?? null, false);
                   }}
                 />
               )}
@@ -1349,11 +1357,11 @@ const ManageProfilePage = () => {
                           
                           <p style={{ color: '#7f1d1d', marginBottom: '16px', lineHeight: '1.5' }}>
                             Votre profil a été supprimé le <strong>
-                              {new Date(existingProfile.deleted_at || existingProfile.updated_at).toLocaleDateString('fr-FR')}
+                              {new Date(existingProfile.deleted_at || existingProfile.updated_at || new Date().toISOString()).toLocaleDateString('fr-FR')}
                             </strong>.
                             <br/>
                             Vos données personnelles ont été effacées, mais l'historique technique est conservé pour des raisons de sécurité pendant 1 an (jusqu'au {
-                              new Date(new Date(existingProfile.deleted_at || existingProfile.updated_at).getTime() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR')
+                              new Date(new Date(existingProfile.deleted_at || existingProfile.updated_at || new Date().toISOString()).getTime() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR')
                             }).
                           </p>
 

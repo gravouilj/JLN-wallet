@@ -1,4 +1,4 @@
-# 🎨 Guide de Style Farm Wallet - CSS Architecture
+# 🎨 Guide de Style JLN Wallet - CSS Architecture
 
 **Version** : 3.0  
 **Date** : Décembre 2025  
@@ -32,7 +32,7 @@ src/styles/
 └── utilities.css      # Classes utilitaires génériques (NEW)
 ```
 
-### Ordre d'Import (App.jsx)
+### Ordre d'Import (App.tsx)
 
 ```jsx
 import './App.css';           // 1. Base
@@ -643,7 +643,7 @@ function TransactionList({ transactions }) {
 - [themes.css](../src/styles/themes.css) - Variables CSS
 - [utilities.css](../src/styles/utilities.css) - Classes utilitaires
 - [components.css](../src/styles/components.css) - Composants
-- [UI.jsx](../src/components/UI.jsx) - Composants React
+- [UI/](../src/components/UI/) - Composants React (TypeScript)
 
 ---
 
@@ -687,4 +687,4 @@ function TransactionList({ transactions }) {
 ---
 
 **Dernière mise à jour** : Décembre 2025  
-**Maintenu par** : Équipe Farm Wallet
+**Maintenu par** : Équipe JLN Wallet

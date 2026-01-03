@@ -1,7 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useAtom } from 'jotai';
-import { useEcashWallet } from './useEcashWallet';
-import { walletConnectedAtom, selectedProfileAtom, favoriteProfilesAtom } from '../atoms';
+import { useCallback, useEffect } from 'react';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { 
+  walletAtom, 
+  walletConnectedAtom, 
+  selectedProfileAtom, 
+  favoriteProfilesAtom,
+  walletTokensAtom,
+  tokenInfoCacheAtom,
+  walletScanTriggerAtom,
+  WalletToken,
+} from '../atoms';
 import { useProfiles } from './useProfiles';
 
 // Type definitions
@@ -16,189 +24,260 @@ interface Profile {
   image?: string | null;
   region?: string;
   country?: string;
-  [key: string]: any;
-}
-
-interface MyToken extends Profile {
-  balance?: string;
-}
-
-interface TokenBalances {
-  [tokenId: string]: string;
+  [key: string]: unknown;
 }
 
 interface UseWalletScanReturn {
-  myTokens: MyToken[];
-  tokenBalances: TokenBalances;
+  // State from atom (cached)
+  myTokens: WalletToken[];
+  tokenBalances: Record<string, string>;
   scanLoading: boolean;
   scanError: string | null;
+  lastScanAt: number | null;
+  
+  // Actions
+  triggerScan: () => void;
   formatTokenBalance: (balance: string | bigint, decimals?: number) => string;
 }
 
 /**
- * useWalletScan Hook
- * Extrait la logique complexe de scan des jetons du wallet
- * Responsabilités:
- * - Scanner tous les tokens du wallet via wallet.listETokens()
- * - Matcher les tokens avec les profils de l'annuaire
- * - Formater les soldes avec les bonnes décimales
- * - Auto-ajouter aux favoris les tokens référencés
+ * Format token balance with proper decimals handling
+ */
+const formatTokenBalance = (balance: string | bigint, decimals: number = 0): string => {
+  if (!balance) return '0';
+  const balanceNum = typeof balance === 'string' ? BigInt(balance) : BigInt(balance.toString());
+  const divisor = BigInt(Math.pow(10, decimals));
+  const wholePart = balanceNum / divisor;
+  const remainder = balanceNum % divisor;
+  
+  if (remainder === 0n) {
+    return wholePart.toString();
+  }
+  
+  const decimalPart = remainder.toString().padStart(decimals, '0');
+  return `${wholePart}.${decimalPart}`.replace(/\.?0+$/, '');
+};
+
+/**
+ * useWalletScan Hook - Refactoré avec Atom Cache
+ * 
+ * Architecture:
+ * - Les résultats du scan sont stockés dans walletTokensAtom (source de vérité)
+ * - Le scan ne se déclenche QUE quand:
+ *   1. Wallet connecté ET selectedProfile === null (hub view)
+ *   2. Ou manuellement via triggerScan()
+ * - Les infos token sont cachées dans tokenInfoCacheAtom pour éviter appels Chronik répétés
+ * 
+ * @returns État et actions du scan
  */
 export const useWalletScan = (): UseWalletScanReturn => {
-  const { wallet } = useEcashWallet();
-  const [walletConnected] = useAtom(walletConnectedAtom);
-  const [selectedProfile] = useAtom(selectedProfileAtom);
+  const wallet = useAtomValue(walletAtom);
+  const walletConnected = useAtomValue(walletConnectedAtom);
+  const selectedProfile = useAtomValue(selectedProfileAtom);
   const { profiles } = useProfiles() as { profiles: Profile[] };
-  const [favoriteProfileIds, setFavoriteProfileIds] = useAtom(favoriteProfilesAtom);
   
-  const [myTokens, setMyTokens] = useState<MyToken[]>([]);
-  const [tokenBalances, setTokenBalances] = useState<TokenBalances>({});
-  const [scanLoading, setScanLoading] = useState(false);
-  const [scanError, setScanError] = useState<string | null>(null);
+  const [favoriteProfileIds, setFavoriteProfileIds] = useAtom(favoriteProfilesAtom);
+  const [walletTokens, setWalletTokens] = useAtom(walletTokensAtom);
+  const [tokenInfoCache, setTokenInfoCache] = useAtom(tokenInfoCacheAtom);
+  const scanTrigger = useAtomValue(walletScanTriggerAtom);
+  const setScanTrigger = useSetAtom(walletScanTriggerAtom);
 
-  // Format token balance with proper decimals handling
-  const formatTokenBalance = useCallback((balance: string | bigint, decimals: number = 0): string => {
-    if (!balance) return '0';
-    const balanceNum = typeof balance === 'string' ? BigInt(balance) : BigInt(balance.toString());
-    const divisor = BigInt(Math.pow(10, decimals));
-    const wholePart = balanceNum / divisor;
-    const remainder = balanceNum % divisor;
+  /**
+   * Déclencher un scan manuel
+   */
+  const triggerScan = useCallback(() => {
+    setScanTrigger(Date.now());
+  }, [setScanTrigger]);
+
+  /**
+   * Récupérer les infos token (avec cache)
+   */
+  const getTokenInfoCached = useCallback(async (tokenId: string) => {
+    // Check cache (valid for 5 minutes)
+    const cached = tokenInfoCache[tokenId];
+    const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
     
-    if (remainder === 0n) {
-      return wholePart.toString();
+    if (cached && Date.now() - cached.fetchedAt < CACHE_TTL) {
+      return {
+        genesisInfo: {
+          tokenName: cached.tokenName,
+          tokenTicker: cached.tokenTicker,
+          decimals: cached.decimals,
+        }
+      };
     }
+
+    // Fetch from blockchain
+    if (!wallet) return null;
     
-    const decimalPart = remainder.toString().padStart(decimals, '0');
-    return `${wholePart}.${decimalPart}`.replace(/\.?0+$/, '');
-  }, []);
+    try {
+      const info = await wallet.getTokenInfo(tokenId);
+      
+      // Update cache
+      setTokenInfoCache(prev => ({
+        ...prev,
+        [tokenId]: {
+          tokenName: info.genesisInfo?.tokenName || 'Inconnu',
+          tokenTicker: info.genesisInfo?.tokenTicker || '???',
+          decimals: info.genesisInfo?.decimals || 0,
+          fetchedAt: Date.now(),
+        }
+      }));
+      
+      return info;
+    } catch (e) {
+      console.warn(`⚠️ Impossible de récupérer infos blockchain pour ${tokenId}:`, e);
+      return null;
+    }
+  }, [wallet, tokenInfoCache, setTokenInfoCache]);
+
+  /**
+   * Exécuter le scan
+   */
+  const runScan = useCallback(async () => {
+    if (!wallet || !walletConnected) return;
+    
+    setWalletTokens(prev => ({ ...prev, loading: true, error: null }));
+    
+    try {
+      console.log('🔍 SCAN GLOBAL: Scan des jetons dans le wallet...');
+      
+      // 1. Get all tokens from wallet (source of truth)
+      const walletTokensList = await wallet.listETokens();
+      console.log(`📦 ${walletTokensList.length} jeton(s) détecté(s) dans le wallet`);
+      
+      const balances: Record<string, string> = {};
+      const tokensWithBalance: WalletToken[] = [];
+      const newFavoritesToAdd: string[] = [];
+      
+      // 2. Process each token found in wallet
+      for (const walletToken of walletTokensList) {
+        const { tokenId, balance: rawBalance } = walletToken;
+        
+        // Skip zero balances
+        const balanceNum = BigInt(rawBalance || '0');
+        if (balanceNum === 0n) continue;
+        
+        // 3. Get blockchain metadata (with cache)
+        const tokenInfo = await getTokenInfoCached(tokenId);
+        
+        const ticker = tokenInfo?.genesisInfo?.tokenTicker || 'UNK';
+        const decimals = tokenInfo?.genesisInfo?.decimals || 0;
+        const blockchainName = tokenInfo?.genesisInfo?.tokenName || 'Token Inconnu';
+        
+        // 4. Search if token exists in profiles
+        const profileMatch = Array.isArray(profiles) 
+          ? profiles.find((p: Profile) => p.tokenId === tokenId)
+          : null;
+        
+        const formattedBalance = formatTokenBalance(rawBalance, decimals);
+        balances[tokenId] = formattedBalance;
+        
+        if (profileMatch) {
+          // ✅ Token referenced in profiles
+          console.log(`✅ Jeton référencé: ${profileMatch.name} (${ticker}) - Solde: ${formattedBalance}`);
+          
+          tokensWithBalance.push({
+            tokenId,
+            name: profileMatch.name,
+            ticker,
+            decimals,
+            balance: formattedBalance,
+            verified: true,
+            profileId: profileMatch.id,
+            image: profileMatch.image,
+          });
+          
+          // Auto-add to favorites if not already present
+          if (!favoriteProfileIds.includes(profileMatch.id)) {
+            console.log(`⭐ Auto-ajout aux favoris: ${profileMatch.name}`);
+            newFavoritesToAdd.push(profileMatch.id);
+          }
+        } else {
+          // ⚠️ Token NOT referenced - use blockchain info only
+          console.log(`⚠️ Jeton non-référencé détecté: ${tokenId}`);
+          
+          tokensWithBalance.push({
+            tokenId,
+            name: blockchainName,
+            ticker,
+            decimals,
+            balance: formattedBalance,
+            verified: false,
+            image: null,
+          });
+        }
+      }
+      
+      // Update atom state
+      setWalletTokens({
+        tokens: tokensWithBalance,
+        balances,
+        loading: false,
+        error: null,
+        lastScanAt: Date.now(),
+      });
+      
+      // Update favorites (only for referenced tokens)
+      if (newFavoritesToAdd.length > 0) {
+        console.log(`💾 Ajout de ${newFavoritesToAdd.length} ferme(s) référencée(s) aux favoris`);
+        setFavoriteProfileIds([...favoriteProfileIds, ...newFavoritesToAdd]);
+      }
+      
+      console.log(`📊 RÉSULTAT SCAN: ${tokensWithBalance.length} jeton(s) avec solde positif`);
+      console.log(`   - Référencés: ${tokensWithBalance.filter(t => t.verified).length}`);
+      console.log(`   - Non-référencés: ${tokensWithBalance.filter(t => !t.verified).length}`);
+      
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Erreur lors du scan';
+      console.error('❌ Erreur lors du scan des jetons:', error);
+      setWalletTokens(prev => ({
+        ...prev,
+        loading: false,
+        error: errorMsg,
+      }));
+    }
+  }, [wallet, walletConnected, profiles, favoriteProfileIds, setFavoriteProfileIds, setWalletTokens, getTokenInfoCached]);
 
   // Main scan effect - ONLY in hub view (when selectedProfile is null)
   useEffect(() => {
-    // Reset data if not in hub view
-    if (!wallet || !walletConnected || selectedProfile !== null) {
-      setMyTokens([]);
-      setTokenBalances({});
+    // Reset if wallet not connected
+    if (!wallet || !walletConnected) {
+      if (walletTokens.tokens.length > 0) {
+        setWalletTokens({
+          tokens: [],
+          balances: {},
+          loading: false,
+          error: null,
+          lastScanAt: null,
+        });
+      }
       return;
     }
     
-    const runScan = async () => {
-      setScanLoading(true);
-      setScanError(null);
-      
-      try {
-        console.log('🔍 SCAN GLOBAL: Scan des jetons dans le wallet...');
-        
-        // 1. Get all tokens from wallet (source of truth)
-        const walletTokens = await wallet.listETokens();
-        console.log(`📦 ${walletTokens.length} jeton(s) détecté(s) dans le wallet`);
-        
-        const balances = {};
-        const tokensWithBalance = [];
-        const newFavoritesToAdd = [];
-        
-        // 2. Process each token found in wallet
-        for (const walletToken of walletTokens) {
-          const { tokenId, balance: rawBalance } = walletToken;
-          
-          // Skip zero balances
-          const balanceNum = BigInt(rawBalance || '0');
-          if (balanceNum === 0n) continue;
-          
-          // 3. Get blockchain metadata (ticker, decimals ALWAYS from blockchain)
-          let tokenInfo = { 
-            genesisInfo: { 
-              tokenName: 'Inconnu', 
-              tokenTicker: '???', 
-              decimals: 0 
-            } 
-          };
-          
-          try {
-            tokenInfo = await wallet.getTokenInfo(tokenId);
-          } catch (e) {
-            console.warn(`⚠️ Impossible de récupérer infos blockchain pour ${tokenId}:`, e);
-          }
-          
-          const ticker = tokenInfo.genesisInfo?.tokenTicker || 'UNK';
-          const decimals = tokenInfo.genesisInfo?.decimals || 0;
-          const blockchainName = tokenInfo.genesisInfo?.tokenName || 'Token Inconnu';
-          
-          // 4. Search if token exists in profiles.json
-          const profileMatch = Array.isArray(profiles) 
-            ? profiles.find((p: Profile) => p.tokenId === tokenId)
-            : null;
-          
-          const formattedBalance = formatTokenBalance(rawBalance, decimals);
-          balances[tokenId] = formattedBalance;
-          
-          if (profileMatch) {
-            // ✅ Token referenced in profiles.json
-            console.log(`✅ Jeton référencé: ${profileMatch.name} (${ticker}) - Solde: ${formattedBalance}`);
-            
-            tokensWithBalance.push({
-              ...profileMatch,
-              ticker: ticker, // OVERRIDE: always blockchain
-              decimals: decimals, // OVERRIDE: always blockchain
-              verified: true,
-              balance: formattedBalance
-            });
-            
-            // Auto-add to favorites if not already present
-            if (!favoriteProfileIds.includes(profileMatch.id)) {
-              console.log(`⭐ Auto-ajout aux favoris: ${profileMatch.name}`);
-              newFavoritesToAdd.push(profileMatch.id);
-            }
-          } else {
-            // ⚠️ Token NOT referenced - use blockchain info only
-            console.log(`⚠️ Jeton non-référencé détecté: ${tokenId}`);
-            console.log(`📡 Infos blockchain: ${blockchainName} (${ticker})`);
-            
-            tokensWithBalance.push({
-              id: tokenId,
-              tokenId: tokenId,
-              name: blockchainName,
-              ticker: ticker,
-              decimals: decimals,
-              description: 'Jeton non référencé dans l\'annuaire',
-              verified: false,
-              balance: formattedBalance,
-              image: null,
-              region: 'Inconnu',
-              country: 'Inconnu'
-            });
-          }
-        }
-        
-        setTokenBalances(balances);
-        setMyTokens(tokensWithBalance);
-        
-        // Update favorites (only for referenced tokens)
-        if (newFavoritesToAdd.length > 0) {
-          console.log(`💾 Ajout de ${newFavoritesToAdd.length} ferme(s) référencée(s) aux favoris`);
-          setFavoriteProfileIds([...favoriteProfileIds, ...newFavoritesToAdd]);
-        }
-        
-        console.log(`📊 RÉSULTAT SCAN: ${tokensWithBalance.length} jeton(s) avec solde positif`);
-        console.log(`   - Référencés: ${tokensWithBalance.filter((t: MyToken) => t.verified).length}`);
-        console.log(`   - Non-référencés: ${tokensWithBalance.filter((t: MyToken) => !t.verified).length}`);
-        
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : 'Erreur lors du scan';
-        console.error('❌ Erreur lors du scan des jetons:', error);
-        setScanError(errorMsg);
-      } finally {
-        setScanLoading(false);
-      }
-    };
+    // Only scan in hub view OR on manual trigger
+    if (selectedProfile !== null && scanTrigger === 0) {
+      return;
+    }
     
-    runScan();
-  }, [wallet, walletConnected, selectedProfile, profiles, favoriteProfileIds, setFavoriteProfileIds, formatTokenBalance]);
+    // Debounce
+    const timeoutId = setTimeout(() => {
+      runScan();
+    }, 300);
+    
+    return () => clearTimeout(timeoutId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wallet, walletConnected, selectedProfile, scanTrigger, profiles?.length]);
 
   return {
-    myTokens,
-    tokenBalances,
-    scanLoading,
-    scanError,
-    formatTokenBalance
+    myTokens: walletTokens.tokens,
+    tokenBalances: walletTokens.balances,
+    scanLoading: walletTokens.loading,
+    scanError: walletTokens.error,
+    lastScanAt: walletTokens.lastScanAt,
+    triggerScan,
+    formatTokenBalance,
   };
 };
+
+export default useWalletScan;

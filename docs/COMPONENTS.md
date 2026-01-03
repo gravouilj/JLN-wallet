@@ -1,19 +1,44 @@
 # Component Documentation
 
+**Dernière mise à jour** : Janvier 2026  
+**Architecture** : React 19.1 + TypeScript
+
 ## Overview
 
-Farm Wallet uses **custom atomic components** without any UI framework (no Tailwind, no Shadcn, no Bootstrap).
+JLN Wallet utilise des **composants atomiques personnalisés** sans framework UI (pas de Tailwind, pas de Shadcn, pas de Bootstrap).
 
-All components are built with pure CSS variables defined in `src/styles/themes.css`.
+Tous les composants utilisent des variables CSS définies dans `src/styles/themes.css`.
 
-## Atomic Components (`src/components/UI.jsx`)
+---
+
+## Composants UI Atomiques (`src/components/UI/`)
+
+Structure modulaire avec exports centralisés via `src/components/UI/index.ts`.
+
+### Modules disponibles
+
+| Fichier | Composants exportés |
+|---------|---------------------|
+| `Card.tsx` | `Card`, `CardContent` |
+| `Button.tsx` | `Button` |
+| `Layout.tsx` | `Stack`, `Container` |
+| `Inputs.tsx` | `Input`, `Select`, `Textarea` |
+| `Badge.tsx` | `Badge`, `StatusBadge` |
+| `Modal.tsx` | `Modal` |
+| `Tabs.tsx` | `Tabs`, `Tab` |
+| `Toggles.tsx` | `Toggle`, `Checkbox` |
+| `BalanceCard.tsx` | `BalanceCard` |
+| `Feedback.tsx` | `Spinner`, `Alert`, `Toast` |
+| `Accordion.tsx` | `Accordion`, `AccordionItem` |
+
+---
 
 ### Card
 
-Container component with consistent styling.
+Container avec style cohérent.
 
-```jsx
-import { Card, CardContent } from './components/UI';
+```tsx
+import { Card, CardContent } from '../components/UI';
 
 <Card>
   <CardContent>
@@ -24,59 +49,49 @@ import { Card, CardContent } from './components/UI';
 ```
 
 **Props:**
-- `children` - Card content
-- `className` - Additional CSS classes
-- `onClick` - Click handler (makes card interactive)
-
-**CSS Classes:**
-- `.card` - Main card container
-- `.card-content` - Inner content wrapper
+- `children` - Contenu de la carte
+- `className` - Classes CSS additionnelles
+- `onClick` - Handler de clic (rend la carte interactive)
 
 ---
 
 ### Button
 
-Reusable button with variants.
+Bouton réutilisable avec variantes.
 
-```jsx
-import { Button } from './components/UI';
+```tsx
+import { Button } from '../components/UI';
 
 <Button variant="primary" onClick={handleClick}>
-  Send
+  Envoyer
 </Button>
 
 <Button variant="secondary" disabled>
-  Loading...
+  Chargement...
 </Button>
 ```
 
 **Props:**
-- `variant` - `"primary"` | `"secondary"` | `"danger"` (default: `"primary"`)
-- `children` - Button text/content
-- `onClick` - Click handler
-- `disabled` - Disable button
-- `type` - HTML button type (`"button"` | `"submit"`)
-- `className` - Additional CSS classes
+- `variant` - `"primary"` | `"secondary"` | `"danger"` (défaut: `"primary"`)
+- `children` - Texte/contenu du bouton
+- `onClick` - Handler de clic
+- `disabled` - Désactiver le bouton
+- `type` - Type HTML (`"button"` | `"submit"`)
+- `className` - Classes CSS additionnelles
 
-**Variants:**
-- `primary` - Blue accent color (main actions)
-- `secondary` - Gray color (secondary actions)
-- `danger` - Red color (destructive actions)
-
-**CSS Classes:**
-- `.button` - Base button styles
-- `.button-primary` - Primary variant
-- `.button-secondary` - Secondary variant
-- `.button-danger` - Danger variant
+**Variantes:**
+- `primary` - Couleur accent bleue (actions principales)
+- `secondary` - Couleur grise (actions secondaires)
+- `danger` - Couleur rouge (actions destructives)
 
 ---
 
 ### Stack
 
-Flexbox layout container for spacing elements.
+Container flexbox pour espacer les éléments.
 
-```jsx
-import { Stack } from './components/UI';
+```tsx
+import { Stack } from '../components/UI';
 
 <Stack direction="column" gap="1rem">
   <Button>Action 1</Button>
@@ -84,367 +99,262 @@ import { Stack } from './components/UI';
 </Stack>
 
 <Stack direction="row" gap="0.5rem" align="center">
-  <span>Price:</span>
+  <span>Prix:</span>
   <strong>$0.00003</strong>
 </Stack>
 ```
 
 **Props:**
-- `direction` - `"row"` | `"column"` (default: `"column"`)
-- `gap` - CSS gap value (default: `"1rem"`)
-- `align` - `align-items` CSS property
-- `justify` - `justify-content` CSS property
-- `className` - Additional CSS classes
-- `children` - Stack content
-
-**CSS Class:**
-- `.stack` - Flexbox container with configurable direction/gap
+- `direction` - `"row"` | `"column"` (défaut: `"column"`)
+- `gap` - Valeur CSS gap (défaut: `"1rem"`)
+- `align` - Propriété CSS `align-items`
+- `justify` - Propriété CSS `justify-content`
+- `className` - Classes CSS additionnelles
+- `children` - Contenu du stack
 
 ---
 
-## Layout Components
+### Input
 
-### TopBar (`src/components/Layout/TopBar.jsx`)
+Champ de saisie avec label et gestion d'erreurs.
 
-Top navigation bar with logo and settings.
+```tsx
+import { Input } from '../components/UI';
 
-```jsx
-import TopBar from './components/Layout/TopBar';
+<Input
+  label="Montant"
+  value={amount}
+  onChange={setAmount}
+  placeholder="0.00"
+  error={error}
+  suffix="XEC"
+/>
+```
+
+**Props:**
+- `label` - Label du champ
+- `value` - Valeur contrôlée
+- `onChange` - Handler de changement
+- `placeholder` - Texte placeholder
+- `error` - Message d'erreur
+- `suffix` - Texte/élément après l'input
+- `prefix` - Texte/élément avant l'input
+
+---
+
+### Modal
+
+Fenêtre modale accessible.
+
+```tsx
+import { Modal } from '../components/UI';
+
+<Modal
+  isOpen={isOpen}
+  onClose={handleClose}
+  title="Confirmer l'envoi"
+>
+  <p>Voulez-vous envoyer 100 XEC ?</p>
+  <Button onClick={confirm}>Confirmer</Button>
+</Modal>
+```
+
+**Props:**
+- `isOpen` - État d'ouverture
+- `onClose` - Handler de fermeture
+- `title` - Titre de la modale
+- `children` - Contenu
+- `size` - `"sm"` | `"md"` | `"lg"`
+
+---
+
+### Tabs
+
+Navigation par onglets.
+
+```tsx
+import { Tabs, Tab } from '../components/UI';
+
+<Tabs activeTab={activeTab} onTabChange={setActiveTab}>
+  <Tab name="receive">Recevoir</Tab>
+  <Tab name="send">Envoyer</Tab>
+  <Tab name="history">Historique</Tab>
+</Tabs>
+```
+
+---
+
+### Badge
+
+Indicateur de statut.
+
+```tsx
+import { Badge, StatusBadge } from '../components/UI';
+
+<Badge>Nouveau</Badge>
+<StatusBadge status="verified">Vérifié</StatusBadge>
+<StatusBadge status="pending">En attente</StatusBadge>
+```
+
+---
+
+## Composants Layout (`src/components/Layout/`)
+
+### TopBar
+
+Barre de navigation supérieure.
+
+```tsx
+import { TopBar } from '../components/Layout/TopBar';
 
 <TopBar />
 ```
 
-**Features:**
-- Logo display
-- Settings button (navigates to `/settings`)
-- Responsive mobile layout
-- Dark mode compatible
+**Fonctionnalités:**
+- Affichage du logo
+- Bouton paramètres (navigue vers `/settings`)
+- Layout mobile responsive
+- Compatible dark mode
 
 ---
 
-### BottomNavigation (`src/components/Layout/BottomNavigation.jsx`)
+### BottomNavigation
 
-Bottom navigation for mobile devices.
+Navigation inférieure pour mobile.
 
-```jsx
-import BottomNavigation from './components/Layout/BottomNavigation';
+```tsx
+import { BottomNavigation } from '../components/Layout/BottomNavigation';
 
 <BottomNavigation />
 ```
 
-**Navigation items:**
+**Éléments de navigation:**
 - Home (`/wallet`)
 - Send (`/send`)
 - Directory (`/`)
 - Favorites (`/favorites`)
 
-**Features:**
-- Active state highlighting
-- Icons for each section
-- Fixed bottom position on mobile
-- Hidden on desktop (>768px)
+**Fonctionnalités:**
+- État actif surligné
+- Icônes pour chaque section
+- Position fixe en bas sur mobile
+- Caché sur desktop (>768px)
 
 ---
 
-### MobileLayout (`src/components/Layout/MobileLayout.jsx`)
+### MobileLayout
 
-Container layout for mobile-first design.
+Container pour design mobile-first.
 
-```jsx
-import MobileLayout from './components/Layout/MobileLayout';
+```tsx
+import { MobileLayout } from '../components/Layout/MobileLayout';
 
 <MobileLayout>
-  <YourContent />
+  <VotreContenu />
 </MobileLayout>
 ```
 
-**Features:**
-- Combines TopBar + content + BottomNavigation
-- Responsive padding
-- Scroll container
-- Safe area handling
+**Fonctionnalités:**
+- Combine TopBar + contenu + BottomNavigation
+- Padding responsive
+- Container de scroll
+- Gestion des safe areas
 
 ---
 
-## Feature Components
+## Composants ClientWallet (`src/components/ClientWallet/`)
 
-### ECashWallet (`src/components/ECashWallet.jsx`)
+### ImmersionComponents
 
-Wallet connection component.
+Composants d'immersion de marque pour `ClientWalletPage`.
 
-**Features:**
-- Mnemonic input
-- Wallet initialization
-- Persistent storage
-- Loading states
-
----
-
-### SendXEC (`src/components/SendXEC.jsx`)
-
-XEC transaction component.
-
-**Features:**
-- Address validation
-- Amount input with validation
-- Balance display (sendable amount)
-- Dust prevention (6 XEC minimum)
-- QR scanner integration
-
----
-
-### TokenSend (`src/components/TokenSend.jsx`)
-
-Token transaction component.
-
-**Features:**
-- Token selection
-- Address validation with real-time feedback (✓/❌)
-- Amount input with comma→dot conversion
-- Balance display
-- Form extracted to `TokenSendForm` subcomponent
-
-**Related:**
-- `TokenSendForm.jsx` - Reusable form component with validation
-
----
-
-### QrCodeScanner (`src/components/QrCodeScanner.jsx`)
-
-QR code scanner for receiving addresses.
-
-**Features:**
-- Camera access with permissions handling
-- QR code detection
-- Address validation
-- Modal UI with backdrop
-
----
-
-### ChronikConnectionIndicator (`src/components/ChronikConnectionIndicator.jsx`)
-
-Real-time WebSocket connection status indicator.
-
-**Features:**
-- Visual dot indicator (🟢 connected / 🔴 disconnected)
-- Auto-hide when connected (clean UI)
-- Error messages display
-- Reconnection attempt counter
-- Pulsating animation
-
-**States:**
-- Connected - Green, auto-hidden
-- Disconnected - Red, visible with error message
-- Reconnecting - Shows attempt count
-
----
-
-## Utility Components
-
-### Notification (`src/components/Notification.jsx`)
-
-Toast notification system.
-
-```jsx
-import { useSetAtom } from 'jotai';
-import { notificationAtom } from './atoms';
-
-const setNotification = useSetAtom(notificationAtom);
-
-setNotification({
-  type: 'success', // 'success' | 'error' | 'info' | 'warning'
-  message: 'Transaction sent successfully!'
-});
+```tsx
+import {
+  TokenHeroSection,
+  TokenPurposeCard,
+  CreatorSocialLinks,
+  CreatorContactCard,
+  CreatorActions
+} from '../components/ClientWallet/ImmersionComponents';
 ```
 
-**Features:**
-- Auto-dismiss after 5 seconds
-- Multiple notification types
-- Smooth animations
-- Stacked notifications
+**Composants:**
+- `TokenHeroSection` - Header visuel avec image, nom, ticker, badge vérifié
+- `TokenPurposeCard` - Utilité (purpose) et contrepartie (counterpart)
+- `CreatorSocialLinks` - Liens réseaux sociaux
+- `CreatorContactCard` - Infos géographiques et website
+- `CreatorActions` - Boutons d'action rapide
 
 ---
 
-### LoadingScreen (`src/components/LoadingScreen.jsx`)
+## Composants eCash (`src/components/eCash/`)
 
-Full-screen loading indicator.
+### TokenActions
 
-```jsx
-import LoadingScreen from './components/LoadingScreen';
+Actions blockchain (Send, Airdrop, Mint, Burn, Message).
 
-<LoadingScreen />
+```tsx
+import { Send, Airdrop, Mint, Burn, Message } from '../components/eCash/TokenActions';
 ```
 
-**Use cases:**
-- Wallet initialization
-- Blockchain data fetching
-- Route transitions
+Chaque composant utilise le hook correspondant :
+- `useSendToken` - Envoi de tokens
+- `useAirdropToken` - Distribution airdrop
+- `useMintToken` - Frappe de tokens
+- `useBurnToken` - Destruction de tokens
 
 ---
 
-### ErrorBoundary (`src/components/ErrorBoundary.jsx`)
+## Hooks Personnalisés (`src/hooks/`)
 
-React error boundary for graceful error handling.
+Les hooks centralisent la logique métier. Voir [WALLET_ARCHITECTURE.md](./WALLET_ARCHITECTURE.md) pour les détails.
 
-```jsx
-import ErrorBoundary from './components/ErrorBoundary';
-
-<ErrorBoundary>
-  <YourApp />
-</ErrorBoundary>
-```
-
-**Features:**
-- Catches React component errors
-- Displays user-friendly error message
-- Logs errors to console
-- Prevents full app crash
+| Hook | Usage |
+|------|-------|
+| `useEcashWallet` | Instance wallet, adresse, connexion |
+| `useEcashBalance` | Balance avec auto-refresh |
+| `useSendToken` | Envoi de tokens avec validation |
+| `useMintToken` | Logique de mint |
+| `useBurnToken` | Logique de burn |
+| `useAirdropToken` | Distribution airdrop |
+| `useChronikWebSocket` | Événements blockchain temps réel |
+| `useAdmin` | Vérification permissions admin |
+| `useAddressBook` | Gestion contacts |
 
 ---
 
-## Styling Guidelines
+## Variables CSS
 
-### CSS Variables
-
-All components use CSS variables from `src/styles/themes.css`:
+Les composants utilisent les variables de `src/styles/themes.css`:
 
 ```css
-/* Light mode */
---bg-primary: #ffffff;
---text-primary: #000000;
---accent-primary: #0074e4;
+/* Couleurs */
+var(--primary)          /* #0074e4 - eCash blue */
+var(--bg-primary)       /* Background principal */
+var(--text-primary)     /* Couleur texte */
 
-/* Dark mode */
-[data-theme="dark"] {
-  --bg-primary: #1a1a1a;
-  --text-primary: #ffffff;
-  --accent-primary: #3b9dff;
-}
+/* Espacement */
+var(--spacing-xs)       /* 0.25rem */
+var(--spacing-sm)       /* 0.5rem */
+var(--spacing-md)       /* 1rem */
+var(--spacing-lg)       /* 1.5rem */
+var(--spacing-xl)       /* 2rem */
+
+/* Bordures */
+var(--border-radius)    /* Rayon standard */
+var(--border-color)     /* Couleur bordure */
 ```
 
-### Responsive Design
+---
 
-Use mobile-first approach with CSS media queries:
+## Breakpoints (Mobile-First)
 
 ```css
-/* Mobile first (default) */
-.component {
-  padding: 1rem;
-}
-
-/* Tablet and up */
-@media (min-width: 768px) {
-  .component {
-    padding: 2rem;
-  }
-}
+/* Mobile (défaut) */
+/* Tablette */
+@media (min-width: 600px) { }
+/* Desktop */
+@media (min-width: 768px) { }
+/* Large */
+@media (min-width: 1024px) { }
 ```
-
-**Breakpoints:**
-- `400px` - Very small mobile
-- `600px` - Mobile
-- `640px` - Small tablet
-- `768px` - Tablet
-
----
-
-## Best Practices
-
-### ✅ DO
-
-```jsx
-// Use atomic components
-import { Card, Button, Stack } from './components/UI';
-
-<Card>
-  <Stack direction="column" gap="1rem">
-    <Button variant="primary">Action</Button>
-  </Stack>
-</Card>
-
-// Use CSS variables
-.custom-component {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-}
-```
-
-### ❌ DON'T
-
-```jsx
-// Don't use inline styles for colors
-<div style={{ background: '#ffffff' }}>...</div>
-
-// Don't use Tailwind classes
-<div className="bg-blue-500 p-4">...</div>
-
-// Don't hardcode breakpoints
-<div style={{ width: window.innerWidth > 768 ? '50%' : '100%' }}>
-```
-
----
-
-## Testing Components
-
-Use Playwright for E2E component testing:
-
-```javascript
-// tests/component-name.spec.js
-import { test, expect } from '@playwright/test';
-
-test('should display button with correct text', async ({ page }) => {
-  await page.goto('/');
-  
-  await expect(page.locator('button:has-text("Send")')).toBeVisible();
-});
-```
-
-See `tests/README.md` for complete testing guide.
-
----
-
-## Adding New Components
-
-1. **Create component file:**
-```jsx
-// src/components/MyComponent.jsx
-import { Card, Button } from './UI';
-import '../styles/my-component.css';
-
-export const MyComponent = ({ title, onAction }) => {
-  return (
-    <Card>
-      <h2>{title}</h2>
-      <Button variant="primary" onClick={onAction}>
-        Action
-      </Button>
-    </Card>
-  );
-};
-```
-
-2. **Create CSS file:**
-```css
-/* src/styles/my-component.css */
-.my-component-title {
-  color: var(--text-primary);
-  font-size: 1.5rem;
-}
-```
-
-3. **Add tests:**
-```javascript
-// tests/my-component.spec.js
-test('MyComponent renders correctly', async ({ page }) => {
-  // ... test implementation
-});
-```
-
----
-
-## Resources
-
-- [CSS Variables Reference](https://developer.mozilla.org/en-US/docs/Web/CSS/Using_CSS_custom_properties)
-- [Flexbox Guide](https://css-tricks.com/snippets/css/a-guide-to-flexbox/)
-- [React Component Patterns](https://react.dev/learn/passing-props-to-a-component)
-- [Playwright Testing](https://playwright.dev/)

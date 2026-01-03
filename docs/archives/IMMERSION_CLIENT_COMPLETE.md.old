@@ -1,0 +1,209 @@
+# ✅ Immersion Client - Implémentation Complétée
+
+**Date**: 2 janvier 2026  
+**Ticket**: Architecture Validation - ClientWalletPage Mode Détail
+
+---
+
+## 🎯 Objectif Réalisé
+
+Transformer la vue détail de **ClientWalletPage** en expérience immersive de marque, affichant l'univers du créateur (description, réseaux sociaux, utilité du jeton, contact).
+
+---
+
+## 📦 Nouveaux Composants Créés
+
+**Fichier**: `/src/components/ClientWallet/ImmersionComponents.tsx`
+
+### 1. TokenHeroSection
+**Rôle**: Header visuel avec identité du créateur  
+**Props**:
+- `name` - Nom du créateur
+- `description` - Histoire/présentation du créateur
+- `image` - Logo du jeton/créateur
+- `verified` - Badge vérifié (✓)
+- `ticker` - Ticker du jeton
+
+**Features**:
+- Affichage conditionnel (masqué si pas de description ni image)
+- Image 60x60px avec border radius
+- Badge ticker stylisé
+- Description multiligne avec `whiteSpace: pre-wrap`
+
+### 2. TokenPurposeCard
+**Rôle**: Afficher utilité et contrepartie du jeton  
+**Props**:
+- `purpose` - Utilité du jeton (ex: "1 PAIN = 1 baguette")
+- `counterpart` - Contrepartie offerte par le créateur
+
+**Features**:
+- Sections avec icônes 🎯 (utilité) et 🤝 (contrepartie)
+- Affichage conditionnel (masqué si vide)
+- Texte multiligne supporté
+
+### 3. CreatorSocialLinks
+**Rôle**: Barre de liens sociaux cliquables  
+**Props**:
+- `socials` - Objet avec clés: facebook, instagram, tiktok, youtube, whatsapp, telegram
+
+**Features**:
+- Grid responsive (`repeat(auto-fill, minmax(140px, 1fr))`)
+- Icônes emoji pour chaque réseau
+- Liens ouverts en nouvel onglet (`target="_blank"`)
+- Hover effect (background devient primary-color)
+- Filtrage automatique des liens vides
+
+### 4. CreatorContactCard
+**Rôle**: Informations géographiques et contact  
+**Props**:
+- `country`, `region`, `city` - Localisation
+- `website` - Site web officiel
+- `email` - Email de contact
+- `phone` - Téléphone
+
+**Features**:
+- Icônes emoji (🗺️ 🌐 ✉️ 📞)
+- Liens cliquables (mailto:, tel:, https://)
+- Auto-préfixe https:// si manquant
+- Word-break pour les URLs longues
+- Affichage conditionnel global
+
+---
+
+## 🔧 Intégration dans ClientWalletPage
+
+**Fichier**: `/src/pages/ClientWalletPage.tsx`  
+**Lignes modifiées**: ~680
+
+### Import ajouté
+```tsx
+import { TokenHeroSection, TokenPurposeCard, CreatorSocialLinks, CreatorContactCard } 
+  from '../components/ClientWallet/ImmersionComponents';
+```
+
+### Insertion dans le DOM
+**Position**: Après `balance-card-split`, avant `action-tabs`
+
+```tsx
+{/* Immersion: Brand Universe Section */}
+{resolvedSelectedProfile && (
+  <>
+    <TokenHeroSection
+      name={profileDisplayName}
+      description={resolvedSelectedProfile.description}
+      image={resolvedSelectedProfile.tokens?.find(t => t.tokenId === selectedProfile.tokenId)?.image}
+      verified={resolvedSelectedProfile.verified}
+      ticker={profileDisplayTicker}
+    />
+
+    <TokenPurposeCard
+      purpose={resolvedSelectedProfile.tokens?.find(t => t.tokenId === selectedProfile.tokenId)?.purpose}
+      counterpart={resolvedSelectedProfile.tokens?.find(t => t.tokenId === selectedProfile.tokenId)?.counterpart}
+    />
+
+    <CreatorSocialLinks socials={resolvedSelectedProfile.socials} />
+
+    <CreatorContactCard
+      country={resolvedSelectedProfile.location_country}
+      region={resolvedSelectedProfile.location_region}
+      city={resolvedSelectedProfile.city}
+      website={resolvedSelectedProfile.website}
+      email={resolvedSelectedProfile.email}
+      phone={resolvedSelectedProfile.phone}
+    />
+  </>
+)}
+```
+
+---
+
+## ✅ Tests de Build
+
+```bash
+npm run build
+✓ built in 2.90s
+```
+
+**Statut**: ✅ Aucune erreur de compilation
+
+---
+
+## 🎨 Styling
+
+### CSS Variables Utilisées
+Conformément aux guidelines du projet (zéro framework CSS):
+- `var(--bg-primary)` - Fond blanc principal
+- `var(--bg-secondary)` - Fond gris clair (#f5f5f5)
+- `var(--text-primary)` - Texte noir principal
+- `var(--text-secondary)` - Texte gris (#666)
+- `var(--primary-color)` - Bleu principal (#0074e4)
+- `var(--border-color)` - Bordures (#ddd)
+
+### Responsive Design
+- Grid social links: `minmax(140px, 1fr)` adapte automatiquement
+- Word-break sur URLs longues
+- Hover effects avec transitions CSS
+
+---
+
+## 📊 Flux Utilisateur Amélioré
+
+### Avant (Vue basique)
+1. Client sélectionne jeton dans hub
+2. Affichage: Balance + Formulaire envoi
+3. Actions: Receive/Send/AddressBook
+
+### Après (Expérience immersive)
+1. Client sélectionne jeton dans hub
+2. **Immersion dans l'univers du créateur**:
+   - 🎨 Hero avec logo et description
+   - 🎯 Utilité concrète du jeton
+   - 🤝 Contrepartie offerte
+   - 🌐 Réseaux sociaux pour engagement
+   - 📍 Localisation et contact
+3. Balance + Actions transactionnelles (Receive/Send)
+
+---
+
+## 🔄 Sources de Données
+
+Toutes les données proviennent de `resolvedSelectedProfile` (calculé via useMemo):
+- **Profile Supabase**: `description`, `socials`, `website`, `email`, `phone`, `location_*`, `verified`
+- **Token metadata**: `tokens[].image`, `tokens[].purpose`, `tokens[].counterpart`
+
+**Avantage**: Pas de requête additionnelle, données déjà chargées via `useProfiles()`.
+
+---
+
+## 🚀 Prochaines Étapes (Optionnel)
+
+### Améliorations UX
+1. **Skeleton loaders** pendant chargement profile
+2. **Fallback image** si `image` non définie
+3. **Rich text** pour description (liens markdown)
+4. **Share button** pour partager le profil créateur
+
+### Analytics
+1. **Track clicks** sur réseaux sociaux
+2. **Heatmap** des sections les plus consultées
+3. **Conversion** Hub → Detailed View → Send action
+
+---
+
+## ✅ Conformité Architecture
+
+| Aspect | Statut |
+|--------|--------|
+| **Univers de marque** | ✅ Description, image, ticker |
+| **Réseaux sociaux** | ✅ 6 plateformes supportées |
+| **Utilité jeton** | ✅ Purpose + Counterpart |
+| **Contact** | ✅ Localisation, website, email, phone |
+| **CSS Custom** | ✅ Variables CSS, zéro framework |
+| **Responsive** | ✅ Grid auto-fill, word-break |
+| **TypeScript** | ✅ Interfaces typées |
+| **Performance** | ✅ Conditional rendering, pas de requêtes additionnelles |
+
+---
+
+**Status Final**: ✅ **IMMERSION CLIENT IMPLÉMENTÉE**  
+ClientWalletPage mode détail affiche désormais l'histoire et l'univers du créateur avant les actions transactionnelles.

@@ -1,182 +1,206 @@
-# Schéma Supabase - Table `farms`
+# Schéma Supabase - Tables Principales
 
-## Structure de la table
+**Dernière mise à jour** : Janvier 2026  
+**Client** : `src/services/supabaseClient.ts`
+
+---
+
+## Table `profiles`
+
+Table principale pour les profils créateurs/entreprises.
 
 ```sql
--- Table principale des fermes
-CREATE TABLE farms (
+CREATE TABLE profiles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_address TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   description TEXT,
   
+  -- Statut
+  status TEXT DEFAULT 'active',
+  -- Valeurs: 'active', 'banned', 'deleted', 'suspended', 'draft'
+  
+  -- Vérification
+  verification_status TEXT DEFAULT 'none',
+  -- Valeurs: 'none', 'pending', 'verified', 'rejected', 'info_requested'
+  verified BOOLEAN DEFAULT FALSE,
+  verified_at TIMESTAMP WITH TIME ZONE,
+  admin_message TEXT,
+  
   -- Localisation
   location_country TEXT,
   location_region TEXT,
   location_department TEXT,
-  address TEXT NOT NULL, -- OBLIGATOIRE (affichage Directory)
+  city TEXT,
+  postal_code TEXT,
+  street_address TEXT,
+  address_complement TEXT,
   
   -- Contact
   phone TEXT,
-  email TEXT NOT NULL, -- OBLIGATOIRE
+  email TEXT,
   website TEXT,
-  
-  -- Image
-  image_url TEXT,
   
   -- Réseaux sociaux (JSONB)
   socials JSONB DEFAULT '{}'::jsonb,
-  -- Structure: { facebook, instagram, tiktok, youtube, whatsapp, telegram, other_website }
+  -- Structure: { facebook, instagram, tiktok, youtube, whatsapp, telegram }
+  
+  -- Activité
+  products JSONB DEFAULT '[]'::jsonb,
+  services JSONB DEFAULT '[]'::jsonb,
   
   -- Certifications (JSONB)
   certifications JSONB DEFAULT '{}'::jsonb,
-  -- Structure: { 
-  --   siret, 
-  --   siret_link, 
-  --   legal_representative,
-  --   official_website,
-  --   national, 
-  --   national_link, 
-  --   international, 
-  --   international_link 
-  -- }
-  
-  -- Produits et services (ARRAY)
-  products TEXT[] DEFAULT ARRAY[]::TEXT[],
-  services TEXT[] DEFAULT ARRAY[]::TEXT[],
+  -- Structure: { label, url, is_active }
   
   -- Tokens associés (JSONB Array)
   tokens JSONB DEFAULT '[]'::jsonb,
-  -- Structure: [{ tokenId, ticker, purpose, isVisible }]
-  
-  -- Statuts de vérification
-  verification_status TEXT DEFAULT 'unverified', 
-  -- Valeurs: 'unverified', 'pending', 'info_requested', 'verified'
-  verified BOOLEAN DEFAULT FALSE,
-  admin_message TEXT,
-  verified_at TIMESTAMP WITH TIME ZONE,
+  -- Structure: [{ tokenId, ticker, name, decimals, image, purpose, counterpart, isVisible, isLinked, isActive, isDeleted }]
   
   -- Timestamps
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Index pour les requêtes fréquentes
-CREATE INDEX idx_farms_owner_address ON farms(owner_address);
-CREATE INDEX idx_farms_verification_status ON farms(verification_status);
-CREATE INDEX idx_farms_verified ON farms(verified);
+CREATE INDEX idx_profiles_owner_address ON profiles(owner_address);
+CREATE INDEX idx_profiles_verification_status ON profiles(verification_status);
+CREATE INDEX idx_profiles_verified ON profiles(verified);
+CREATE INDEX idx_profiles_status ON profiles(status);
 ```
 
-## Champs obligatoires
+---
 
-### Toujours obligatoires
-- `name` : Nom de la ferme
-- `description` : Description de la ferme
-- `email` : Email de contact
-- `address` : Adresse complète (affichée dans l'annuaire)
+## Table `tickets`
 
-### Obligatoires pour la demande de vérification (`verification_status = 'pending'`)
-- `certifications.siret` : Numéro SIRET ou Company ID
-- `certifications.siret_link` : Lien de vérification SIRET (ex: annuaire-entreprises.data.gouv.fr)
-- `certifications.legal_representative` : Nom du représentant légal
-- `certifications.official_website` : Lien vers le registre officiel de l'entreprise (ex: infogreffe.fr, societe.com)
-- `phone` : Numéro de téléphone
+Système de support et communication.
 
-## Workflow de vérification
+```sql
+CREATE TABLE tickets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  subject TEXT NOT NULL,
+  description TEXT,
+  status TEXT DEFAULT 'open',
+  -- Valeurs: 'open', 'awaiting_reply', 'in_progress', 'resolved', 'closed'
+  priority TEXT DEFAULT 'normal',
+  -- Valeurs: 'low', 'normal', 'high', 'urgent'
+  category TEXT,
+  
+  -- Création
+  created_by_address TEXT NOT NULL,
+  created_by_role TEXT DEFAULT 'client',
+  -- Valeurs: 'client', 'creator', 'admin'
+  
+  -- Relations
+  token_id TEXT,
+  profile_id UUID REFERENCES profiles(id),
+  
+  -- Messages (JSONB Array)
+  messages JSONB DEFAULT '[]'::jsonb,
+  -- Structure: [{ id, author, author_address, message, type, timestamp, read, attachments }]
+  
+  -- Métadonnées
+  metadata JSONB DEFAULT '{}'::jsonb,
+  
+  -- Timestamps
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 
-1. **Création de ferme** : `verification_status = 'unverified'`, `verified = false`
-2. **Demande de vérification** : Validation des champs obligatoires → `verification_status = 'pending'`
-3. **Admin valide** : `verification_status = 'verified'`, `verified = true`, `verified_at = NOW()`
-4. **Admin demande info** : `verification_status = 'info_requested'`, `admin_message = "message admin"`
-5. **Modification après vérification** : Retour à `verification_status = 'unverified'` (sécurité)
+CREATE INDEX idx_tickets_status ON tickets(status);
+CREATE INDEX idx_tickets_created_by ON tickets(created_by_address);
+CREATE INDEX idx_tickets_token ON tickets(token_id);
+```
 
-## Exemple de données
+---
 
-```json
-{
-  "id": "uuid-here",
-  "owner_address": "ecash:qp...",
-  "name": "Ferme Bio du Soleil",
-  "description": "Producteur de légumes biologiques en circuit court",
-  "location_country": "France",
-  "location_region": "Occitanie",
-  "location_department": "Haute-Garonne",
-  "address": "123 Chemin des Champs, 31000 Toulouse",
-  "phone": "+33612345678",
-  "email": "contact@fermedusoleil.fr",
-  "website": "https://fermedusoleil.fr",
-  "socials": {
-    "facebook": "https://facebook.com/fermedusoleil",
-    "instagram": "@fermedusoleil",
-    "tiktok": "@fermedusoleil",
-    "youtube": null,
-    "whatsapp": "+33612345678",
-    "telegram": "@fermedusoleil",
-    "other_website": "https://boutique.fermedusoleil.fr"
-  },
-  "certifications": {
-    "siret": "12345678901234",
-    "siret_link": "https://annuaire-entreprises.data.gouv.fr/entreprise/123456789",
-    "legal_representative": "Jean Dupont",
-    "official_website": "https://www.infogreffe.fr/entreprise/123456789",
-    "national": "Agriculture Biologique (AB)",
-    "national_link": "https://www.agencebio.org/",
-    "international": "Demeter",
-    "international_link": "https://demeter.net/"
-  },
-  "products": ["Légumes bio", "Œufs", "Miel"],
-  "services": ["Vente directe", "Livraison", "Visite ferme"],
-  "tokens": [
-    {
-      "tokenId": "abc123...",
-      "ticker": "FARM",
-      "purpose": "Points de fidélité pour achats directs",
-      "isVisible": true
-    }
-  ],
-  "verification_status": "verified",
-  "verified": true,
-  "verified_at": "2025-01-15T10:00:00Z",
-  "created_at": "2025-01-01T10:00:00Z",
-  "updated_at": "2025-01-15T10:00:00Z"
+## Table `admins`
+
+Gestion des administrateurs.
+
+```sql
+CREATE TABLE admins (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  wallet_address TEXT NOT NULL UNIQUE,
+  admin_name TEXT NOT NULL,
+  admin_role TEXT DEFAULT 'moderator',
+  -- Valeurs: 'moderator', 'super_admin'
+  
+  added_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  added_by TEXT
+);
+
+CREATE INDEX idx_admins_wallet ON admins(wallet_address);
+```
+
+---
+
+## Table `admin_actions`
+
+Historique des actions administratives.
+
+```sql
+CREATE TABLE admin_actions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  action_type TEXT NOT NULL,
+  -- Valeurs: 'add_admin', 'remove_admin', 'unblock_profile', 'block_profile'
+  admin_wallet TEXT NOT NULL,
+  reason TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_admin_actions_type ON admin_actions(action_type);
+CREATE INDEX idx_admin_actions_wallet ON admin_actions(admin_wallet);
+```
+
+---
+
+## Types TypeScript
+
+Les types correspondants sont définis dans `src/types/index.ts` :
+
+```typescript
+interface UserProfile {
+  id: string;
+  owner_address: string;
+  name: string;
+  description?: string;
+  status?: 'active' | 'banned' | 'deleted' | 'suspended' | 'draft';
+  verification_status?: 'none' | 'pending' | 'verified' | 'rejected' | 'info_requested';
+  verified?: boolean;
+  tokens?: TokenDataFromProfile[];
+  location_country?: string;
+  city?: string;
+  phone?: string;
+  email?: string;
+  website?: string;
+  socials?: { facebook?, instagram?, tiktok?, youtube?, whatsapp?, telegram? };
+  // ...
+}
+
+interface Ticket {
+  id: string;
+  subject: string;
+  status: 'open' | 'awaiting_reply' | 'in_progress' | 'resolved' | 'closed';
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  messages: TicketMessage[];
+  // ...
 }
 ```
 
-## Migration SQL (si table existe déjà)
+---
 
-```sql
--- Ajouter les nouveaux champs s'ils n'existent pas
-ALTER TABLE farms 
-  ADD COLUMN IF NOT EXISTS address TEXT;
+## Workflow de Vérification
 
--- Mettre à jour le JSONB certifications pour inclure les nouveaux champs
--- (Les colonnes JSONB n'ont pas besoin de migration, on peut ajouter des clés dynamiquement)
+1. **Création profil** : `verification_status = 'none'`, `verified = false`
+2. **Demande de vérification** : `verification_status = 'pending'`
+3. **Admin valide** : `verification_status = 'verified'`, `verified = true`, `verified_at = NOW()`
+4. **Admin demande info** : `verification_status = 'info_requested'`, `admin_message = "..."`
+5. **Admin rejette** : `verification_status = 'rejected'`
 
--- Mettre address obligatoire après avoir rempli les données existantes
--- ALTER TABLE farms ALTER COLUMN address SET NOT NULL;
-```
+---
 
-## Requêtes utiles
+## Services Associés
 
-### Récupérer les fermes en attente de vérification
-```sql
-SELECT * FROM farms 
-WHERE verification_status IN ('pending', 'unverified')
-ORDER BY updated_at DESC;
-```
-
-### Récupérer toutes les fermes vérifiées
-```sql
-SELECT * FROM farms 
-WHERE verified = true
-ORDER BY name ASC;
-```
-
-### Statistiques de vérification
-```sql
-SELECT 
-  verification_status, 
-  COUNT(*) as count 
-FROM farms 
-GROUP BY verification_status;
-```
+- **profilService.ts** : CRUD profils, vérification
+- **ticketService.ts** : Gestion tickets
+- **adminService.ts** : Actions admin
